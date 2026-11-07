@@ -208,3 +208,16 @@ def test_invite_link_returns_to_app(server, monkeypatch):
     r = server.post("/api/admin/users", json={"email": "new@oddo.ma", "full_name": "New"}, headers=H("omar@oddo.ma"))
     assert r.status_code == 200 and r.json()["invite_error"] is None
     assert seen["url"].endswith("/auth/v1/invite?redirect_to=https%3A%2F%2Fsequences.example.ma%2Fv2%2F")
+
+
+def test_health_reports_engine_stall(server):
+    from datetime import timedelta
+
+    from app import settings_store
+    from app.timeutil import utcnow
+    assert server.get("/api/health").json()["ok"] is True
+    with get_session() as s:
+        settings_store.set_(s, "engine_last_tick", (utcnow() - timedelta(minutes=30)).isoformat())
+        s.commit()
+    r = server.get("/api/health")
+    assert r.status_code == 503 and r.json()["engine_age_s"] >= 1800

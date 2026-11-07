@@ -396,15 +396,26 @@ def guide_check(body: dict):
 
 
 # ------------------------------------------------------------------ V2.17 : mises à jour
+# V3 : mises à jour par fichier .zip et sauvegardes SQLite : propres au poste unique. Sur le
+# serveur, elles permettraient d'installer du code ou d'écrire n'importe où : fermées (404).
+# Le serveur se met à jour depuis GitHub et sauvegarde PostgreSQL (deploy/).
+
+def _pc_only() -> None:
+    from app.paths import is_server_mode
+    if is_server_mode():
+        raise HTTPException(404, "Indisponible sur le serveur en ligne.")
+
 
 @router.get("/update")
 def update_status():
+    _pc_only()
     from app import updater
     return updater.status()
 
 
 @router.post("/update/url")
 def update_url(body: dict):
+    _pc_only()
     from app import updater
     url = (body.get("url") or "").strip()
     if url:
@@ -421,12 +432,14 @@ def update_url(body: dict):
 
 @router.post("/update/check")
 def update_check():
+    _pc_only()
     from app import updater
     return updater.check()
 
 
 @router.post("/update/install")
 def update_install():
+    _pc_only()
     from app import updater
     try:
         return updater.install()
@@ -438,6 +451,7 @@ def update_install():
 
 @router.get("/backups")
 def backups_list():
+    _pc_only()
     from pathlib import Path
 
     from app import backup
@@ -450,6 +464,7 @@ def backups_list():
 
 @router.post("/backups/now")
 def backups_now():
+    _pc_only()
     from app import backup
     path = backup.backup_now("manuelle")
     if path is None:
@@ -459,6 +474,7 @@ def backups_now():
 
 @router.post("/backups/copy-dir")
 def backups_copy_dir(body: dict):
+    _pc_only()
     from pathlib import Path
     target = (body.get("path") or "").strip().strip('"')
     if target:

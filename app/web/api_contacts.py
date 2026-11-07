@@ -15,7 +15,7 @@ from app import importer, settings_store, suppression, template_xlsx, vocab
 from app.db import get_session
 from app.models import Company, Contact, Suppression
 from app.timeutil import fmt_local, utcnow
-from app.web.api_common import contact_ref, iso, not_found
+from app.web.api_common import contact_ref, iso, not_found, require_admin_or_owner
 from app.web.routes_contacts import MANUAL_REASON, MAX_UPLOAD, TOKEN_RE, _discard, _imports_dir, _upload
 
 router = APIRouter(prefix="/api")
@@ -170,6 +170,7 @@ def contact_erase(cid: int, body: EraseIn):
         c = s.get(Contact, cid)
         if c is None:
             raise not_found("Contact")
+        require_admin_or_owner(c.owner_id, "Effacer un contact est réservé à son responsable ou à l'administrateur.")
         cs.erase(s, c)
         s.commit()
     return {"ok": True}
@@ -196,6 +197,8 @@ def contact_action(cid: int, action: str):
         if action == "do-not-contact":
             cs.set_do_not_contact(s, c)
         elif action == "reactivate":
+            if c.owner_id is not None:
+                require_admin_or_owner(c.owner_id, "Seul le responsable de ce contact (ou l'administrateur) peut le réactiver.")
             try:
                 cs.reactivate(s, c)
             except cs.ReactivationRefused as exc:
@@ -327,6 +330,7 @@ def exclusion_add(body: ExclusionIn):
 
 @router.delete("/exclusions/{sid:int}")
 def exclusion_delete(sid: int):
+    require_admin_or_owner(None, "Retirer une adresse de la liste d'exclusion est réservé à l'administrateur.")
     with get_session() as s:
         row = s.get(Suppression, sid)
         if row is None or not row.reason.startswith(MANUAL_REASON):

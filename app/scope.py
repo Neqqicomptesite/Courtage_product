@@ -1,4 +1,4 @@
-"""V3 : chaque employé ne voit que SES campagnes, SES emails, SES rappels et les modèles
+"""V3 : chaque employé ne voit que SES campagnes, SES emails, SES rappels, SON journal et les modèles
 communs + ses modèles personnels. Les contacts et les entreprises restent communs.
 
 Plutôt que de modifier chacune des ~70 requêtes de l'appli, un filtre global est ajouté
@@ -41,7 +41,7 @@ def _apply(state: ORMExecuteState) -> None:
     uid = user_id()
     if uid is None:
         return
-    from app.models import Campaign, Enrollment, Message, Reminder, Sequence
+    from app.models import Campaign, Enrollment, EventLog, Message, Reminder, Sequence
     mbid = mailbox_id_of(state.session, uid)
     state.statement = state.statement.options(
         with_loader_criteria(Campaign, lambda c: c.mailbox_id == mbid, include_aliases=True, track_closure_variables=True),
@@ -49,6 +49,7 @@ def _apply(state: ORMExecuteState) -> None:
             select(Campaign.id).where(Campaign.mailbox_id == mbid)), include_aliases=True, track_closure_variables=True),
         with_loader_criteria(Message, lambda m: m.mailbox_id == mbid, include_aliases=True, track_closure_variables=True),
         with_loader_criteria(Reminder, lambda r: r.user_id == uid, include_aliases=True, track_closure_variables=True),
+        with_loader_criteria(EventLog, lambda ev: ev.user_id == uid, include_aliases=True, track_closure_variables=True),
         with_loader_criteria(Sequence, lambda q: or_(q.owner_id.is_(None), q.owner_id == uid),
                              include_aliases=True, track_closure_variables=True),
     )

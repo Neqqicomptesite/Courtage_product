@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from starlette.concurrency import run_in_threadpool
 
 from app import campaigns_service as camp_svc
@@ -39,12 +39,21 @@ def _ind(ind: stats.Indicators) -> dict:
 def campaigns():
     with get_session() as s:
         out = []
-        for c in s.scalars(select(Campaign).order_by(Campaign.created_at.desc())):
-            seq = s.get(Sequence, c.sequence_id)
-            out.append({"id": c.id, "name": c.name, "status": c.status, "sequence": seq.name if seq else None, "direct": c.direct,
+        camps = list(s.scalars(select(Campaign).order_by(Campaign.created_at.desc())))
+        ids = [c.id for c in camps]
+        # V3 : tout en quelques requêtes groupées (la base est à distance sur le serveur)
+        names = dict(s.execute(select(Sequence.id, Sequence.name).execution_options(oddo_all=True)
+                               .where(Sequence.id.in_({c.sequence_id for c in camps}))).all()) if camps else {}
+        counts: dict[int, dict[str, int]] = {cid: {} for cid in ids}
+        if ids:
+            for cid, st, n in s.execute(select(Enrollment.campaign_id, Enrollment.status, func.count(Enrollment.id))
+                                        .where(Enrollment.campaign_id.in_(ids)).group_by(Enrollment.campaign_id, Enrollment.status)):
+                counts[cid][st] = n
+        inds = stats.indicators_many(s, ids)
+        for c in camps:
+            out.append({"id": c.id, "name": c.name, "status": c.status, "sequence": names.get(c.sequence_id), "direct": c.direct,
                         "filters": c.filters or {}, "created_at": iso(c.created_at), "activated_at": iso(c.activated_at),
-                        "start_at": iso(c.start_at),
-                        "counts": camp_svc.enrollment_counts(s, c), "indicators": _ind(stats.indicators(s, c.id))})
+                        "start_at": iso(c.start_at), "counts": counts[c.id], "indicators": _ind(inds[c.id])})
         return out
 
 

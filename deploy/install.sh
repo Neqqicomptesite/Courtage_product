@@ -7,6 +7,7 @@ exec > >(tee -a /var/log/oddo-install.log) 2>&1
 echo "=== install $(date -Is) ==="
 
 REPO="Neqqicomptesite/oddo-sequences"
+BRANCH=production
 APP=/opt/oddo
 DATA=/var/lib/oddo
 ENVF=/etc/oddo/env
@@ -47,10 +48,10 @@ echo "Adresse : https://$ODDO_HOST"
 # 5. Code (dépôt privé, clé GitHub en lecture seule)
 git config --system --get-all safe.directory | grep -qx "$APP" || git config --system --add safe.directory "$APP"
 if [ ! -d "$APP/.git" ]; then
-  git clone --depth 20 "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git" "$APP"
+  git clone --depth 20 -b "$BRANCH" "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git" "$APP"
 else
   git -C "$APP" remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git"
-  git -C "$APP" fetch --depth 20 origin main && git -C "$APP" reset --hard origin/main
+  git -C "$APP" fetch --depth 20 origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" && git -C "$APP" checkout -B "$BRANCH" origin/"$BRANCH"
 fi
 chmod 700 "$APP/.git"
 [ -d "$APP/.venv" ] || python3 -m venv "$APP/.venv"

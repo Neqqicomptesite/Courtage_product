@@ -20,6 +20,15 @@ def contact_ref(c: Contact | None) -> dict | None:
             "company": c.company, "sequence_code": c.sequence_code, "phone": c.phone}
 
 
+def require_admin_or_owner(owner_id: int | None, message: str) -> None:
+    """V3 : données communes à l'équipe. Les modifier ou les supprimer est réservé à
+    l'administrateur, ou au responsable quand il y en a un. Sans effet en poste unique."""
+    from app.current import is_admin, user_id
+    if is_admin() or (owner_id is not None and owner_id == user_id()):
+        return
+    raise HTTPException(403, message)
+
+
 def not_found(what: str = "Élément") -> HTTPException:
     return HTTPException(404, f"{what} introuvable.")
 

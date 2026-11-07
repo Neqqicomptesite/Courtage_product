@@ -58,9 +58,27 @@ _engine: Engine | None = None
 SessionLocal = sessionmaker(expire_on_commit=False)
 
 
+def _fit_lengths(session, _ctx, _instances) -> None:
+    """V3 : PostgreSQL refuse un texte plus long que sa colonne (SQLite l'acceptait). Un
+    fichier importé avec un intitulé de poste de 300 caractères ferait échouer tout l'import :
+    on coupe à la longueur de la colonne, comme l'ancienne base le tolérait sans rien dire."""
+    from sqlalchemy import String, inspect as sa_inspect
+    for obj in list(session.new) + list(session.dirty):
+        for col in sa_inspect(obj).mapper.columns:
+            n = getattr(col.type, "length", None)
+            if n and isinstance(col.type, String):
+                key = sa_inspect(obj).mapper.get_property_by_column(col).key
+                v = getattr(obj, key, None)
+                if isinstance(v, str) and len(v) > n:
+                    setattr(obj, key, v[:n])
+
+
 def _install_scope() -> None:
+    from sqlalchemy import event
+
     from app import scope  # V3 : filtre « chaque employé ses données » (sans effet en poste unique)
     scope.install(SessionLocal)
+    event.listen(SessionLocal, "before_flush", _fit_lengths)
 
 
 def init_engine(target: "Path | str | None" = None) -> Engine:

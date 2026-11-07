@@ -5,7 +5,7 @@ import re
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from starlette.concurrency import run_in_threadpool
 
 from app import attachments_service, credentials, render, vocab
@@ -17,7 +17,7 @@ from app.mail import compose, transport
 from app.mailbox_service import as_form_values, get_primary, server_config
 from app.models import ContentBlock, Contact, EventLog, Sequence, Step, StepVariant, StepAttachment
 from app.seed import SECTOR_BLOCKS, TARGET_BLOCKS
-from app.web.api_common import contact_ref, iso, not_found
+from app.web.api_common import contact_ref, iso, not_found, require_admin_or_owner
 
 router = APIRouter(prefix="/api")
 MAX_STEPS = 8
@@ -27,6 +27,12 @@ def _seq(s, sid: int) -> Sequence:
     seq = s.get(Sequence, sid)
     if seq is None:
         raise not_found("Séquence")
+    return seq
+
+
+def _seq_editable(s, sid: int) -> Sequence:
+    seq = _seq(s, sid)
+    require_admin_or_owner(seq.owner_id, "Modèle commun à l'équipe : seul l'administrateur peut le modifier. Dupliquez-le pour en faire votre version.")
     return seq
 
 
@@ -43,19 +49,26 @@ CATEGORIES = {"prospection": "Prospection", "gestion": "Gestion", "souscription"
 
 
 def _sequence_json(s, seq: Sequence) -> dict:
+    from app.current import is_admin, user_id
     return {"id": seq.id, "name": seq.name, "category": seq.category, "campaigns": ss.campaigns_using(s, seq),
-            "steps": [_step_json(s, st) for st in ss.steps_of(s, seq)]}
+            "steps": [_step_json(s, st) for st in ss.steps_of(s, seq)],
+            # V3 : modèle commun (modifiable par l'administrateur) ou personnel (par son auteur)
+            "shared": seq.owner_id is None, "editable": is_admin() or seq.owner_id == user_id()}
 
 
 @router.get("/sequences")
 def sequences():
     with get_session() as s:
         todo = sorted(b.key for b in s.scalars(select(ContentBlock)) if render.TODO_MARKER in b.body)
+        # V3 : comptes groupés en 2 requêtes (au lieu de 3 par séquence ; la base est à distance)
+        steps = {sid: (n, days or 0) for sid, n, days in s.execute(
+            select(Step.sequence_id, func.count(Step.id), func.sum(Step.delay_days)).group_by(Step.sequence_id))}
+        used = dict(s.execute(select(Campaign.sequence_id, func.count(Campaign.id)).group_by(Campaign.sequence_id)).all())
         return {"todo_blocks": todo, "items": [
-            {"id": q.id, "name": q.name, "category": q.category, "steps": len(ss.steps_of(s, q)),
-             "campaigns": ss.campaigns_using(s, q),
+            {"id": q.id, "name": q.name, "category": q.category, "steps": steps.get(q.id, (0, 0))[0],
+             "campaigns": used.get(q.id, 0),
              "created_at": iso(q.created_at),
-             "total_days": sum(st.delay_days for st in ss.steps_of(s, q))}
+             "total_days": steps.get(q.id, (0, 0))[1]}
             for q in s.scalars(select(Sequence).order_by(Sequence.created_at))],
             "categories": [{"value": k, "label": v} for k, v in CATEGORIES.items()]}
 
@@ -134,7 +147,7 @@ class SequenceIn(BaseModel):
 def sequence_save(sid: int, body: SequenceIn):
     """Enregistrement complet de la séquence (appelé automatiquement pendant la frappe)."""
     with get_session() as s:
-        seq = _seq(s, sid)
+        seq = _seq_editable(s, sid)
         seq.name = body.name.strip() or seq.name
         if body.category and body.category != seq.category:
             if ss.campaigns_using(s, seq):
@@ -180,7 +193,7 @@ def sequence_save(sid: int, body: SequenceIn):
 @router.post("/sequences/{sid:int}/steps")
 def step_add(sid: int):
     with get_session() as s:
-        seq = _seq(s, sid)
+        seq = _seq_editable(s, sid)
         steps = ss.steps_of(s, seq)
         if len(steps) >= MAX_STEPS:
             raise HTTPException(400, f"{MAX_STEPS} étapes maximum.")
@@ -193,7 +206,7 @@ def step_add(sid: int):
 @router.delete("/sequences/{sid:int}/steps/{step_id:int}")
 def step_delete(sid: int, step_id: int):
     with get_session() as s:
-        seq = _seq(s, sid)
+        seq = _seq_editable(s, sid)
         st = s.get(Step, step_id)
         if st is None or st.sequence_id != seq.id:
             raise not_found("Étape")
@@ -211,7 +224,7 @@ def step_delete(sid: int, step_id: int):
 @router.delete("/sequences/{sid:int}")
 def sequence_delete(sid: int):
     with get_session() as s:
-        seq = _seq(s, sid)
+        seq = _seq_editable(s, sid)
         if ss.campaigns_using(s, seq):
             raise HTTPException(400, "Séquence utilisée par une campagne : suppression impossible.")
         s.delete(seq)  # étapes et variantes supprimées par la base (ON DELETE CASCADE), comme en V1
@@ -328,6 +341,7 @@ def block_create(body: NewBlock):
 
 @router.delete("/blocks/{bid:int}")
 def block_delete(bid: int):
+    require_admin_or_owner(None, "Textes communs à l'équipe : seul l'administrateur peut les supprimer.")
     with get_session() as s:
         b = s.get(ContentBlock, bid)
         if b is None:
@@ -346,6 +360,7 @@ class BlockIn(BaseModel):
 
 @router.put("/blocks/{bid:int}")
 def block_save(bid: int, body: BlockIn):
+    require_admin_or_owner(None, "Textes communs à l'équipe : seul l'administrateur peut les modifier.")
     with get_session() as s:
         b = s.get(ContentBlock, bid)
         if b is None:

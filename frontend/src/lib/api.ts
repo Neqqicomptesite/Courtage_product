@@ -226,7 +226,8 @@ export type StepData = {
   subject_b: string;
   attachments: Attachment[];  // V2.8
 };
-export type SequenceData = { id: number; name: string; category: SequenceCategory; campaigns: number; steps: StepData[] };
+export type SequenceData = { id: number; name: string; category: SequenceCategory; campaigns: number; steps: StepData[];
+  shared?: boolean; editable?: boolean };
 export type SequenceFull = SequenceData & { variables: string[]; custom_fields: string[] };
 export type SequenceList = {
   todo_blocks: string[];

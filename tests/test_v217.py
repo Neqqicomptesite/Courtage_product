@@ -67,6 +67,7 @@ def test_apply_zip_rejects_escape(tmp_path):
     assert not (tmp_path / "evil.py").exists() and not (tmp_path / "ODDO" / "app").exists()
 
 
+@pytest.mark.sqlite_only  # V3 : mise à jour par zip = poste unique (fermée sur le serveur)
 def test_check_and_install(client, db, tmp_path, monkeypatch):
     root = tmp_path / "ODDO"
     root.mkdir()
@@ -96,6 +97,7 @@ def test_check_and_install(client, db, tmp_path, monkeypatch):
     assert not st["newer"] and st["available"] == VERSION and not st["error"]
 
 
+@pytest.mark.sqlite_only
 def test_check_bad_file(client, db, monkeypatch):
     def fake_fetch(url, dest):
         raise updater.UpdateError("Le lien ne donne pas un fichier .zip")

@@ -66,13 +66,15 @@ def start() -> None:
                 max_instances=1, coalesce=True)
     sch.add_job(_safe(for_each_user(digest.maybe_send), "récapitulatif"), "interval", seconds=60, id="digest",
                 name="récapitulatif quotidien", max_instances=1, coalesce=True)
-    # V2.20 : vérifiée toutes les heures (faite si la dernière a plus de 20 h), même si le PC est éteint le soir
-    sch.add_job(_safe(backup.daily_if_due, "sauvegarde"), "interval", hours=1, id="backup",
-                name="sauvegarde quotidienne", next_run_time=datetime.now(TZ) + timedelta(minutes=10),
-                max_instances=1, coalesce=True)
+    from app.paths import is_server_mode
+    # V2.20 : vérifiée toutes les heures (faite si la dernière a plus de 20 h), même si le PC est éteint le soir.
+    # V3 : sur le serveur, la base PostgreSQL est sauvegardée par deploy/backup.sh (systemd).
+    if not is_server_mode():
+        sch.add_job(_safe(backup.daily_if_due, "sauvegarde"), "interval", hours=1, id="backup",
+                    name="sauvegarde quotidienne", next_run_time=datetime.now(TZ) + timedelta(minutes=10),
+                    max_instances=1, coalesce=True)
     # V2.17 : nouvelle version ? 2 minutes après le démarrage, puis toutes les 12 heures.
     # (V3 : sur le serveur, les mises à jour arrivent autrement : pas de kit Drive.)
-    from app.paths import is_server_mode
     if not is_server_mode():
         sch.add_job(updater.check_quietly, "interval", hours=12, id="update", name="mises à jour",
                     next_run_time=datetime.now(TZ) + timedelta(minutes=2), max_instances=1, coalesce=True)

@@ -9,7 +9,7 @@ from app import companies_service as co
 from app import contacts_service as cs
 from app.db import get_session
 from app.models import Campaign, Company, Contact, Enrollment, Message, Sequence
-from app.web.api_common import contact_ref, iso, not_found
+from app.web.api_common import contact_ref, iso, not_found, require_admin_or_owner
 
 router = APIRouter(prefix="/api")
 EDITABLE = ("domain", "website", "phone", "sector", "notes")
@@ -121,6 +121,7 @@ def company_update(cid: int, body: dict):
 
 @router.post("/companies/{cid:int}/merge")
 def company_merge(cid: int, body: dict):
+    require_admin_or_owner(None, "Fusionner des entreprises est réservé à l'administrateur.")
     with get_session() as s:
         src, dst = s.get(Company, cid), s.get(Company, int(body.get("into_id") or 0))
         if src is None or dst is None:
@@ -135,6 +136,7 @@ def company_merge(cid: int, body: dict):
 
 @router.delete("/companies/{cid:int}")
 def company_delete(cid: int):
+    require_admin_or_owner(None, "Supprimer une entreprise est réservé à l'administrateur.")
     with get_session() as s:
         comp = s.get(Company, cid)
         if comp is None:

@@ -57,7 +57,7 @@ write_files:
     content: |
 {body}
 runcmd:
-  - [bash, -c, "set -a; . /etc/oddo/env; git clone --depth 20 https://x-access-token:$GITHUB_TOKEN@github.com/Neqqicomptesite/oddo-sequences.git /opt/oddo && bash /opt/oddo/deploy/install.sh"]
+  - [bash, -c, "set -a; . /etc/oddo/env; git clone --depth 20 -b production https://x-access-token:$GITHUB_TOKEN@github.com/Neqqicomptesite/oddo-sequences.git /opt/oddo && bash /opt/oddo/deploy/install.sh"]
 """)
     return 0
 

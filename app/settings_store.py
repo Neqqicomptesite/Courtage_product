@@ -82,16 +82,34 @@ def _key(key: str) -> str:
     return key if uid is None or key in GLOBAL_KEYS else f"u{uid}:{key}"
 
 
+def _cache(session: Session) -> dict[str, str]:
+    """V3 : tous les réglages utiles (communs + ceux de l'employé) lus en UNE requête par
+    session, au lieu d'une par réglage : sur le serveur, la base est à distance."""
+    from app.current import user_id
+    ck = ("oddo_settings", user_id())
+    cached = session.info.get(ck)
+    if cached is None:
+        from sqlalchemy import select
+        uid = user_id()
+        stmt = select(Setting.key, Setting.value)
+        if uid is not None:
+            from sqlalchemy import or_
+            stmt = stmt.where(or_(Setting.key.in_(GLOBAL_KEYS), Setting.key.like(f"u{uid}:%")))
+        cached = dict(session.execute(stmt).all())
+        session.info[ck] = cached
+    return cached
+
+
 def get(session: Session, key: str) -> Any:
     if key == "test_mode" and test_mode_locked():
         return True
-    row = session.get(Setting, _key(key))
-    if row is None:
+    raw = _cache(session).get(_key(key))
+    if raw is None:
         defaults = _defaults()
         if key not in defaults:
             raise KeyError(f"Réglage inconnu : {key}")
         return defaults[key]
-    return json.loads(row.value)
+    return json.loads(raw)
 
 
 def set_(session: Session, key: str, value: Any) -> None:
@@ -103,6 +121,7 @@ def set_(session: Session, key: str, value: Any) -> None:
         session.add(Setting(key=_key(key), value=encoded))
     else:
         row.value = encoded
+    _cache(session)[_key(key)] = encoded
 
 
 def get_all(session: Session) -> dict[str, Any]:

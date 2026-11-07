@@ -4,7 +4,7 @@ import {
   Paperclip, Plus, Send, Split, Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { ConfirmDialog, toastError, useDebounced } from "@/components/common";
@@ -115,7 +115,10 @@ function Editor({ initial }: { initial: SequenceFull }) {
   const current = steps.find((s) => s.id === selected) ?? steps[0];
   const cumul = useMemo(() => steps.reduce<number[]>((acc, s) => [...acc, (acc.at(-1) ?? 0) + (s.position === 1 ? 0 : s.delay_days)], []), [steps]);
 
-  return (
+  if (initial.editable === false) return <ReadOnlyNotice initial={initial}>{body()}</ReadOnlyNotice>;
+  return body();
+
+  function body() { return (
     <div className="space-y-5">
       {/* En-tête : nom modifiable directement, état d'enregistrement */}
       <div className="flex flex-wrap items-center gap-3">
@@ -191,6 +194,25 @@ function Editor({ initial }: { initial: SequenceFull }) {
       <ConfirmDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)} destructive
         title={`Supprimer l'étape ${toDelete?.position} ?`} description="Son texte sera perdu. Les étapes suivantes seront renumérotées."
         confirmLabel="Supprimer" onConfirm={() => toDelete && deleteStep(toDelete)} />
+    </div>
+  ); }
+}
+
+/** V3 : modèle commun à l'équipe, ouvert par un employé : lecture seule + « Dupliquer ». */
+function ReadOnlyNotice({ initial, children }: { initial: SequenceFull; children: React.ReactNode }) {
+  const navigate = useNavigate();
+  const dup = useMutation({
+    mutationFn: () => api.sequenceDuplicate(initial.id),
+    onSuccess: (r) => { toast.success("Copie créée : c'est votre version, modifiable."); navigate(`/sequences/${r.id}`); },
+    onError: (e) => toastError(e),
+  });
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-info/40 bg-accent/40 px-4 py-3 text-sm">
+        <p className="min-w-0 flex-1">Modèle commun à l'équipe : seul l'administrateur peut le modifier. Vous pouvez l'utiliser tel quel, ou le dupliquer pour en faire votre version.</p>
+        <Button size="sm" onClick={() => dup.mutate()} disabled={dup.isPending}>Dupliquer</Button>
+      </div>
+      <fieldset disabled className="min-w-0">{children}</fieldset>
     </div>
   );
 }

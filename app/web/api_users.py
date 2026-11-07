@@ -32,7 +32,31 @@ def auth_config():
 
 @router.get("/health")
 def health():
-    return {"ok": True}
+    """Pour une surveillance externe (ex. UptimeRobot) : 503 si la base ne répond pas ou si le
+    moteur d'envoi ne tourne plus depuis 10 minutes. Ne révèle aucune donnée."""
+    from datetime import datetime, timezone
+
+    from fastapi.responses import JSONResponse
+    from sqlalchemy import text
+
+    from app import settings_store
+    from app.timeutil import utcnow
+    try:
+        with get_session() as s:
+            s.execute(text("SELECT 1"))
+            last = settings_store.get(s, "engine_last_tick")
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"ok": False, "db": False}, status_code=503)
+    age = None
+    if last:
+        try:
+            dt = datetime.fromisoformat(last)
+            dt = dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+            age = int((utcnow() - dt).total_seconds())
+        except (TypeError, ValueError):
+            age = None
+    ok = age is None or age < 600
+    return JSONResponse({"ok": ok, "db": True, "engine_age_s": age}, status_code=200 if ok else 503)
 
 
 @router.get("/me")

@@ -95,6 +95,42 @@ def indicators(s: Session, campaign_id: int | None = None) -> Indicators:
     return ind
 
 
+def indicators_many(s: Session, campaign_ids: list[int]) -> dict[int, Indicators]:
+    """V3 : indicateurs de plusieurs campagnes en ~8 requêtes au total (au lieu de ~9 par
+    campagne). Sur le serveur, chaque requête fait l'aller-retour jusqu'à la base."""
+    out = {cid: Indicators() for cid in campaign_ids}
+    if not campaign_ids:
+        return out
+    in_ids = Enrollment.campaign_id.in_(campaign_ids)
+    for cid, status, n in s.execute(select(Enrollment.campaign_id, Enrollment.status, func.count(Enrollment.id))
+                                    .where(in_ids).group_by(Enrollment.campaign_id, Enrollment.status)):
+        ind = out[cid]
+        ind.enrolled += n
+        if status == "bounced":
+            ind.bounced = n
+        elif status == "unsubscribed":
+            ind.unsubscribed = n
+        elif status == "completed":
+            ind.completed_no_reply = n
+
+    def per_campaign(ids_select) -> dict[int, int]:
+        return dict(s.execute(select(Enrollment.campaign_id, func.count(Enrollment.id))
+                              .where(in_ids, Enrollment.id.in_(ids_select)).group_by(Enrollment.campaign_id)).all())
+    for cid, n in per_campaign(_reached_ids(None)).items():
+        out[cid].reached = n
+    for attr, clause in (("replies", Message.kind == "reply"), ("interested", Message.classification == "interested"),
+                         ("out_of_office", Message.kind == "auto_reply")):
+        for cid, n in per_campaign(_enrollments_with_inbound(clause, None)).items():
+            setattr(out[cid], attr, n)
+    rows = s.execute(select(Enrollment.campaign_id, Message.step_position, func.count(Message.id))
+                     .join(Enrollment, Enrollment.id == Message.enrollment_id)
+                     .where(Message.direction == "out", Message.sent_at.is_not(None), in_ids)
+                     .group_by(Enrollment.campaign_id, Message.step_position).order_by(Message.step_position))
+    for cid, pos, n in rows:
+        out[cid].sent_by_step[pos] = n
+    return out
+
+
 def _grouped(s: Session, group_col, campaign_id: int | None, base_ids=None) -> list[SegmentRow]:
     """Touchés et réponses regroupés par une colonne (code séquence, variante A/B…)."""
     base_ids = base_ids if base_ids is not None else _reached_ids(campaign_id)

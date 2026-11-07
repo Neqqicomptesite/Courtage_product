@@ -90,9 +90,11 @@ def dashboard():
              "suggestion": _contact(s.get(Contact, m.suggested_contact_id)) if m.suggested_contact_id else None}
             for m in s.scalars(select(Message).where(Message.kind == "unmatched").order_by(Message.received_at.desc()))]
         campaigns = []
-        for c in s.scalars(select(Campaign).where(Campaign.status.in_(("active", "paused")))
-                           .order_by(Campaign.created_at.desc())):
-            ci = stats.indicators(s, c.id)
+        open_camps = list(s.scalars(select(Campaign).where(Campaign.status.in_(("active", "paused")))
+                                    .order_by(Campaign.created_at.desc())))
+        many = stats.indicators_many(s, [c.id for c in open_camps])  # V3 : requêtes groupées
+        for c in open_camps:
+            ci = many[c.id]
             campaigns.append({"id": c.id, "name": c.name, "status": c.status, "enrolled": ci.enrolled,
                               "reached": ci.reached, "replies": ci.replies, "reply_rate": ci.reply_rate,
                               "completed": ci.completed_no_reply + ci.replies + ci.bounced + ci.unsubscribed})

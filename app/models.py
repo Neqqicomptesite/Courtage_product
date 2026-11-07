@@ -295,6 +295,11 @@ class ImapState(Base):
     last_uid: Mapped[int] = mapped_column(Integer, default=0)
 
 
+def _current_user() -> int | None:
+    from app.current import user_id
+    return user_id()
+
+
 class EventLog(Base):
     __tablename__ = "event_log"
 
@@ -304,6 +309,8 @@ class EventLog(Base):
     entity: Mapped[str | None] = mapped_column(String(30))
     entity_id: Mapped[int | None] = mapped_column(Integer)
     text: Mapped[str] = mapped_column(Text)
+    # V3 : l'employé concerné (rempli tout seul d'après l'employé « en cours »)
+    user_id: Mapped[int | None] = mapped_column(Integer, index=True, default=lambda: _current_user())
 
 
 class Secret(Base):
