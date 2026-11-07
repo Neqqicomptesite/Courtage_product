@@ -34,10 +34,32 @@ def get_primary(session: Session) -> Mailbox | None:
     return session.scalars(select(Mailbox).order_by(Mailbox.id)).first()
 
 
-def as_form_values(mb: Mailbox | None) -> dict:
+def as_form_values(mb: Mailbox | None, session: Session | None = None) -> dict:
     if mb is None:
-        return dict(DEFAULT_MAILBOX)
+        return _new_colleague_defaults(session) if session is not None else dict(DEFAULT_MAILBOX)
     return {k: getattr(mb, k) for k in DEFAULT_MAILBOX}
+
+
+def _new_colleague_defaults(session: Session) -> dict:
+    """V3 : un collègue qui n'a pas encore réglé sa boîte trouve le formulaire pré-rempli :
+    son nom et son email de connexion, et les serveurs (hôtes, ports, sécurité, dossiers)
+    de la boîte de l'administrateur, qui marchent depuis le serveur (envoi en 587, le 465
+    étant bloqué chez l'hébergeur). Jamais de mot de passe."""
+    values = dict(DEFAULT_MAILBOX)
+    from app.current import user_id
+    uid = user_id()
+    if uid is None:
+        return values
+    from app.models import AppUser
+    me = session.get(AppUser, uid)
+    ref = session.scalars(select(Mailbox).join(AppUser, AppUser.id == Mailbox.user_id)
+                          .where(AppUser.role == "admin", AppUser.active.is_(True)).order_by(Mailbox.id)).first()
+    if ref is not None:
+        for k in ("smtp_host", "smtp_port", "smtp_security", "imap_host", "imap_port", "sent_folder", "watched_folders"):
+            values[k] = getattr(ref, k)
+    if me is not None:
+        values.update(email=me.email, username=me.email, display_name=me.full_name or values.get("display_name", ""))
+    return values
 
 
 def server_config(values: dict, password: str) -> ServerConfig:

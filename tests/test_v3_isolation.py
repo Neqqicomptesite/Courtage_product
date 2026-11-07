@@ -320,3 +320,21 @@ def test_interface_security_headers(server):  # noqa: F811
     csp = r.headers["content-security-policy"]
     assert "script-src 'self' 'sha256-" in csp and "frame-ancestors 'none'" in csp and "test.supabase.co" in csp
     assert r.headers["x-frame-options"] == "DENY" and r.headers["x-content-type-options"] == "nosniff"
+
+
+def test_new_colleague_mailbox_form_is_prefilled(server):  # noqa: F811
+    """Un collègue arrive : formulaire de boîte pré-rempli avec SES nom et email et les serveurs de
+    l'admin (587/STARTTLS qui passent depuis le serveur), jamais un mot de passe."""
+    with get_session() as s, s.begin():
+        omar = s.query(AppUser).filter_by(email="omar@oddo.ma").one()
+        s.add(Mailbox(display_name="Omar", email="omar@oddo.ma", user_id=omar.id, smtp_host="mail.oddo.ma",
+                      smtp_port=587, smtp_security="starttls", imap_host="mail.oddo.ma", imap_port=993,
+                      username="omar@oddo.ma", sent_folder="INBOX.Sent"))
+    from app import scope
+    scope.forget_cache()
+    d = server.get("/api/settings", headers=H("hamza@oddo.ma")).json()
+    mb = d["mailbox"]
+    assert d["mailbox_exists"] is False and d["has_password"] is False
+    assert mb["email"] == "hamza@oddo.ma" and mb["username"] == "hamza@oddo.ma"
+    assert (mb["smtp_host"], mb["smtp_port"], mb["smtp_security"]) == ("mail.oddo.ma", 587, "starttls")
+    assert mb["sent_folder"] == "INBOX.Sent"

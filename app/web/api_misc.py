@@ -144,7 +144,7 @@ def journal(entity: str = "", level: str = "", q: str = "", limit: int = 300):
 def settings_get():
     with get_session() as s:
         mb = mailbox_service.get_primary(s)
-        values = mailbox_service.as_form_values(mb)
+        values = mailbox_service.as_form_values(mb, s)
         st = settings_store.get_all(s)
         return {
             "mailbox": {k: values[k] for k in ("display_name", "email", "smtp_host", "smtp_port", "smtp_security",
