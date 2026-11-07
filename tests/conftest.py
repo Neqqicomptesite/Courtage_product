@@ -76,6 +76,10 @@ def db(tmp_path, monkeypatch):
         monkeypatch.setenv("DATABASE_URL", PG_TEST_URL)
         from cryptography.fernet import Fernet
         monkeypatch.setenv("ODDO_SECRET_KEY", Fernet.generate_key().decode())  # coffre du serveur
+        # Tests « poste unique » rejoués sur PostgreSQL : les règles propres au serveur (droits
+        # par défaut, ports, coffre) sont testées à part, en l'activant explicitement.
+        from app import paths
+        monkeypatch.setattr(paths, "is_server_mode", lambda: False)
         from sqlalchemy import create_engine, text
         eng = create_engine(database_url())
         with eng.begin() as c:

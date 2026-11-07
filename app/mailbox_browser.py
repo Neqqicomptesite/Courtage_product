@@ -131,7 +131,7 @@ _HEADER_FIELDS = ("FROM TO CC SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES CON
 def list_messages(folder: str = "INBOX", days: int = 30, refresh: bool = False, now: datetime | None = None,
                   imap_factory=None) -> dict:
     """Les emails des `days` derniers jours du dossier, les plus récents d'abord (200 au plus)."""
-    key = (folder, days)
+    key = (_who(), folder, days)  # V3 : un cache par employé (sinon B verrait la liste de A)
     with _lock:
         hit = _cache.get(key)
         if hit and not refresh and time.monotonic() - hit[0] < CACHE_TTL_S:
@@ -194,11 +194,18 @@ def list_messages(folder: str = "INBOX", days: int = 30, refresh: bool = False, 
 # ses images et d'ouvrir ses pièces jointes sans le retélécharger à chaque fois.
 RAW_TTL_S = 120
 RAW_MAX = 8
-_raw_cache: dict[tuple[str, int], tuple[float, bytes]] = {}
+_raw_cache: dict[tuple, tuple[float, bytes]] = {}
+
+
+def _who():
+    """V3 : les numéros d'email (UID) sont propres à chaque boîte : le cache doit être
+    séparé par employé, sinon l'email n°42 de A s'afficherait pour l'email n°42 de B."""
+    from app.current import user_id
+    return user_id()
 
 
 def _fetch_raw(folder: str, uid: int, imap_factory=None) -> bytes:
-    key = (folder, int(uid))
+    key = (_who(), folder, int(uid))
     with _lock:
         hit = _raw_cache.get(key)
         if hit and time.monotonic() - hit[0] < RAW_TTL_S:
@@ -331,10 +338,11 @@ def get_part(folder: str, uid: int, index: int, imap_factory=None) -> tuple[byte
 
 
 def invalidate(folder: str | None = None) -> None:
+    me = _who()
     with _lock:
-        for k in [k for k in _cache if folder is None or k[0] == folder]:
+        for k in [k for k in _cache if k[0] == me and (folder is None or k[1] == folder)]:
             del _cache[k]
-        for k in [k for k in _raw_cache if folder is None or k[0] == folder]:
+        for k in [k for k in _raw_cache if k[0] == me and (folder is None or k[1] == folder)]:
             del _raw_cache[k]
 
 

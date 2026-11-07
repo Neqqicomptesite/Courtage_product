@@ -19,6 +19,24 @@ from app.web import (api, api_campaigns, api_companies, api_contacts, api_mailbo
 from app.web.security import LocalOnlyMiddleware
 
 
+def _spa_csp(index) -> str:
+    """V3 (revue externe) : politique de sécurité de l'interface. Scripts : seulement ceux de
+    l'appli (plus le petit script de thème, autorisé par son empreinte) : une injection de
+    code dans une page ne pourrait pas s'exécuter, ni voler la session."""
+    import base64
+    import hashlib
+    import re as _re
+    html = index.read_text(encoding="utf-8")
+    hashes = " ".join(f"'sha256-{base64.b64encode(hashlib.sha256(m.encode()).digest()).decode()}'"
+                      for m in _re.findall(r"<script>(.*?)</script>", html, flags=_re.S))
+    supa = auth.config().url
+    return ("default-src 'self'; "
+            f"script-src 'self' {hashes}; "
+            f"connect-src 'self'{(' ' + supa) if supa else ''}; "
+            "img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data: https:; "
+            "frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
+
+
 def create_app(testing: bool = False) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -66,7 +84,16 @@ def create_app(testing: bool = False) -> FastAPI:
         # Toutes les adresses /v2/... renvoient la même page : c'est React qui affiche la bonne section.
         if not spa_index.exists():
             return RedirectResponse("/classique")
-        return FileResponse(spa_index, headers={"Cache-Control": "no-cache"})
+        return FileResponse(spa_index, headers={"Cache-Control": "no-cache", "Content-Security-Policy": _spa_csp(spa_index)})
+
+    @app.middleware("http")
+    async def security_headers(request, call_next):
+        # V3 (revue externe) : en-têtes de sécurité sur toutes les réponses
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "same-origin")
+        return response
 
     if is_server_mode():
         # V3 : sur le serveur, seules l'API (protégée par la connexion) et l'interface V2

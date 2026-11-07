@@ -35,6 +35,7 @@ def H(email, **kw):
 def server(db, monkeypatch):
     monkeypatch.setenv("SUPABASE_URL", URL)
     monkeypatch.setattr(auth, "_jwks_client", lambda url: _Jwks())
+    monkeypatch.setattr(auth, "_email_confirmed", lambda sub, email: True)  # Supabase : adresse confirmée
     from app.web import app as appmod
     monkeypatch.setattr(appmod, "is_server_mode", lambda: True)
     with get_session() as s, s.begin():
@@ -221,3 +222,30 @@ def test_health_reports_engine_stall(server):
         s.commit()
     r = server.get("/api/health")
     assert r.status_code == 503 and r.json()["engine_age_s"] >= 1800
+
+
+
+def test_unconfirmed_email_is_not_linked(server, monkeypatch):
+    """Revue externe, point 4 : un compte Supabase dont l'adresse n'est pas confirmée ne peut pas
+    prendre la place de l'employé invité (ou de l'administrateur) qui porte cette adresse."""
+    monkeypatch.setattr(auth, "_email_confirmed", lambda sub, email: False)
+    r = server.get("/api/me", headers=H("hamza@oddo.ma", sub="intrus"))
+    assert r.status_code == 403
+    with get_session() as s:
+        assert s.scalars(select(AppUser).where(AppUser.email == "hamza@oddo.ma")).one().auth_id is None
+
+
+def test_health_reports_backup_problems(server):
+    import json
+    from datetime import timedelta
+
+    from app.paths import data_dir
+    from app.timeutil import utcnow
+    p = data_dir() / "backup-status.json"
+    p.write_text(json.dumps({"ok": True, "ts": utcnow().isoformat(), "offsite": True}))
+    r = server.get("/api/health")
+    assert r.status_code == 200 and r.json()["backup"]["offsite"] is True
+    p.write_text(json.dumps({"ok": True, "ts": (utcnow() - timedelta(hours=40)).isoformat()}))
+    assert server.get("/api/health").status_code == 503
+    p.write_text(json.dumps({"ok": False, "ts": utcnow().isoformat(), "error": "x"}))
+    assert server.get("/api/health").status_code == 503

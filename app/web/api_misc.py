@@ -187,6 +187,9 @@ def settings_mailbox(body: dict):
             mailbox_service.save(s, values, password or None)
             s.add(EventLog(level="info", entity="mailbox", text="Réglages de la boîte mail enregistrés"))
             s.commit()
+        except mailbox_service.MailboxTaken as exc:
+            s.rollback()
+            raise HTTPException(409, {"errors": {"email": str(exc)}}) from None
         except credentials.CredentialError as exc:
             s.rollback()
             raise HTTPException(500, {"errors": {"password": str(exc)}}) from None

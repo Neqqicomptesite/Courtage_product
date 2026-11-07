@@ -25,7 +25,7 @@ import { formatDayTime, fullName, lot } from "@/lib/format";
 import { KindCards } from "@/components/kind-cards";
 import { RemindersPanel, openReminder } from "@/pages/agenda";
 import { DEPARTMENTS, SENIORITIES } from "@/pages/companies";
-import { cn } from "@/lib/utils";
+import { cn, safeUrl } from "@/lib/utils";
 
 /** V2.23 : une personne qui a répondu peut encore recevoir une séquence envoyée à l'unité (P2 après le rendez-vous). */
 const canSend = (status: string) => status === "active" || status === "replied";
@@ -310,8 +310,8 @@ function ContactSheet({ id, vocab, companies, companyKinds, onClosed }: { id: nu
         {canSend(c.status) && !c.suppressed && <Button size="sm" onClick={() => openSendSequence({ contacts: [c] })}><Send /> Envoyer une séquence</Button>}
         <Button size="sm" variant="outline" onClick={() => openComposer({ to: c.email })} title="Écrire depuis l'application"><Mail /> {c.email}</Button>
         {c.phone && <Button size="sm" variant="outline" asChild><a href={`tel:${c.phone}`}><Phone /> {c.phone}</a></Button>}
-        {c.linkedin_url && <Button size="sm" variant="outline" asChild><a href={c.linkedin_url} target="_blank" rel="noreferrer"><Linkedin /> LinkedIn</a></Button>}
-        {c.website && <Button size="sm" variant="outline" asChild><a href={c.website.startsWith("http") ? c.website : `https://${c.website}`} target="_blank" rel="noreferrer"><ExternalLink /> Site</a></Button>}
+        {safeUrl(c.linkedin_url) && <Button size="sm" variant="outline" asChild><a href={safeUrl(c.linkedin_url)} target="_blank" rel="noreferrer noopener"><Linkedin /> LinkedIn</a></Button>}
+        {safeUrl(c.website) && <Button size="sm" variant="outline" asChild><a href={safeUrl(c.website)} target="_blank" rel="noreferrer noopener"><ExternalLink /> Site</a></Button>}
       </div>
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border p-4 text-sm">

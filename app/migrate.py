@@ -23,8 +23,14 @@ def upgrade_to_head() -> None:
                 Base.metadata.create_all(engine)
                 cfg.attributes["db_url"] = url
                 command.stamp(cfg, "head")
-                return
+            else:
+                cfg.attributes["db_url"] = url
+                command.upgrade(cfg, "head")
+            # V3 : tables fermées à l'API publique de Supabase, à chaque démarrage (app/db_lockdown.py)
+            from app.db_lockdown import lock_down
+            with engine.begin() as conn:
+                lock_down(conn)
         finally:
             engine.dispose()
-        cfg.attributes["db_url"] = url
+        return
     command.upgrade(cfg, "head")

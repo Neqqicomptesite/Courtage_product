@@ -453,3 +453,14 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
 276. **Pages « classiques » V1** : absentes du serveur (elles ne vérifient pas la connexion).
 277. **Déploiement** : deploy/install.sh (cloud-init) ; mises à jour automatiques depuis GitHub toutes les
      15 min ; sauvegarde pg_dump + fichiers chaque nuit, 30 jours sur le serveur.
+278. **Revue externe (Claude Opus, 07/11/2026)** : points vérifiés un par un dans le code.
+     Corrigés : cache de la boîte mail commun à tous (fuite d'emails entre employés) ; tables
+     Supabase ouvertes à l'API publique (RLS + droits retirés à anon/authenticated à chaque
+     démarrage, Data API coupée par Omar) ; mise à jour automatique trop puissante (code
+     possédé par root, plus de réinstallation des fichiers système, 20 h–7 h seulement,
+     sauvegarde avant) ; liaison de compte sans adresse confirmée ; mot de passe d'un collègue
+     écrasable ; liens javascript: ; pièces jointes par simple numéro ; verrou de synchro
+     commun ; admin par défaut sans employé ; HS256 ; sslmode ; en-têtes et CSP ; ports mail.
+     Sauvegarde : contrôle de relecture, copie chiffrée hors serveur (Supabase Storage),
+     état remonté par /api/health, script de restauration testé.
+     Non retenu : « GET /api/notifications modifie des données » (vérifié : aucune écriture).

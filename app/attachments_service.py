@@ -112,4 +112,5 @@ def attach(msg: EmailMessage, atts: list[Attachment]) -> list[str]:
 
 
 def as_json(a: Attachment) -> dict:
-    return {"id": a.id, "name": a.filename, "size": a.size, "type": a.content_type}
+    # V3 : le jeton aléatoire est exigé pour télécharger (un numéro seul ne suffit plus)
+    return {"id": a.id, "name": a.filename, "size": a.size, "type": a.content_type, "token": a.token}

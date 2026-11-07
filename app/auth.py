@@ -64,7 +64,8 @@ def verify_token(token: str, cfg: SupabaseConfig | None = None) -> dict:
             key: object = cfg.jwt_secret
         else:
             key = _jwks_client(cfg.url).get_signing_key_from_jwt(token).key
-        return jwt.decode(token, key, algorithms=["ES256", "RS256", "HS256"],
+        algs = ["HS256"] if header.get("alg") == "HS256" else ["ES256", "RS256"]  # un seul type par branche
+        return jwt.decode(token, key, algorithms=algs,
                           audience="authenticated", issuer=cfg.issuer, leeway=30)
     except AuthError:
         raise
@@ -74,11 +75,32 @@ def verify_token(token: str, cfg: SupabaseConfig | None = None) -> dict:
         raise AuthError("Connexion invalide : reconnectez-vous.") from exc
 
 
+def _email_confirmed(sub: str, email: str) -> bool:
+    """V3 (revue externe, point 4) : avant de rattacher un compte Supabase à un employé invité
+    PAR SON ADRESSE, on demande à Supabase (clé secrète du serveur) que cette adresse soit bien
+    confirmée et appartienne à ce compte. En cas de doute : refus."""
+    import json
+    import urllib.request
+    cfg = config()
+    if not (cfg.url and cfg.secret_key and sub):
+        return False
+    req = urllib.request.Request(f"{cfg.url}/auth/v1/admin/users/{sub}",
+                                 headers={"apikey": cfg.secret_key})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read().decode())
+    except Exception:  # noqa: BLE001
+        return False
+    return bool(data.get("email_confirmed_at")) and str(data.get("email", "")).strip().lower() == email
+
+
 def resolve_user(claims: dict) -> tuple[int, str, str]:
     """(id, rôle, email) de l'employé correspondant au jeton. Lie le compte Supabase à
     l'employé invité lors de sa première connexion (par l'adresse email)."""
     sub = str(claims.get("sub") or "")
     email = str(claims.get("email") or "").strip().lower()
+    if claims.get("is_anonymous"):
+        raise AuthError("Ce compte n'a pas accès à ODDO Séquences.", 403)
     with get_session() as s, s.begin():
         u = s.scalars(select(AppUser).where(AppUser.auth_id == sub)).first() if sub else None
         if u is None and email:
@@ -86,6 +108,8 @@ def resolve_user(claims: dict) -> tuple[int, str, str]:
             if u is not None and u.auth_id and u.auth_id != sub:
                 u = None  # adresse déjà liée à un autre compte Supabase
             elif u is not None:
+                if not _email_confirmed(sub, email):
+                    raise AuthError("Adresse email non confirmée : utilisez le lien de votre invitation.", 403)
                 u.auth_id = sub
         if u is None:
             raise AuthError("Ce compte n'a pas accès à ODDO Séquences. Demandez une invitation.", 403)

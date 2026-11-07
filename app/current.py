@@ -22,7 +22,12 @@ def user_id() -> int | None:
 
 
 def is_admin() -> bool:
-    return _user.get() is None or _role.get() == "admin"
+    """Sans employé en cours : vrai en poste unique (une seule personne) ; FAUX sur le serveur
+    (refus par défaut : une future adresse hors connexion ne serait pas « admin »)."""
+    if _user.get() is None:
+        from app.paths import is_server_mode
+        return not is_server_mode()
+    return _role.get() == "admin"
 
 
 @contextmanager

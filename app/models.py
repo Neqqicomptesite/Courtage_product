@@ -12,7 +12,7 @@ from datetime import date, datetime
 from sqlalchemy import (
     JSON, Boolean, CheckConstraint, Date, ForeignKey, Index, Integer, String, Text, UniqueConstraint,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, validates
 
 from app.db import Base, UTCDateTime
 from app.timeutil import utcnow
@@ -91,6 +91,10 @@ class Company(Base):
     """Entreprise (V2.3). Le nom est aussi recopié dans contact.company, utilisé par les
     variables des emails ({{ entreprise }}), les filtres et l'export."""
     __tablename__ = "company"
+
+    @validates("website")
+    def _safe_links(self, _key, value):
+        return safe_web_url(value)
     __table_args__ = (_in("kind", CONTACT_KINDS),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -109,6 +113,11 @@ class Company(Base):
 
 class Contact(Base):
     __tablename__ = "contact"
+
+    @validates("website", "linkedin_url")
+    def _safe_links(self, _key, value):
+        return safe_web_url(value)
+
     __table_args__ = (_in("global_status", CONTACT_STATUSES), _in("kind", CONTACT_KINDS))
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -293,6 +302,23 @@ class ImapState(Base):
     folder: Mapped[str] = mapped_column(String(255), primary_key=True)
     uidvalidity: Mapped[int | None] = mapped_column(Integer)
     last_uid: Mapped[int] = mapped_column(Integer, default=0)
+
+
+def safe_web_url(value: str | None) -> str | None:
+    """V3 (revue externe, point 6) : un lien de site ou de profil n'est gardé que s'il est en
+    http(s). « exemple.ma » devient « https://exemple.ma » ; « javascript:… » ou tout autre
+    schéma est refusé (il deviendrait un lien piégé, cliquable par tous les collègues)."""
+    if value is None:
+        return None
+    v = value.strip()
+    if not v:
+        return None
+    low = v.lower()
+    if low.startswith(("http://", "https://")):
+        return v
+    if ":" in v.split("/")[0] or low.startswith("//"):
+        return None  # autre schéma (javascript:, data:, vbscript:…) : refusé
+    return "https://" + v
 
 
 def _current_user() -> int | None:

@@ -24,7 +24,7 @@ import { ApiError, api, type CompanyDetail, type CompanyInput, type Department, 
 import { RemindersPanel, openReminder } from "@/pages/agenda";
 import { openSendSequence } from "@/components/send-sequence";
 import { formatDayTime, fullName } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { cn, safeUrl } from "@/lib/utils";
 
 export const KINDS: { value: Kind; label: string; hint: string }[] = [
   { value: "prospect", label: "Prospect", hint: "Peut recevoir des campagnes" },
@@ -224,7 +224,7 @@ export function CompanyPage() {
         description={<span className="flex flex-wrap items-center gap-x-3 gap-y-1">
           {data.domain && <span className="inline-flex items-center gap-1"><Globe className="size-3.5" />{data.domain}</span>}
           {data.phone && <a href={`tel:${data.phone}`} className="inline-flex items-center gap-1 hover:text-primary"><Phone className="size-3.5" />{data.phone}</a>}
-          {data.website && <a href={data.website.startsWith("http") ? data.website : `https://${data.website}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-primary"><ExternalLink className="size-3.5" />Site</a>}
+          {safeUrl(data.website) && <a href={safeUrl(data.website)} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 hover:text-primary"><ExternalLink className="size-3.5" />Site</a>}
           {data.sector && <span>{data.sector}</span>}
         </span>}
         actions={<>

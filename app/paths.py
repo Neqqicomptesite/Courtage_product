@@ -30,6 +30,10 @@ def database_url() -> str:
             url = "postgresql://" + url[len("postgres://"):]
         if url.startswith("postgresql://"):
             url = "postgresql+psycopg://" + url[len("postgresql://"):]
+        # V3 (revue externe) : connexion chiffrée exigée vers une base distante (Supabase)
+        host = url.split("@")[-1].split("/")[0].split(":")[0]
+        if "sslmode=" not in url and host not in ("127.0.0.1", "localhost", "::1"):
+            url += ("&" if "?" in url else "?") + "sslmode=require"
         return url
     return f"sqlite:///{db_path()}"
 

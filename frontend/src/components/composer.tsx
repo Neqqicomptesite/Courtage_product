@@ -67,7 +67,7 @@ export function AttachmentChips({ items, onRemove }: { items: Attachment[]; onRe
       {items.map((a) => (
         <span key={a.id} className="inline-flex max-w-full items-center gap-1.5 rounded-md border bg-muted/40 py-1 pl-2 pr-1 text-xs">
           <Paperclip className="size-3 shrink-0 text-muted-foreground" />
-          <a href={`/api/attachments/${a.id}`} target="_blank" rel="noreferrer" className="truncate hover:underline">{a.name}</a>
+          <a href={`/api/attachments/${a.id}?t=${encodeURIComponent(a.token ?? "")}`} target="_blank" rel="noreferrer" className="truncate hover:underline">{a.name}</a>
           <span className="shrink-0 text-muted-foreground">{fileSize(a.size)}</span>
           {onRemove && <button type="button" className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground" aria-label={`Retirer ${a.name}`} onClick={() => onRemove(a.id)}><X className="size-3" /></button>}
         </span>

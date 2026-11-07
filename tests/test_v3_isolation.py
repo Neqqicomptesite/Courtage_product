@@ -214,3 +214,109 @@ def test_long_text_is_cut_to_column_size(db):
     with get_session() as s:
         c = s.query(Contact).filter_by(email="long@test.ma").one()
         assert len(c.first_name) == 120 and len(c.job_title) == 255
+
+
+def test_mailbox_cache_is_per_employee(monkeypatch):
+    """Revue externe, point 1 : le cache de la boîte mail (liste et emails ouverts) était commun.
+    Les UID IMAP étant propres à chaque boîte, l'email n°42 de A s'affichait pour l'email n°42 de B."""
+    from app import mailbox_browser as mbx
+
+    boxes = {1: b"Subject: Sinistre confidentiel du client de A\r\n\r\nA", 2: b"Subject: Email de B\r\n\r\nB"}
+
+    class Conn:
+        def __init__(self, raw):
+            self.raw = raw
+
+        def uid(self, *a):
+            return "OK", [(b"42 (BODY[] {10}", self.raw)]
+
+    monkeypatch.setattr(mbx, "_context", lambda: object())
+    monkeypatch.setattr(mbx, "_select_readonly", lambda conn, folder: None)
+    monkeypatch.setattr(mbx, "_close", lambda conn: None)
+    from app.current import user_id
+    monkeypatch.setattr(mbx, "_open", lambda ctx, f=None: Conn(boxes[user_id()]))
+    mbx._raw_cache.clear()
+    with as_user(1, "admin"):
+        assert b"client de A" in mbx._fetch_raw("INBOX", 42)
+    with as_user(2, "user"):
+        assert mbx._fetch_raw("INBOX", 42) == boxes[2]
+        mbx.invalidate("INBOX")   # n'efface que le cache de B
+    assert any(k[0] == 1 for k in mbx._raw_cache) and not any(k[0] == 2 for k in mbx._raw_cache)
+    mbx._raw_cache.clear()
+
+
+def test_supabase_api_roles_locked_out(db):
+    """Revue externe, point 2 : sur Supabase, les rôles de l'API publique (anon, authenticated)
+    recevaient par défaut tous les droits sur les tables créées en SQL. Elles doivent être
+    fermées (RLS sans règle + droits retirés), le propriétaire (le serveur) gardant l'accès."""
+    from sqlalchemy import text
+    if db.dialect.name != "postgresql":
+        pytest.skip("propre à PostgreSQL")
+    from app.db_lockdown import lock_down
+    with db.begin() as c:
+        c.execute(text("DO $$BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon NOLOGIN; END IF;"
+                       " IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF; END$$"))
+        c.execute(text("GRANT USAGE ON SCHEMA public TO anon, authenticated"))
+        c.execute(text("GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated"))  # comme Supabase
+        lock_down(c)
+    with db.connect() as c:
+        assert c.scalar(text("SELECT count(*) FROM pg_tables WHERE schemaname='public' AND NOT rowsecurity")) == 0
+        assert c.scalar(text("SELECT count(*) FROM information_schema.role_table_grants "
+                             "WHERE grantee IN ('anon','authenticated') AND table_schema='public'")) == 0
+        c.execute(text("SET ROLE anon"))
+        with pytest.raises(Exception):
+            c.execute(text("SELECT count(*) FROM contact"))
+
+
+def test_cannot_take_colleague_mailbox_or_password(server, omar_data):  # noqa: F811
+    """Revue externe, point 5 : saisir l'adresse d'un collègue dans ses réglages ne doit ni
+    réussir, ni remplacer son mot de passe (rangé sous cette adresse)."""
+    from app import credentials
+    credentials.set_password("omar@oddo.ma", "mot-de-passe-omar")
+    body = {"display_name": "Hamza", "email": "omar@oddo.ma", "smtp_host": "smtp.test.ma", "smtp_port": 587,
+            "smtp_security": "starttls", "imap_host": "imap.test.ma", "imap_port": 993, "username": "omar@oddo.ma",
+            "password": "pirate", "signature": "", "watched_folders": ["INBOX"]}
+    r = server.put("/api/settings/mailbox", json=body, headers=H("hamza@oddo.ma"))
+    assert r.status_code in (400, 409, 422), r.text
+    assert credentials.get_password("omar@oddo.ma") == "mot-de-passe-omar"
+
+
+def test_only_web_links_are_kept():
+    """Revue externe, point 6 : un lien « javascript:… » importé deviendrait cliquable par tous."""
+    from app.models import safe_web_url
+    assert safe_web_url("javascript:alert(1)") is None
+    assert safe_web_url(" JavaScript:alert(1)") is None
+    assert safe_web_url("data:text/html,x") is None
+    assert safe_web_url("//evil.example") is None
+    assert safe_web_url("exemple.ma") == "https://exemple.ma"
+    assert safe_web_url("https://www.linkedin.com/in/x") == "https://www.linkedin.com/in/x"
+    assert Contact(email="a@b.ma", linkedin_url="javascript:alert(1)").linkedin_url is None
+
+
+def test_no_user_is_not_admin_on_server(monkeypatch):
+    """Revue externe : sans employé en cours, refus par défaut sur le serveur (vrai seulement sur le PC)."""
+    from app import current, paths
+    monkeypatch.setattr(paths, "is_server_mode", lambda: True)
+    assert current.is_admin() is False
+    monkeypatch.setattr(paths, "is_server_mode", lambda: False)
+    assert current.is_admin() is True
+
+
+def test_mail_server_guard_on_server(monkeypatch):
+    """Revue externe : « Tester la connexion » ne doit pas viser le serveur lui-même ni un port quelconque."""
+    from app import paths
+    from app.web import routes_settings
+    monkeypatch.setattr(paths, "is_server_mode", lambda: True)
+    errors = {}
+    routes_settings._server_guard({"smtp_host": "127.0.0.1", "smtp_port": 587, "imap_host": "localhost", "imap_port": 6379}, errors)
+    assert "smtp_host" in errors and "imap_port" in errors
+
+
+def test_interface_security_headers(server):  # noqa: F811
+    from app.paths import STATIC_DIR
+    if not (STATIC_DIR / "v2" / "index.html").exists():
+        pytest.skip("interface non compilée")
+    r = server.get("/v2/", headers={"Origin": "http://testserver"})
+    csp = r.headers["content-security-policy"]
+    assert "script-src 'self' 'sha256-" in csp and "frame-ancestors 'none'" in csp and "test.supabase.co" in csp
+    assert r.headers["x-frame-options"] == "DENY" and r.headers["x-content-type-options"] == "nosniff"

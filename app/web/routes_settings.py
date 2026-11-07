@@ -69,7 +69,37 @@ def _read_mailbox_form(form) -> tuple[dict, dict]:
     }
     if v["smtp_security"] not in ("ssl", "starttls"):
         errors["smtp_security"] = "Sécurité SMTP inconnue."
+    _server_guard(v, errors)
     return v, errors
+
+
+SMTP_PORTS, IMAP_PORTS = {25, 465, 587, 2525}, {143, 993}
+
+
+def _server_guard(v: dict, errors: dict) -> None:
+    """V3 (revue externe) : sur le serveur, « Tester la connexion » et le moteur se connectent à
+    l'hôte saisi. On limite aux ports mail et on refuse les adresses internes (le serveur
+    lui-même, le réseau privé, le service de métadonnées du fournisseur)."""
+    from app.paths import is_server_mode
+    if not is_server_mode():
+        return
+    import ipaddress
+    import socket
+    for field, ports, label in (("smtp", SMTP_PORTS, "SMTP"), ("imap", IMAP_PORTS, "IMAP")):
+        port, host = v.get(f"{field}_port"), (v.get(f"{field}_host") or "").strip()
+        if isinstance(port, int) and port not in ports:
+            errors[f"{field}_port"] = f"Port {label} non autorisé (ports possibles : {', '.join(map(str, sorted(ports)))})."
+        if not host or f"{field}_host" in errors:
+            continue
+        try:
+            addrs = {a[4][0] for a in socket.getaddrinfo(host, None)}
+        except OSError:
+            continue  # nom introuvable : le test de connexion le dira clairement
+        for a in addrs:
+            ip = ipaddress.ip_address(a.split("%")[0])
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
+                errors[f"{field}_host"] = f"Serveur {label} non autorisé (adresse interne)."
+                break
 
 
 @router.post("/mailbox")

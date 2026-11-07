@@ -50,6 +50,10 @@ def server_config(values: dict, password: str) -> ServerConfig:
     )
 
 
+class MailboxTaken(ValueError):
+    """V3 : cette adresse est déjà la boîte d'un collègue."""
+
+
 def save(session: Session, values: dict, new_password: str | None) -> Mailbox:
     """Enregistre la boîte. Le mot de passe va dans keyring, jamais dans la base.
 
@@ -58,6 +62,14 @@ def save(session: Session, values: dict, new_password: str | None) -> Mailbox:
     """
     mb = get_primary(session)
     old_email = mb.email if mb else None
+    # V3 : vérifié AVANT d'écrire le mot de passe (rangé sous l'adresse de la boîte) : sinon
+    # saisir l'adresse d'un collègue remplaçait son mot de passe et bloquait ses envois.
+    from sqlalchemy import func, select
+    other = session.scalar(select(Mailbox.id).execution_options(oddo_all=True)
+                           .where(func.lower(Mailbox.email) == values["email"].strip().lower(),
+                                  Mailbox.id != (mb.id if mb else -1)))
+    if other is not None:
+        raise MailboxTaken("Cette adresse est déjà la boîte mail d'un collègue : chacun utilise la sienne.")
     if mb is None:
         from app.current import user_id
         mb = Mailbox(**{k: values[k] for k in DEFAULT_MAILBOX}, user_id=user_id())

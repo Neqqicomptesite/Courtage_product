@@ -94,7 +94,7 @@ export type ContactRow = ContactRef & {
 };
 export type Department = "souscription" | "gestion" | "production" | "maritime_transport" | "autre";
 export type Seniority = "junior" | "senior" | "directeur";
-export type Attachment = { id: number; name: string; size: number; type: string };
+export type Attachment = { id: number; name: string; size: number; type: string; token?: string };
 // V2.25 : l'aperçu exact avant l'envoi d'une séquence
 export type SendPayload = { contact_ids: number[]; overlap?: boolean; overrides?: Record<string, unknown>; fills?: Record<string, string>; attachment_ids?: number[]; max_steps?: number | null };
 export type ReviewEmail = { position: number; subject: string; body: string; planned_at: string | null; same_thread: boolean; problems: string[]; warnings: string[]; attachments: Attachment[] };

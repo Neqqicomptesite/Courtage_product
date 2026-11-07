@@ -33,7 +33,8 @@ def _parts(raw: bytes):
 def test_upload_rules(client, db):
     r = _upload(client)
     assert r.status_code == 200 and r.json()["name"] == "plaquette.pdf" and r.json()["size"] == len(PDF)
-    assert client.get(f"/api/attachments/{r.json()['id']}").content == PDF
+    assert client.get(f"/api/attachments/{r.json()['id']}?t={r.json()['token']}").content == PDF
+    assert client.get(f"/api/attachments/{r.json()['id']}").status_code == 404  # V3 : jeton exigé
     assert _upload(client, "virus.exe", b"MZ").status_code == 422
     assert _upload(client, "vide.pdf", b"").status_code == 422
     big = b"x" * (attachments_service.MAX_EMAIL_BYTES + 1)

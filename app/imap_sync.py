@@ -35,7 +35,14 @@ log = logging.getLogger(__name__)
 STALE_AFTER = timedelta(minutes=5)  # V2.17 : boîte relue toutes les 5 minutes (10 avant)
 FETCH_BATCH = 50
 OPEN = ("scheduled", "sending", "waiting", "error", "needs_review")
-_sync_lock = threading.Lock()
+_sync_locks: dict = {}          # V3 : un verrou par employé (la synchro de A ne bloque pas celle de B)
+_locks_guard = threading.Lock()
+
+
+def _sync_lock() -> threading.Lock:
+    from app.current import user_id
+    with _locks_guard:
+        return _sync_locks.setdefault(user_id(), threading.Lock())
 
 
 @dataclass
@@ -281,7 +288,8 @@ def sync(now: datetime | None = None, imap_factory=None) -> SyncReport:
     now = now or utcnow()
     imap_factory = imap_factory or transport.open_imap
     report = SyncReport()
-    if not _sync_lock.acquire(blocking=False):
+    lock = _sync_lock()
+    if not lock.acquire(blocking=False):
         return SyncReport(ok=True, error="Synchronisation déjà en cours")
     try:
         with get_session() as s:
@@ -333,7 +341,7 @@ def sync(now: datetime | None = None, imap_factory=None) -> SyncReport:
                     log.exception("Copies en attente dans « Envoyés » : nouvel essai plus tard")
             return report
     finally:
-        _sync_lock.release()
+        lock.release()
 
 
 SAFETY_FLAGS = ("\\archive", "\\trash")

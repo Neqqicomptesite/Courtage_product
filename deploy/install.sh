@@ -57,11 +57,11 @@ chmod 700 "$APP/.git"
 [ -d "$APP/.venv" ] || python3 -m venv "$APP/.venv"
 "$APP/.venv/bin/pip" install -q --upgrade pip
 "$APP/.venv/bin/pip" install -q -r "$APP/requirements.txt"
-chown -R oddo:oddo "$APP"
+chown -R root:root "$APP"   # code en lecture seule pour l'appli (revue externe, point 3)
 
 # 6. Services : appli, mises à jour automatiques, sauvegarde de nuit, HTTPS
 install -m 644 "$APP"/deploy/systemd/*.service "$APP"/deploy/systemd/*.timer /etc/systemd/system/
-install -m 755 "$APP/deploy/update.sh" "$APP/deploy/backup.sh" /usr/local/sbin/
+install -m 755 "$APP/deploy/update.sh" "$APP/deploy/backup.sh" "$APP/deploy/restore.sh" /usr/local/sbin/
 cat > /etc/caddy/Caddyfile <<CADDY
 $ODDO_HOST {
 	encode gzip

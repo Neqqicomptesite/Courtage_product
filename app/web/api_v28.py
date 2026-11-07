@@ -47,10 +47,12 @@ async def attachment_upload(file: UploadFile = File(...)):
 
 
 @router.get("/attachments/{aid:int}")
-def attachment_download(aid: int):
+def attachment_download(aid: int, t: str = ""):
+    """V3 (revue externe, point 8) : le jeton aléatoire de la pièce jointe est exigé, sinon
+    n'importe quel employé connecté pouvait tout télécharger en faisant défiler les numéros."""
     with get_session() as s:
         att = s.get(Attachment, aid)
-        if att is None or not attachments_service.path_of(att).is_file():
+        if att is None or not secrets.compare_digest(t, att.token or "") or not attachments_service.path_of(att).is_file():
             raise not_found("Pièce jointe")
         return FileResponse(attachments_service.path_of(att), media_type=att.content_type, filename=att.filename)
 

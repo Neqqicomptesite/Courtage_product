@@ -56,7 +56,32 @@ def health():
         except (TypeError, ValueError):
             age = None
     ok = age is None or age < 600
-    return JSONResponse({"ok": ok, "db": True, "engine_age_s": age}, status_code=200 if ok else 503)
+    # Sauvegarde (serveur, deploy/backup.sh) : en échec, ou dernière réussite de plus de 36 h -> alerte
+    backup = _backup_state()
+    if backup.get("failed") or (backup.get("age_h") is not None and backup["age_h"] > 36):
+        ok = False
+    return JSONResponse({"ok": ok, "db": True, "engine_age_s": age, "backup": backup}, status_code=200 if ok else 503)
+
+
+def _backup_state() -> dict:
+    import json as _json
+    from datetime import datetime, timezone
+
+    from app.paths import data_dir
+    from app.timeutil import utcnow
+    p = data_dir() / "backup-status.json"
+    try:
+        st = _json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not st.get("ok"):
+        return {"failed": True}
+    try:
+        ts = datetime.fromisoformat(st["ts"])
+        ts = ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+        return {"age_h": round((utcnow() - ts).total_seconds() / 3600, 1), "offsite": bool(st.get("offsite"))}
+    except (KeyError, TypeError, ValueError):
+        return {"failed": True}
 
 
 @router.get("/me")
@@ -104,8 +129,7 @@ def _supabase_invite(email: str) -> str | None:
     if public:  # le lien du mail ramène sur l'appli (sinon : « Site URL » réglée dans Supabase)
         url += "?redirect_to=" + quote(public + "/v2/", safe="")
     req = urllib.request.Request(url, data=json.dumps({"email": email}).encode(), method="POST",
-                                 headers={"apikey": c.secret_key, "Authorization": f"Bearer {c.secret_key}",
-                                          "Content-Type": "application/json"})
+                                 headers={"apikey": c.secret_key, "Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=15):
             return None
