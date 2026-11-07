@@ -1,10 +1,10 @@
 // V3 : l'équipe (administrateur seulement) : inviter un collègue, changer son rôle, le désactiver.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MailPlus, RotateCw, ShieldCheck, UserPlus, Users } from "lucide-react";
+import { DatabaseBackup, MailPlus, RotateCw, ShieldCheck, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { EmptyState, PageHeader, toastError } from "@/components/common";
+import { ConfirmDialog, EmptyState, PageHeader, toastError } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { api, type TeamUser } from "@/lib/api";
+import { api, ApiError, type TeamUser } from "@/lib/api";
 import { relativeTime } from "@/lib/format";
 import { useMe } from "@/pages/login";
 
@@ -60,6 +60,7 @@ export function TeamPage() {
           {data.map((u) => <Row key={u.id} u={u} self={me.server_mode && u.id === me.id} />)}
         </Card>
       )}
+      <ImportV2Card />
     </>
   );
 }
@@ -105,5 +106,55 @@ function Row({ u, self }: { u: TeamUser; self: boolean }) {
         Actif
       </label>
     </div>
+  );
+}
+
+/** Reprise des données de la V2 (une fois, au passage sur le serveur). */
+function ImportV2Card() {
+  const qc = useQueryClient();
+  const [file, setFile] = useState<File | null>(null);
+  const [askReplace, setAskReplace] = useState(false);
+  const run = useMutation({
+    mutationFn: (replace: boolean) => api.importV2(file!, replace),
+    onSuccess: (r) => {
+      const c = r.counts;
+      toast.success("Données de la V2 reprises", {
+        description: `${c.contact ?? 0} contacts, ${c.campaign ?? 0} campagnes, ${c.message ?? 0} messages, ${r.files} fichiers.`
+          + (r.mailbox ? ` Ressaisissez le mot de passe de ${r.mailbox} dans Réglages.` : ""),
+        duration: 15000,
+      });
+      setFile(null);
+      qc.invalidateQueries();
+    },
+    onError: (e) => {
+      if (e instanceof ApiError && e.status === 409) setAskReplace(true);
+      else toastError(e, "Import impossible");
+    },
+  });
+  return (
+    <Card className="mt-8 p-4">
+      <div className="flex items-start gap-3">
+        <DatabaseBackup className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1 space-y-3">
+          <div>
+            <p className="font-medium">Reprendre les données de la V2</p>
+            <p className="text-sm text-muted-foreground">
+              Envoyez le paquet « donnees-v2-….zip » préparé depuis votre PC : contacts, compagnies, séquences,
+              campagnes, messages et pièces jointes. Ils vous sont attribués. À faire une seule fois, au démarrage.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input type="file" accept=".zip" aria-label="Paquet de données V2" className="text-sm file:mr-3 file:rounded-md file:border file:bg-card file:px-3 file:py-1.5 file:text-sm"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            <Button variant="outline" disabled={!file || run.isPending} onClick={() => run.mutate(false)}>
+              {run.isPending && <RotateCw className="animate-spin" />} Importer
+            </Button>
+          </div>
+        </div>
+      </div>
+      <ConfirmDialog open={askReplace} onOpenChange={setAskReplace} title="Remplacer les données du serveur ?"
+        description="Le serveur contient déjà des campagnes ou des messages. L'import les remplacera tous par ceux du paquet (les comptes des employés sont conservés)."
+        confirmLabel="Remplacer" destructive onConfirm={() => { setAskReplace(false); run.mutate(true); }} />
+    </Card>
   );
 }

@@ -608,6 +608,12 @@ export const api = {
     request<TeamUser & { invite_error: string | null }>("/api/admin/users", { method: "POST", json: body }),
   teamUpdate: (id: number, body: { full_name?: string; role?: "admin" | "user"; active?: boolean }) =>
     request<TeamUser>(`/api/admin/users/${id}`, { method: "PATCH", json: body }),
+  importV2: (file: File, replace = false) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<{ counts: Record<string, number>; files: number; mailbox: string | null }>(
+      `/api/admin/import-v2${replace ? "?replace=true" : ""}`, { method: "POST", body: fd });
+  },
   teamResend: (id: number) => request<{ invite_error: string | null }>(`/api/admin/users/${id}/resend`, { method: "POST" }),
 
   testConnection: (body: MailboxSettings & { password?: string; send_test_email: boolean }) =>

@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import urllib.request
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
@@ -136,3 +136,23 @@ def resend_invite(uid: int):
             raise HTTPException(404, "Compte introuvable.")
         email = u.email
     return {"invite_error": _supabase_invite(email)}
+
+
+@router.post("/admin/import-v2")
+async def import_v2(file: UploadFile = File(...), replace: bool = False):
+    """Reprise des données de la V2 (paquet .zip fabriqué depuis le PC). Une seule fois en
+    principe : refusé si le serveur contient déjà des campagnes ou des messages, sauf replace=1."""
+    _require_admin()
+    from starlette.concurrency import run_in_threadpool
+
+    from app import import_v2 as iv
+    uid = user_id()
+    if uid is None:
+        raise HTTPException(400, "Réservé au serveur en ligne.")
+    data = await file.read()
+    if not replace and await run_in_threadpool(iv.existing_work):
+        raise HTTPException(409, "Le serveur contient déjà des campagnes ou des messages : l'import les remplacerait.")
+    try:
+        return await run_in_threadpool(iv.import_pack, data, uid)
+    except iv.ImportError_ as exc:
+        raise HTTPException(400, str(exc)) from exc
