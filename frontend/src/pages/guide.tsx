@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { api, type GuideKey } from "@/lib/api";
+import { SERVER_MODE } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const IMG = "/static/v2/guide/";
@@ -38,7 +39,11 @@ type Step = { key: GuideKey; title: string; text: ReactNode; href: string; cta: 
 const STEPS: Step[] = [
   {
     key: "mailbox", title: "Connecter votre boîte mail", href: "/settings", cta: "Réglages",
-    text: "Réglages → Boîte mail d'envoi : votre adresse, les serveurs indiqués dans le cPanel, votre mot de passe, puis « Tester la connexion ». Le mot de passe reste dans le coffre-fort de Windows.",
+    get text() {
+      return SERVER_MODE
+        ? "Réglages → Boîte mail d'envoi : votre adresse, les serveurs indiqués dans le cPanel (envoi : port 587, sécurité STARTTLS), votre mot de passe, puis « Tester la connexion ». Le mot de passe est rangé chiffré sur le serveur."
+        : "Réglages → Boîte mail d'envoi : votre adresse, les serveurs indiqués dans le cPanel, votre mot de passe, puis « Tester la connexion ». Le mot de passe reste dans le coffre-fort de Windows.";
+    },
   },
   {
     key: "signature", title: "Mettre votre signature", href: "/settings", cta: "Réglages",
@@ -130,7 +135,13 @@ const CHAPTERS: Chapter[] = [
   },
 ];
 
-const RULES: { icon: LucideIcon; title: string; text: string }[] = [
+type Rule = { icon: LucideIcon; title: string; text: string };
+const SERVER_RULES: Record<string, Rule> = {
+  "La fenêtre noire reste ouverte": { icon: MonitorCheck, title: "L'appli tourne en ligne", text: "Elle envoie et lit votre boîte 24 h/24, même PC éteint. Ouvrez-la depuis votre navigateur, avec votre compte." },
+  "Se répartir les prospects": { icon: Users, title: "Un prospect, un responsable", text: "Le premier qui écrit à un prospect le suit ; l'appli refuse qu'un collègue lui écrive aussi. Les compagnies d'assurance sont communes." },
+  "Ne jamais supprimer le dossier « data »": { icon: FolderLock, title: "Modèles communs : on duplique", text: "Les modèles de l'équipe ne se modifient pas (sauf l'administrateur) : « Dupliquer » crée votre version, que vous seul voyez." },
+};
+const RULES_PC: Rule[] = [
   { icon: FlaskConical, title: "Toujours commencer en mode test", text: "Badge orange en haut : chaque email part vers vous. On passe en réel seulement après avoir relu un essai." },
   { icon: MonitorCheck, title: "La fenêtre noire reste ouverte", text: "C'est le moteur d'envoi : réduisez-la, ne la fermez pas. PC éteint ou en veille : rien ne part, l'envoi reprend au redémarrage." },
   { icon: Clock, title: "Un rythme raisonnable", text: "Envois les jours ouvrés, aux heures de bureau, 25 par jour au plus. Nous partageons tous le domaine oddo.ma : trop d'envois ou de rebonds pénalisent tout le monde." },
@@ -138,13 +149,18 @@ const RULES: { icon: LucideIcon; title: string; text: string }[] = [
   { icon: MessageSquareReply, title: "Une réponse arrête les relances", text: "Dès qu'une personne répond, les relances de cette conversation s'arrêtent d'elles-mêmes. Pensez à lui répondre vous-même !" },
   { icon: FolderLock, title: "Ne jamais supprimer le dossier « data »", text: "Il contient vos contacts et votre historique. Une sauvegarde est faite à chaque démarrage." },
 ];
+const rules = () => RULES_PC.map((r) => (SERVER_MODE && SERVER_RULES[r.title]) || r);
 
 const FAQ: { q: string; a: ReactNode }[] = [
   { q: "Mon email ne part pas, pourquoi ?", a: <>Il reste peut-être un champ entre crochets à compléter, ou l'on est hors des heures d'envoi : il partira au prochain créneau. Vérifiez aussi le point vert « Boîte lue » en haut de l'écran : en rouge, rien ne part tant que la boîte est illisible.</> },
   { q: "Où retrouver les emails envoyés ?", a: <>Dans le dossier « Envoyés » de votre boîte, comme d'habitude : l'application envoie depuis votre vraie adresse.</> },
   { q: "Comment arrêter les relances pour une personne ?", a: <>Elles s'arrêtent d'elles-mêmes si elle répond. Sinon : Campagnes → la campagne → menu de la personne → « Retirer de la campagne ». Pour tout arrêter : « Mettre en pause ».</> },
   { q: "Puis-je modifier un modèle ?", a: <>Oui : Séquences → Modifier. Pour un seul envoi, utilisez plutôt « Personnaliser d'abord » : le modèle reste intact.</> },
-  { q: "Mes collègues voient-ils mes contacts ?", a: <>Non. Tout reste sur votre PC : contacts, emails, agenda.</> },
+  { q: "Mes collègues voient-ils mes contacts ?", get a() {
+    return SERVER_MODE
+      ? <>Les contacts et les compagnies sont communs à l'équipe : chacun voit qui suit quel prospect. Mais vos emails, vos campagnes, vos réponses, votre agenda et vos modèles personnels ne sont visibles que par vous.</>
+      : <>Non. Tout reste sur votre PC : contacts, emails, agenda.</>;
+  } },
 ];
 
 export function useGuide() {
@@ -290,7 +306,7 @@ export function ScreensTour() {
 export function RulesGrid() {
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {RULES.map((r) => (
+      {rules().map((r) => (
         <Card key={r.title}>
           <CardContent className="space-y-2 p-4">
             <r.icon className="size-5 text-primary" />

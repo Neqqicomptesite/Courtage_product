@@ -12,6 +12,7 @@ import { Link, NavLink, Outlet, useParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SERVER_MODE } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { FaqList, RulesGrid, ScreensTour, StartChecklist, useGuide, ZoomImage } from "@/pages/guide";
 
@@ -65,7 +66,9 @@ function Table({ rows, head }: { rows: ReactNode[][]; head: string[] }) {
 
 /* ------------------------------------------------------------------ rubriques */
 
-type Section = { slug: string; title: string; icon: LucideIcon; lead: string; keywords: string; body: () => ReactNode };
+type Section = { slug: string; title: string; icon: LucideIcon; lead: string; keywords: string; body: () => ReactNode;
+  /** V3 : rubrique propre à l'appli en ligne (comptes, équipe). */
+  serverOnly?: boolean };
 
 const SECTIONS: Section[] = [
   { slug: "prise-en-main", title: "Prise en main", icon: Compass, keywords: "démarrer fenêtre noire mode test réel plage envoi réflexes",
@@ -73,11 +76,15 @@ const SECTIONS: Section[] = [
     body: () => <>
       <H2>Comment l'appli travaille</H2>
       <Points items={[
-        <>La <B>fenêtre noire</B> est le moteur : tant qu'elle est ouverte (réduite, pas fermée) et le PC allumé, les emails partent et la boîte est lue. PC éteint ou en veille : rien ne part, tout reprend au redémarrage, rien n'est perdu.</>,
+        SERVER_MODE
+          ? <>L'appli tourne <B>en ligne, 24 h/24</B> : les emails partent et votre boîte est lue même quand votre PC est éteint. Vous l'ouvrez depuis votre navigateur, avec votre email et votre mot de passe.</>
+          : <>La <B>fenêtre noire</B> est le moteur : tant qu'elle est ouverte (réduite, pas fermée) et le PC allumé, les emails partent et la boîte est lue. PC éteint ou en veille : rien ne part, tout reprend au redémarrage, rien n'est perdu.</>,
         <>Les emails partent <B>un par un</B>, les jours ouvrés, aux heures de bureau (par défaut 9 h – 12 h 30 et 14 h 30 – 17 h 30), 25 par jour au plus : comme des emails écrits à la main.</>,
         <>Votre boîte est lue <B>toutes les 5 minutes</B> : les réponses arrêtent les relances, les emails reçus apparaissent dans la Boîte mail. Le point vert « Boîte lue » en haut le confirme.</>,
         <>Le <B>mode test</B> (badge orange en haut) envoie chaque email vers votre propre adresse, avec l'objet [TEST → destinataire]. On passe en réel dans Réglages → Mode test, en tapant REEL.</>,
-        <>Tout reste <B>sur votre PC</B> : vos collègues ne voient ni vos contacts ni vos envois. Une sauvegarde est faite à chaque démarrage et chaque jour.</>,
+        SERVER_MODE
+          ? <>Vos <B>emails, campagnes, réponses, agenda et modèles personnels</B> ne sont visibles que par vous. Les contacts et les compagnies sont communs à l'équipe : <Link to="/guide/equipe" className="text-primary hover:underline">Travailler en équipe</Link>.</>
+          : <>Tout reste <B>sur votre PC</B> : vos collègues ne voient ni vos contacts ni vos envois. Une sauvegarde est faite à chaque démarrage et chaque jour.</>,
         <>Tant que vous débutez : <B>relisez chaque email avant l'envoi</B> (Personnaliser d'abord) et comprenez les balises {"{{ … }}"} et [ … ] : <Link to="/guide/balises" className="text-primary hover:underline">Balises et relecture</Link>.</>,
       ]} />
       <H2>Les bons réflexes</H2>
@@ -251,9 +258,46 @@ const SECTIONS: Section[] = [
       ]} />
       <Shot img="echeance-1.png" alt="Ajouter un rappel : type, personne, date, note" caption={<>Exemple : <CaseLink to="renouvellement">un prospect avant son échéance</CaseLink>.</>} />
     </> },
+  { slug: "equipe", title: "Travailler en équipe", icon: Users, serverOnly: true,
+    keywords: "compte connexion mot de passe oublié invitation équipe collègue responsable prospect modèle commun dupliquer administrateur",
+    lead: "Votre compte, ce que voient vos collègues, les règles communes.",
+    body: () => <>
+      <H2>Votre compte</H2>
+      <Points items={[
+        <>Vous recevez une <B>invitation par email</B> de l'administrateur : le lien vous fait choisir votre mot de passe (10 caractères minimum).</>,
+        <>Ensuite, vous vous connectez avec votre <B>email @oddo.ma</B> et ce mot de passe. Oublié ? « Mot de passe oublié ? » sur l'écran de connexion.</>,
+        <>Première chose à faire : <B>Réglages → Boîte mail</B> (port d'envoi 587, sécurité STARTTLS), puis « Tester la connexion ». Votre mode test est activé par défaut.</>,
+        <>Votre compte est personnel : ne le partagez pas. Menu rond en haut à droite → <B>Se déconnecter</B> sur un ordinateur partagé.</>,
+      ]} />
+      <H2>Qui voit quoi</H2>
+      <Table head={["", "Visible par"]} rows={[
+        ["Vos emails, campagnes, réponses, rappels, journal", "Vous seul"],
+        ["Vos modèles personnels (créés ou dupliqués par vous)", "Vous seul"],
+        ["Contacts, compagnies, liste d'exclusion", "Toute l'équipe"],
+        ["Modèles communs (S1, P1, G1…) et textes communs", "Toute l'équipe ; modifiables par l'administrateur seulement"],
+      ]} />
+      <H2>Les règles communes</H2>
+      <Points items={[
+        <><B>Un prospect, un responsable</B> : le premier qui lui écrit le suit. Si un collègue le suit déjà, l'appli refuse l'envoi et indique qui contacter.</>,
+        <>Les <B>compagnies d'assurance</B> (gestionnaires, souscripteurs) sont communes : plusieurs collègues peuvent leur écrire.</>,
+        <>Un modèle commun ne vous convient pas ? <B>Dupliquez-le</B> : la copie est à vous, modifiable, invisible des autres.</>,
+        <>Effacer un contact suivi par un collègue, supprimer une compagnie ou retirer une exclusion : réservé à l'administrateur.</>,
+        <>Le domaine oddo.ma est partagé : respectez les plafonds d'envoi et le mode test tant que vous débutez.</>,
+      ]} />
+      <H2>Administrateur</H2>
+      <P>Menu <B>Équipe</B> : inviter un collègue, renvoyer son lien, changer son rôle, désactiver un compte (ses campagnes s'arrêtent, ses données restent).</P>
+    </> },
   { slug: "reglages", title: "Réglages et sécurité", icon: Settings2, keywords: "mode test réel plafonds rythme sauvegardes mise à jour mot de passe signature",
     lead: "Boîte mail, rythme d'envoi, mode test, sauvegardes, mises à jour.",
-    body: () => <>
+    body: () => SERVER_MODE ? <>
+      <Table head={["Réglage", "À savoir"]} rows={[
+        ["Boîte mail", "Les serveurs indiqués dans le cPanel (envoi : port 587, sécurité STARTTLS), votre mot de passe (rangé chiffré sur le serveur), « Tester la connexion », votre signature."],
+        ["Rythme d'envoi", "Jours et heures d'envoi (heure du Maroc), maximum par jour et par heure, pause entre deux emails, jours fériés (aucun envoi). Le domaine oddo.ma est partagé : restez raisonnable."],
+        ["Mode test", "Propre à chacun. Activé, tout part vers vous. Le désactiver demande de taper REEL. On peut le réactiver à tout moment."],
+        ["Sauvegardes", "Automatiques, chaque nuit et avant chaque mise à jour, gardées 30 jours, avec une copie chiffrée hors du serveur. Rien à faire de votre côté."],
+        ["Mises à jour", "Automatiques, la nuit (entre 20 h et 7 h), pour ne jamais couper un envoi. Vos données ne bougent pas."],
+      ]} />
+    </> : <>
       <Table head={["Réglage", "À savoir"]} rows={[
         ["Boîte mail", "Les serveurs indiqués dans le cPanel, votre mot de passe (rangé dans le coffre-fort de Windows, jamais dans un fichier), « Tester la connexion », votre signature."],
         ["Rythme d'envoi", "Jours et heures d'envoi (heure du Maroc), maximum par jour et par heure, pause entre deux emails, jours fériés (aucun envoi). Le domaine oddo.ma est partagé : restez raisonnable."],
@@ -557,7 +601,7 @@ export function GuideLayout() {
   const { data: g } = useGuide();
   const started = !!g && g.done < g.total;  // V2.23 : « Bien démarrer » disparaît une fois fini
   const match = (s: string) => !q.trim() || norm(s).includes(norm(q.trim()));
-  const sections = SECTIONS.filter((s) => match(`${s.title} ${s.lead} ${s.keywords}`));
+  const sections = SECTIONS.filter((s) => (!s.serverOnly || SERVER_MODE) && match(`${s.title} ${s.lead} ${s.keywords}`));
   const cases = USE_CASES.filter((u) => match(`${u.title} ${u.summary} ${u.keywords} ${u.tag}`));
   const item = "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors";
   const cls = ({ isActive }: { isActive: boolean }) => cn(item, isActive ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground");
@@ -664,7 +708,7 @@ export function GuideHome() {
       <section className="space-y-3 pb-8">
         <h2 className="text-base font-semibold">Toutes les rubriques</h2>
         <div className="grid gap-2 sm:grid-cols-2">
-          {SECTIONS.map((s) => (
+          {SECTIONS.filter((s) => !s.serverOnly || SERVER_MODE).map((s) => (
             <Link key={s.slug} to={`/guide/${s.slug}`}>
               <div className="flex items-start gap-3 rounded-lg border bg-card p-3 transition-colors hover:border-primary/40">
                 <s.icon className="mt-0.5 size-4 shrink-0 text-primary" />

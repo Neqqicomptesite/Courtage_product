@@ -5,6 +5,8 @@ import { createClient, type Session, type SupabaseClient } from "@supabase/supab
 export type AuthConfig = { server_mode: boolean; supabase_url: string; publishable_key: string };
 
 let client: SupabaseClient | null = null;
+/** Vrai quand l'appli tourne sur le serveur en ligne (V3) : le guide adapte ses explications. */
+export let SERVER_MODE = false;
 let currentToken: string | null = null;
 
 export function supabase(): SupabaseClient | null {
@@ -25,6 +27,7 @@ export async function loadAuthConfig(): Promise<AuthConfig> {
   const res = await fetch("/api/auth/config", { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`Serveur injoignable (${res.status}).`);
   const cfg = (await res.json()) as AuthConfig;
+  SERVER_MODE = cfg.server_mode;
   if (cfg.server_mode && !client) {
     client = createClient(cfg.supabase_url, cfg.publishable_key, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: "implicit" },
