@@ -7,6 +7,9 @@
 set -euo pipefail
 set -a; . /etc/oddo/env; set +a
 export PGSSLMODE=require   # connexion chiffrée vers Supabase
+# le client PostgreSQL le plus récent installé (pas l'enrobage pg_wrapper d'Ubuntu)
+PGBIN=$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1)
+[ -n "$PGBIN" ] && export PATH="$PGBIN:$PATH"
 DEST=/var/backups/oddo
 URL="${DATABASE_URL/postgresql+psycopg:/postgresql:}"
 if [ $# -eq 0 ]; then ls -1t "$DEST"; exit 0; fi

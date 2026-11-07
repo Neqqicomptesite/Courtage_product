@@ -10,6 +10,9 @@
 set -euo pipefail
 set -a; . /etc/oddo/env; set +a
 export PGSSLMODE=require   # connexion chiffrée vers Supabase
+# le client PostgreSQL le plus récent installé (pas l'enrobage pg_wrapper d'Ubuntu)
+PGBIN=$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1)
+[ -n "$PGBIN" ] && export PATH="$PGBIN:$PATH"
 DEST=/var/backups/oddo
 STATUS=/var/lib/oddo/backup-status.json
 STAMP=$(date +%Y-%m-%d_%H%M)

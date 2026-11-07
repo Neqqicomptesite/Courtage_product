@@ -19,9 +19,13 @@ set -a; . "$ENVF"; set +a
 # 1. Paquets : Python, git, Caddy (HTTPS automatique), client PostgreSQL récent (sauvegardes)
 apt-get update -q
 apt-get install -y -q python3-venv python3-dev git caddy ufw curl ca-certificates postgresql-common
-if ! command -v pg_dump >/dev/null || [ "$(pg_dump --version | grep -oE '[0-9]+' | head -1)" -lt 17 ]; then
+# Client PostgreSQL pour les sauvegardes : version >= celle de Supabase (17). D'abord celui
+# d'Ubuntu (26.04 : version 18), sinon le dépôt officiel PostgreSQL.
+pgver() { ls -d /usr/lib/postgresql/*/bin/pg_dump 2>/dev/null | sed -E 's#.*/postgresql/([0-9]+)/.*#\1#' | sort -n | tail -1; }
+[ "$(pgver)" ] || apt-get install -y -q postgresql-client || true
+if [ "$(pgver || echo 0)" -lt 17 ] 2>/dev/null || [ -z "$(pgver)" ]; then
   if /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y && apt-get install -y -q postgresql-client-18; then :
-  else echo "ATTENTION : client PostgreSQL 18 non installé, sauvegardes à vérifier"; apt-get install -y -q postgresql-client; fi
+  else echo "ATTENTION : client PostgreSQL 17+ introuvable : sauvegardes impossibles"; fi
 fi
 
 # 2. Pare-feu : SSH, HTTP (certificat), HTTPS
