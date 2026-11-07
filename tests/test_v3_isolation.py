@@ -338,3 +338,29 @@ def test_new_colleague_mailbox_form_is_prefilled(server):  # noqa: F811
     assert mb["email"] == "hamza@oddo.ma" and mb["username"] == "hamza@oddo.ma"
     assert (mb["smtp_host"], mb["smtp_port"], mb["smtp_security"]) == ("mail.oddo.ma", 587, "starttls")
     assert mb["sent_folder"] == "INBOX.Sent"
+
+
+def test_contact_owner_shown_filtered_and_assigned_by_admin(server, omar_data):  # noqa: F811
+    """« Commun avec assignation » : chacun voit qui suit un prospect, filtre « mes prospects /
+    non assignés », et seul l'admin attribue ou libère des prospects."""
+    h, o = H("hamza@oddo.ma"), H("omar@oddo.ma")
+    with get_session() as s, s.begin():
+        free = Contact(email="libre@prospect.ma", kind="prospect")
+        s.add(free)
+        s.flush()
+        free_id = free.id
+    rows = {r["email"]: r for r in server.get("/api/contacts", headers=h).json()["items"]}
+    assert rows["prospect@client.ma"]["owner"]["name"] == "Omar" and rows["prospect@client.ma"]["owner"]["me"] is False
+    assert rows["libre@prospect.ma"]["owner"] is None
+    mine = [r["email"] for r in server.get("/api/contacts?owner=me", headers=o).json()["items"]]
+    assert mine == ["prospect@client.ma"]
+    assert "libre@prospect.ma" in [r["email"] for r in server.get("/api/contacts?owner=none", headers=h).json()["items"]]
+    body = {"contact_ids": [free_id], "owner_id": omar_data["hamza"]}
+    assert server.post("/api/contacts/owner", json=body, headers=h).status_code == 403
+    assert server.post("/api/contacts/owner", json=body, headers=o).json() == {"updated": 1}
+    assert [r["email"] for r in server.get("/api/contacts?owner=me", headers=h).json()["items"]] == ["libre@prospect.ma"]
+    detail = server.get(f"/api/contacts/{free_id}", headers=h).json()
+    assert detail["owner"]["me"] is True
+    # libérer
+    server.post("/api/contacts/owner", json={"contact_ids": [free_id], "owner_id": None}, headers=o)
+    assert server.get(f"/api/contacts/{free_id}", headers=h).json()["owner"] is None

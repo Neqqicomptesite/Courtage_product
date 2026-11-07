@@ -6,7 +6,7 @@ import secrets
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Response, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from app import contacts_service as cs
@@ -21,8 +21,21 @@ from app.web.routes_contacts import MANUAL_REASON, MAX_UPLOAD, TOKEN_RE, _discar
 router = APIRouter(prefix="/api")
 
 
-def _row(c: Contact) -> dict:
-    return {**contact_ref(c), "job_title": c.job_title, "wave": c.wave, "status": c.global_status,
+def _owners(s) -> dict[int, str]:
+    """V3 : noms des employés (pour « Suivi par »), lus une fois par requête."""
+    from app.models import AppUser
+    return {u.id: (u.full_name or u.email) for u in s.scalars(select(AppUser))}
+
+
+def _owner(c: Contact, names: dict[int, str] | None) -> dict | None:
+    from app.current import user_id
+    if not c.owner_id:
+        return None
+    return {"id": c.owner_id, "name": (names or {}).get(c.owner_id, "un collègue"), "me": c.owner_id == user_id()}
+
+
+def _row(c: Contact, names: dict[int, str] | None = None) -> dict:
+    return {**contact_ref(c), "job_title": c.job_title, "wave": c.wave, "status": c.global_status, "owner": _owner(c, names),
             "reliability": cs.reliability_category(c.email_reliability), "sector_family": c.sector_family,
             "target_segment": c.target_segment, "kind": c.kind, "company_id": c.company_id,
             "department": c.department, "seniority": c.seniority}
@@ -35,10 +48,11 @@ def _filters(params: dict) -> cs.ContactFilters:
 @router.get("/contacts")
 def contacts(q: str = "", target_segment: str = "", sector_family: str = "", sequence_code: str = "",
              wave: str = "", reliability: str = "", status: str = "", campaign_id: str = "", kind: str = "",
-             company_id: str = "", department: str = "", seniority: str = ""):
+             company_id: str = "", department: str = "", seniority: str = "", owner: str = ""):
     f = _filters(locals())
     with get_session() as s:
-        rows = [_row(c) for c in s.scalars(cs.filtered_query(f))]
+        names = _owners(s)
+        rows = [_row(c, names) for c in s.scalars(cs.filtered_query(f))]
         opts = cs.filter_options(s)
         return {"total": cs.count_all(s), "items": rows,
                 "options": {**{k: v for k, v in opts.items() if k not in ("status", "campaigns")},
@@ -125,7 +139,7 @@ def contact_detail(cid: int):
             raise not_found("Contact")
         labels = settings_store.get(s, "custom_field_labels")
         return {
-            **_row(c),
+            **_row(c, _owners(s)),
             "sector": c.sector, "size_bucket": c.size_bucket, "website": c.website, "linkedin_url": c.linkedin_url,
             "email_reliability_detail": c.email_reliability, "source": c.source, "notes": c.notes,
             "custom": [{"key": k, "label": labels.get(k, k.replace("_", " ").capitalize()), "value": v}
@@ -141,6 +155,30 @@ def contact_detail(cid: int):
             "timeline": [{"ts": iso(t.ts), "kind": t.kind, "title": t.title, "detail": t.detail}
                          for t in cs.timeline(s, c)],
         }
+
+
+class OwnerIn(BaseModel):
+    contact_ids: list[int] = Field(min_length=1, max_length=5000)
+    owner_id: int | None = None   # None : plus de responsable (le prospect redevient libre)
+
+
+@router.post("/contacts/owner")
+def contacts_set_owner(body: OwnerIn):
+    """V3 : l'administrateur attribue des prospects à un employé (ou les libère). Les campagnes
+    déjà en cours ne bougent pas : elles restent dans la boîte de l'employé qui les a lancées."""
+    from app.models import AppUser
+    require_admin_or_owner(None, "Attribuer des contacts est réservé à l'administrateur.")
+    with get_session() as s:
+        if body.owner_id is not None:
+            u = s.get(AppUser, body.owner_id)
+            if u is None or not u.active:
+                raise HTTPException(404, "Employé introuvable ou désactivé.")
+        n = 0
+        for c in s.scalars(select(Contact).where(Contact.id.in_(body.contact_ids))):
+            c.owner_id = body.owner_id
+            n += 1
+        s.commit()
+        return {"updated": n}
 
 
 class NotesIn(BaseModel):

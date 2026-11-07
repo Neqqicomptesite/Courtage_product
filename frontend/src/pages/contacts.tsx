@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDownLeft, ArrowUpRight, Ban, CalendarPlus, StickyNote, Download, ExternalLink, FileSpreadsheet, Linkedin, Mail, MoreHorizontal, Paperclip, Pencil,
-  Phone, Rocket, RotateCcw, Search, Send, ShieldOff, Trash2, Upload, UserMinus, UserPlus, Users, X,
+  Phone, Rocket, RotateCcw, Search, Send, ShieldOff, Trash2, Upload, UserCheck, UserMinus, UserPlus, Users, X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -26,6 +26,7 @@ import { KindCards } from "@/components/kind-cards";
 import { RemindersPanel, openReminder } from "@/pages/agenda";
 import { DEPARTMENTS, SENIORITIES } from "@/pages/companies";
 import { cn, safeUrl } from "@/lib/utils";
+import { useMe } from "@/pages/login";
 
 /** V2.23 : une personne qui a répondu peut encore recevoir une séquence envoyée à l'unité (P2 après le rendez-vous). */
 const canSend = (status: string) => status === "active" || status === "replied";
@@ -42,7 +43,43 @@ const FILTERS_BY_KIND: Record<string, FilterDef[]> = {
   client: [{ key: "company_id", label: "Entreprise" }, STATUS_F, CAMPAIGN_F],
   partner: [{ key: "company_id", label: "Entreprise" }, STATUS_F, CAMPAIGN_F],
 };
-const KEEP_PARAMS = ["q", "kind", "open", "new"];
+const KEEP_PARAMS = ["q", "kind", "open", "new", "owner"];
+
+/** V3 : « Suivi par » d'un prospect (appli en ligne). */
+function OwnerBadge({ owner }: { owner?: { name: string; me: boolean } | null }) {
+  if (!owner) return null;
+  return <Badge variant={owner.me ? "info" : "secondary"} className="font-normal">{owner.me ? "Suivi par vous" : `Suivi par ${owner.name}`}</Badge>;
+}
+
+/** V3 : l'administrateur attribue des contacts à un employé (ou les libère). */
+function AssignMenu({ ids, onDone, size = "sm" }: { ids: number[]; onDone?: () => void; size?: "sm" | "icon" }) {
+  const me = useMe();
+  const qc = useQueryClient();
+  const { data: team } = useQuery({ queryKey: ["team"], queryFn: api.team, enabled: !!me?.server_mode && me.role === "admin" });
+  const assign = useMutation({
+    mutationFn: (uid: number | null) => api.contactsSetOwner(ids, uid),
+    onSuccess: (r, uid) => {
+      toast.success(uid === null ? `${r.updated} contact${r.updated > 1 ? "s" : ""} libéré${r.updated > 1 ? "s" : ""}` : `${r.updated} contact${r.updated > 1 ? "s" : ""} attribué${r.updated > 1 ? "s" : ""}`);
+      qc.invalidateQueries({ queryKey: ["contacts"] });
+      qc.invalidateQueries({ queryKey: ["contact"] });
+      onDone?.();
+    },
+    onError: (e) => toastError(e),
+  });
+  if (!me?.server_mode || me.role !== "admin") return null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild><Button size="sm" variant="outline" className={size === "icon" ? "h-8" : undefined}><UserCheck /> Attribuer</Button></DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {(team ?? []).filter((u) => u.active).map((u) => (
+          <DropdownMenuItem key={u.id} onSelect={() => assign.mutate(u.id)}>{u.full_name || u.email}</DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => assign.mutate(null)}>Personne (prospect libre)</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 function optionsFor(o: ContactList["options"] | undefined, key: string, kind: string): { value: string; label: string }[] {
   if (!o) return [];
@@ -88,6 +125,7 @@ export function ContactsPage() {
   const debouncedQ = useDebounced((v: string) => setParam("q", v.trim()), 300);
   const active = Object.keys(filters).filter((k) => k !== "q" && k !== "kind");
   const isInsurer = filters.kind === "insurer";  // V2.18 : colonnes Service et Niveau pour les assureurs
+  const serverMode = !!useMe()?.server_mode;
   // V2.11 : sélection multiple (envoyer une séquence, ajouter un rappel à plusieurs personnes)
   const [sel, setSel] = useState<Set<number>>(new Set());
   const rows = data?.items ?? [];
@@ -139,6 +177,14 @@ export function ContactsPage() {
               </NativeSelect>
             );
           })}
+          {serverMode && (
+            <NativeSelect value={filters.owner ?? ""} onChange={(e) => setParam("owner", e.target.value)} aria-label="Suivi par"
+              className={cn("h-8 w-auto rounded-full pr-8 text-xs", filters.owner && "border-primary bg-accent font-medium text-accent-foreground")}>
+              <option value="">Suivi : tout le monde</option>
+              <option value="me">Mes prospects</option>
+              <option value="none">Prospects libres</option>
+            </NativeSelect>
+          )}
           {active.length > 0 && (
             <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setQ(""); setParams({}, { replace: true }); }}><X /> Effacer les filtres</Button>
           )}
@@ -165,6 +211,7 @@ export function ContactsPage() {
                 <Send /> Envoyer une séquence
               </Button>
               <Button size="sm" variant="outline" onClick={() => openReminder({ contacts: chosen })}><CalendarPlus /> Ajouter un rappel</Button>
+              <AssignMenu ids={chosen.map((c) => c.id)} onDone={() => setSel(new Set())} />
               <Button size="sm" variant="ghost" onClick={() => setSel(new Set())}><X /> Désélectionner</Button>
             </div>
           )}
@@ -187,6 +234,7 @@ export function ContactsPage() {
                     <td className="max-w-[16rem] px-4 py-2.5">
                       <div className="truncate font-medium">{fullName(c)}</div>
                       <div className="truncate text-xs text-muted-foreground">{c.job_title ?? c.email}</div>
+                      {c.owner && <div className="mt-1"><OwnerBadge owner={c.owner} /></div>}
                     </td>
                     <td className="max-w-[14rem] px-4 py-2.5">
                       <div className="flex items-center gap-1.5">
@@ -292,8 +340,9 @@ function ContactSheet({ id, vocab, companies, companyKinds, onClosed }: { id: nu
             {c.job_title}{c.job_title && c.company && " · "}
             {c.company_ref ? <Link to={`/companies/${c.company_ref.id}`} className="font-medium text-foreground hover:text-primary hover:underline">{c.company_ref.name}</Link> : c.company}
           </p>
-          <div className="mt-2 flex flex-wrap gap-1.5"><KindBadge kind={c.kind} /><ContactStatus status={c.status} />{c.suppressed && <Badge variant="destructive">Adresse bloquée</Badge>}</div>
+          <div className="mt-2 flex flex-wrap gap-1.5"><KindBadge kind={c.kind} /><ContactStatus status={c.status} />{c.suppressed && <Badge variant="destructive">Adresse bloquée</Badge>}<OwnerBadge owner={c.owner} /></div>
         </div>
+        <AssignMenu ids={[c.id]} size="icon" />
         <Button variant="outline" size="sm" className="h-8" onClick={() => setEditing(true)}><Pencil /> Modifier</Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button variant="outline" size="icon" className="size-8" aria-label="Actions"><MoreHorizontal /></Button></DropdownMenuTrigger>

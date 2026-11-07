@@ -57,6 +57,7 @@ class ContactFilters:
     company_id: str = ""
     department: str = ""   # V2.18 : filtres de l'onglet Assureurs
     seniority: str = ""
+    owner: str = ""        # V3 : "me" (mes prospects), "none" (non assignés) ou un numéro d'employé
 
     @classmethod
     def from_query(cls, params) -> "ContactFilters":
@@ -81,6 +82,13 @@ def filtered_query(f: ContactFilters):
     for col in ("department", "seniority"):
         if getattr(f, col):
             stmt = stmt.where(getattr(Contact, col) == getattr(f, col))
+    if f.owner == "me":
+        from app.current import user_id
+        stmt = stmt.where(Contact.owner_id == user_id())
+    elif f.owner == "none":
+        stmt = stmt.where(Contact.owner_id.is_(None))
+    elif f.owner.isdigit():
+        stmt = stmt.where(Contact.owner_id == int(f.owner))
     if f.reliability:
         stmt = stmt.where(_reliability_clause(f.reliability))
     if f.campaign_id.isdigit():

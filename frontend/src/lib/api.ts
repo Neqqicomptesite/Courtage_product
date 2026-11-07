@@ -81,6 +81,8 @@ export type SyncResult = { ok: boolean; error: string | null; counts: Record<str
 
 // ----------------------------------------------------------------- contacts
 export type ContactRow = ContactRef & {
+  /** V3 : employé qui suit ce contact (prospects) ; null = libre. */
+  owner?: { id: number; name: string; me: boolean } | null;
   job_title: string | null;
   wave: string | null;
   status: "active" | "replied" | "bounced" | "unsubscribed" | "do_not_contact";
@@ -493,6 +495,8 @@ export const api = {
   contacts: (f: Record<string, string>) => request<ContactList>(`/api/contacts${qs(f)}`),
   contactsCount: (f: Record<string, string>) => request<{ matching: number; active: number; protected: number }>(`/api/contacts/count${qs(f)}`),
   contact: (id: number) => request<ContactDetail>(`/api/contacts/${id}`),
+  contactsSetOwner: (contact_ids: number[], owner_id: number | null) =>
+    request<{ updated: number }>("/api/contacts/owner", { method: "POST", json: { contact_ids, owner_id } }),
   contactCreate: (body: ContactInput) => request<{ id: number; warnings: string[] }>("/api/contacts", { method: "POST", json: body }),
   contactUpdate: (id: number, body: ContactInput) => request<{ changed: string[] }>(`/api/contacts/${id}`, { method: "PUT", json: body }),
   followups: () => request<Followup[]>("/api/followups"),
