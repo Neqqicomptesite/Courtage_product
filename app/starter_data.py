@@ -147,6 +147,17 @@ def apply_sequences(s: Session, force: bool = False) -> dict:
             report["blocks_filled"] += 1
     s.flush()
 
+    # V3 : textes de départ corrigés après coup, remplacés seulement s'ils n'ont pas été retouchés
+    report["texts_updated"] = 0
+    for fix in data.get("replace_texts", []):
+        for seq in s.scalars(select(Sequence).where(Sequence.name == fix["name"], Sequence.owner_id.is_(None))
+                             .execution_options(oddo_all=True)):
+            st = s.scalars(select(Step).where(Step.sequence_id == seq.id, Step.position == fix["position"])).first()
+            if st is not None and st.body_template == fix["old"]:
+                st.body_template = fix["new"]
+                report["texts_updated"] += 1
+    s.flush()
+
     existing = {n for n in s.scalars(select(Sequence.name))}
     for spec in data["sequences"]:
         if spec["name"] in existing:

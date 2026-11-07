@@ -146,3 +146,33 @@ def test_quotation_templates_by_branch_ready_at_first_open(client, db):
     # la branche se change dans l'éditeur, et se garde à la duplication
     dup = client.post(f"/api/sequences/{cot['Retraite']['id']}/duplicate", headers=O).json()
     assert client.get(f"/api/sequences/{dup['id']}").json()["branch"] == "Retraite"
+
+
+def test_starter_text_fix_applies_only_if_untouched(db):
+    """Corrections d'Omar (C8 sans « objets de valeur », C10 sans « maître d'ouvrage ») : appliquées
+    sur un serveur qui a déjà les modèles, sauf si quelqu'un a retouché le texte."""
+    import json
+
+    from sqlalchemy import select
+
+    from app import settings_store, starter_data
+    from app.db import get_session
+    from app.models import Sequence, Step
+    data = starter_data.load_sequences()
+    with get_session() as s:
+        settings_store.set_(s, "starter_sequences_version", 2)   # serveur déjà à la version 2…
+        for fix in data["replace_texts"]:                         # …avec les anciens textes
+            seq = Sequence(name=fix["name"], category="souscription")
+            s.add(seq)
+            s.flush()
+            s.add(Step(sequence_id=seq.id, position=1, body_template=fix["old"]))
+        s.flush()
+        c10 = s.scalars(select(Step).join(Sequence).where(Sequence.name.like("C10%"))).one()
+        c10.body_template = c10.body_template + "\\nMon ajout."                 # C10 retouché à la main
+        r = starter_data.apply_sequences(s)
+        s.commit()
+        assert r["texts_updated"] == 1
+        c8 = s.scalars(select(Step).join(Sequence).where(Sequence.name.like("C8%"))).one().body_template
+        assert "Objets de valeur" not in c8 and "Valeur du contenu" in c8
+        assert "Maître d'ouvrage" in s.scalars(select(Step).join(Sequence).where(Sequence.name.like("C10%"))).one().body_template
+    assert "Maître d'ouvrage" not in json.dumps([q for q in data["sequences"] if q["code"] == "C10"], ensure_ascii=False)

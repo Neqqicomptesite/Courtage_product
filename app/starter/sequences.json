@@ -1,5 +1,5 @@
 {
- "version": 2,
+ "version": 3,
  "remove_sequences": [
   "Prospection PME – 3 étapes",
   "PME",
@@ -537,7 +537,7 @@
      "delay_days": 0,
      "business_days": true,
      "same_thread": false,
-     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation multirisque habitation au profit de notre client [Nom du client].\n\nAdresse : [Adresse]\nType de logement : [Appartement / Villa]\nSuperficie : [Superficie] m²\nQualité : [Propriétaire / Locataire]\nValeur du contenu : [Valeur du contenu] MAD\nObjets de valeur : [Objets de valeur]\nDate d'effet souhaitée : [Date d'effet]\n\nMerci de nous adresser votre meilleure proposition (garanties, franchises, prime), ainsi que la liste des éléments complémentaires éventuellement nécessaires.\n\nBien cordialement,",
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation multirisque habitation au profit de notre client [Nom du client].\n\nAdresse : [Adresse]\nType de logement : [Appartement / Villa]\nSuperficie : [Superficie] m²\nQualité : [Propriétaire / Locataire]\nValeur du contenu : [Valeur du contenu] MAD\nDate d'effet souhaitée : [Date d'effet]\n\nMerci de nous adresser votre meilleure proposition (garanties, franchises, prime), ainsi que la liste des éléments complémentaires éventuellement nécessaires.\n\nBien cordialement,",
      "subjects": [
       "Demande de cotation Multirisque habitation – [Nom du client]"
      ]
@@ -595,7 +595,7 @@
      "delay_days": 0,
      "business_days": true,
      "same_thread": false,
-     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation tous risques chantier au profit de notre client [Nom du client].\n\nNature des travaux : [Nature des travaux]\nAdresse du chantier : [Adresse du chantier]\nMontant du marché : [Montant du marché] MAD\nDurée des travaux : [Durée]\nMaître d'ouvrage : [Maître d'ouvrage]\nDate de démarrage : [Date de démarrage]\n\nMerci de nous adresser votre meilleure proposition (garanties, franchises, prime), ainsi que la liste des éléments complémentaires éventuellement nécessaires.\n\nBien cordialement,",
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation tous risques chantier au profit de notre client [Nom du client].\n\nNature des travaux : [Nature des travaux]\nAdresse du chantier : [Adresse du chantier]\nMontant du marché : [Montant du marché] MAD\nDurée des travaux : [Durée]\nDate de démarrage : [Date de démarrage]\n\nMerci de nous adresser votre meilleure proposition (garanties, franchises, prime), ainsi que la liste des éléments complémentaires éventuellement nécessaires.\n\nBien cordialement,",
      "subjects": [
       "Demande de cotation Tous risques chantier – [Nom du client]"
      ]
@@ -613,6 +613,20 @@
      "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe relance la demande de cotation ci-dessous : nous devons revenir vers notre client prochainement. Merci de m'indiquer si un élément complémentaire vous est nécessaire.\n\nBien cordialement,"
     }
    ]
+  }
+ ],
+ "replace_texts": [
+  {
+   "name": "C8 · Cotation Multirisque habitation",
+   "position": 1,
+   "old": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation multirisque habitation au profit de notre client [Nom du client].\n\nAdresse : [Adresse]\nType de logement : [Appartement / Villa]\nSuperficie : [Superficie] m²\nQualité : [Propriétaire / Locataire]\nValeur du contenu : [Valeur du contenu] MAD\nObjets de valeur : [Objets de valeur]\nDate d'effet souhaitée : [Date d'effet]\n\nMerci de nous adresser votre meilleure proposition (garanties, franchises, prime), ainsi que la liste des éléments complémentaires éventuellement nécessaires.\n\nBien cordialement,",
+   "new": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation multirisque habitation au profit de notre client [Nom du client].\n\nAdresse : [Adresse]\nType de logement : [Appartement / Villa]\nSuperficie : [Superficie] m²\nQualité : [Propriétaire / Locataire]\nValeur du contenu : [Valeur du contenu] MAD\nDate d'effet souhaitée : [Date d'effet]\n\nMerci de nous adresser votre meilleure proposition (garanties, franchises, prime), ainsi que la liste des éléments complémentaires éventuellement nécessaires.\n\nBien cordialement,"
+  },
+  {
+   "name": "C10 · Cotation Tous risques chantier",
+   "position": 1,
+   "old": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation tous risques chantier au profit de notre client [Nom du client].\n\nNature des travaux : [Nature des travaux]\nAdresse du chantier : [Adresse du chantier]\nMontant du marché : [Montant du marché] MAD\nDurée des travaux : [Durée]\nMaître d'ouvrage : [Maître d'ouvrage]\nDate de démarrage : [Date de démarrage]\n\nMerci de nous adresser votre meilleure proposition (garanties, franchises, prime), ainsi que la liste des éléments complémentaires éventuellement nécessaires.\n\nBien cordialement,",
+   "new": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation tous risques chantier au profit de notre client [Nom du client].\n\nNature des travaux : [Nature des travaux]\nAdresse du chantier : [Adresse du chantier]\nMontant du marché : [Montant du marché] MAD\nDurée des travaux : [Durée]\nDate de démarrage : [Date de démarrage]\n\nMerci de nous adresser votre meilleure proposition (garanties, franchises, prime), ainsi que la liste des éléments complémentaires éventuellement nécessaires.\n\nBien cordialement,"
   }
  ]
 }
