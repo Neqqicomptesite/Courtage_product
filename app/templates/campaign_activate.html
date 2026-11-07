@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Activer – {{ camp.name }}{% endblock %}
+{% block content %}
+<p><a href="/campaigns/{{ camp.id }}">← {{ camp.name }}</a></p>
+<h1>Activer « {{ camp.name }} »</h1>
+
+{% if report.test_mode %}
+  <div class="banner banner-test">Mode test activé : tous les emails partiront vers votre propre adresse,
+    avec l'objet préfixé [TEST → destinataire]. Aucun contact ne recevra rien.</div>
+{% else %}
+  <div class="banner banner-live">Mode test DÉSACTIVÉ : les emails partiront réellement aux contacts.</div>
+{% endif %}
+
+<div class="stats">
+  <article><span class="big">{{ report.eligible|length }}</span>contact(s) inscrit(s)</article>
+  <article><span class="big">{{ report.excluded|length }}</span>exclu(s)</article>
+  <article><span class="big small-text">{{ report.first_send|local_long if report.first_send else "—" }}</span>premier envoi</article>
+  <article><span class="big small-text">{{ report.last_send|local_long if report.last_send else "—" }}</span>fin estimée</article>
+</div>
+<p class="hint">Fin estimée avec vos plafonds et vos jours d'envoi, en supposant que personne ne réponde.
+  Chaque réponse arrête les relances de la personne : la fin réelle sera donc plus tôt.</p>
+
+{% if report.with_problems %}
+  <article class="error-box">
+    <strong>Activation impossible : {{ report.with_problems|length }} contact(s) produisent un email incomplet.</strong>
+    Corrigez la séquence ou les blocs (ou retirez ces contacts du filtre), puis revenez ici.
+    <ul>
+      {% for c in report.with_problems[:30] %}
+        <li><a href="/sequences/{{ camp.sequence_id }}/preview?contact_id={{ c.contact.id }}">{{ c.contact.company or c.contact.email }}</a>
+          ({{ c.contact.sequence_code or "sans code" }}) : {{ c.problems[:3]|join(" ; ") }}{% if c.problems|length > 3 %}…{% endif %}</li>
+      {% endfor %}
+      {% if report.with_problems|length > 30 %}<li>… et {{ report.with_problems|length - 30 }} autre(s)</li>{% endif %}
+    </ul>
+  </article>
+{% endif %}
+
+{% if not report.eligible %}<p class="error-box">Aucun contact éligible avec ces filtres.</p>{% endif %}
+
+{% if report.reliability_ratio > warn_ratio %}
+  <p class="warn-box">{{ (report.reliability_ratio * 100)|round|int }} % des contacts ont un email dont la fiabilité n'est
+    pas « Bonne » (seuil d'alerte : {{ (warn_ratio * 100)|int }} %). Beaucoup de rebonds peuvent nuire à la réputation de oddo.ma.</p>
+{% endif %}
+{% for w in report.link_warnings %}<p class="warn-box">{{ w }}</p>{% endfor %}
+
+{% if report.overlapping %}
+  <article>
+    <p class="warn-box">{{ report.overlapping|length }} contact(s) sont déjà en cours dans une autre campagne.
+      {% if overlap %}Ils SERONT inscrits.{% else %}Ils ne seront PAS inscrits.{% endif %}</p>
+    <a href="/campaigns/{{ camp.id }}/activate?overlap={{ '' if overlap else '1' }}">
+      {{ "Ne pas les inscrire" if overlap else "Les inscrire quand même" }}</a>
+  </article>
+{% endif %}
+
+{% if report.excluded %}
+  <details><summary>Contacts exclus automatiquement ({{ report.excluded|length }})</summary>
+    <ul>{% for c in report.excluded %}<li>{{ c.contact.email }} : {{ c.excluded }}</li>{% endfor %}</ul>
+  </details>
+{% endif %}
+
+<form method="post" action="/campaigns/{{ camp.id }}/activate"
+      {% if not report.test_mode %}onsubmit="return confirm('Les emails partiront RÉELLEMENT à {{ report.eligible|length }} contact(s). Confirmer ?');"{% endif %}>
+  <input type="hidden" name="confirm" value="1">
+  <input type="hidden" name="overlap" value="{{ '1' if overlap else '' }}">
+  <button type="submit" {% if report.blocked %}disabled{% endif %} class="{{ '' if report.test_mode else 'contrast' }}">
+    {% if report.blocked %}Activation impossible{% elif report.test_mode %}Activer en mode test{% else %}Activer : envois réels{% endif %}
+  </button>
+</form>
+{% endblock %}

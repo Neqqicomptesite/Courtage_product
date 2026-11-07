@@ -1,0 +1,49 @@
+{# Une réponse, avec ses boutons de classement. Renvoyée telle quelle par HTMX après chaque clic. #}
+{% if hide %}
+  <div id="reply-{{ m.id }}"></div>
+{% else %}
+<article class="reply-card" id="reply-{{ m.id }}">
+  <header class="reply-head">
+    <div>
+      <a href="/contacts/{{ c.id }}"><strong>{{ c.first_name or "" }} {{ c.last_name or "" }}</strong></a>
+      · {{ c.company or c.email }} <code>{{ c.sequence_code or "—" }}</code>
+      {% if m.test_mode %}<span class="badge camp-paused">mode test</span>{% endif %}
+      {% if m.kind == "auto_reply" %}<span class="badge enr-completed">absence</span>{% endif %}
+      {% if m.kind == "unsubscribe" %}<span class="badge enr-bounced">STOP</span>{% endif %}
+    </div>
+    <small class="hint">{{ m.received_at|local_long }}</small>
+  </header>
+  <p class="reply-subject">{{ m.subject or "(sans objet)" }}</p>
+  <blockquote class="reply-text">{{ m.body_text or "(message vide)" }}</blockquote>
+  {% if m.return_date %}<p class="hint">Retour prévu : {{ m.return_date }}</p>{% endif %}
+  {% if m.body_full and m.body_full != m.body_text %}
+    <details><summary>Voir le message complet (avec la citation)</summary><pre class="mail-body">{{ m.body_full }}</pre></details>
+  {% endif %}
+  {% if error %}<p class="error-text">{{ error }}</p>{% endif %}
+
+  <div class="classify">
+    {% if m.classification %}
+      <p>Classée : <strong>{{ classes[m.classification] }}</strong>
+        {% if m.callback_on %} · rappel le {{ m.callback_on.strftime("%d/%m/%Y") }}{% endif %}</p>
+    {% endif %}
+    {% for key, label in classes.items() if key != "later" %}
+      <button type="button" class="small {{ 'secondary' if m.classification != key else '' }} outline"
+              hx-post="/replies/{{ m.id }}/classify" hx-vals='{"c": "{{ key }}", "f": "{{ f }}"}'
+              hx-target="#reply-{{ m.id }}" hx-swap="outerHTML"
+              {% if key == "unsubscribe" %}hx-confirm="Désinscrire définitivement cette personne (liste d'exclusion) ?"{% endif %}>
+        {{ label }}</button>
+    {% endfor %}
+    <form class="inline-form later-form" hx-post="/replies/{{ m.id }}/classify" hx-target="#reply-{{ m.id }}" hx-swap="outerHTML">
+      <input type="hidden" name="c" value="later"><input type="hidden" name="f" value="{{ f }}">
+      <input type="date" name="callback_on" value="{{ m.callback_on.isoformat() if m.callback_on else '' }}" min="{{ today.isoformat() }}">
+      <button type="submit" class="small secondary outline">À rappeler plus tard</button>
+    </form>
+  </div>
+  <form class="note-form" hx-post="/replies/{{ m.id }}/note" hx-target="#reply-{{ m.id }}" hx-swap="outerHTML">
+    <input type="hidden" name="f" value="{{ f }}">
+    <input name="note" value="{{ m.note or '' }}" placeholder="Note (ex. rappeler après le 15, demande devis flotte auto)">
+    <button type="submit" class="small secondary outline">Enregistrer la note</button>
+  </form>
+</article>
+{% endif %}
+{% if oob_count %}<span id="reply-count" hx-swap-oob="true">{{ count if count else "" }}</span>{% endif %}

@@ -1,0 +1,47 @@
+{# Indicateurs (§6.8). Variables : ind, segments, ab_rows, ab_too_small, ab_min, export_url #}
+{% macro pct(v) %}{{ "—" if v is none else ("%.0f %%"|format(v * 100)) }}{% endmacro %}
+<div class="kpis">
+  <article><span class="big">{{ ind.enrolled }}</span><small>inscrits</small></article>
+  <article><span class="big">{{ ind.sent_total }}</span><small>emails envoyés
+    {% if ind.sent_by_step %}<br>{% for k, v in ind.sent_by_step.items() %}ét.{{ k }} : {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}{% endif %}</small></article>
+  <article><span class="big">{{ ind.replies }}</span><small>réponses<br>{{ pct(ind.reply_rate) }} des {{ ind.reached }} touchés</small></article>
+  <article><span class="big">{{ ind.interested }}</span><small>intéressés</small></article>
+  <article><span class="big">{{ ind.bounced }}</span><small>rebonds</small></article>
+  <article><span class="big">{{ ind.unsubscribed }}</span><small>désinscriptions</small></article>
+  <article><span class="big">{{ ind.out_of_office }}</span><small>absences</small></article>
+  <article><span class="big">{{ ind.completed_no_reply }}</span><small>terminés sans réponse</small></article>
+</div>
+
+{% if segments %}
+<div class="grid two-cols">
+  <article>
+    <header><strong>Par segment (cible × secteur)</strong></header>
+    <table>
+      <thead><tr><th>Code</th><th class="num">Touchés</th><th class="num">Réponses</th><th class="num">Taux</th></tr></thead>
+      <tbody>
+        {% for r in segments %}
+          <tr><td><code>{{ r.key }}</code></td><td class="num">{{ r.reached }}</td><td class="num">{{ r.replies }}</td>
+              <td class="num">{{ pct(r.rate) }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="hint">Effectifs petits : un taux calculé sur quelques contacts varie beaucoup d'une campagne à l'autre.</p>
+  </article>
+  <article>
+    <header><strong>Test A/B (objet de l'étape 1)</strong></header>
+    {% if ab_rows %}
+      <table>
+        <thead><tr><th>Variante</th><th class="num">Contacts</th><th class="num">Réponses</th><th class="num">Taux</th></tr></thead>
+        <tbody>
+          {% for r in ab_rows %}
+            <tr><td>{{ r.key }}</td><td class="num">{{ r.reached }}</td><td class="num">{{ r.replies }}</td><td class="num">{{ pct(r.rate) }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if ab_too_small %}<p class="warn-text">Échantillon trop petit pour conclure avec certitude
+        (moins de {{ ab_min }} contacts dans au moins une variante).</p>{% endif %}
+    {% else %}<p class="hint">Pas encore d'étape 1 envoyée avec deux objets.</p>{% endif %}
+  </article>
+</div>
+{% endif %}
+{% if export_url %}<p><a href="{{ export_url }}" role="button" class="secondary outline">Exporter les résultats (Excel)</a></p>{% endif %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Importer des contacts – ODDO Séquences{% endblock %}
+{% block content %}
+<h1>Importer des contacts</h1>
+<p class="steps"><strong>1. Fichier</strong> › 2. Colonnes › 3. Aperçu et validation</p>
+
+{% if error %}<p class="error-box">{{ error }}</p>{% endif %}
+
+<article>
+  <form method="post" action="/contacts/import" enctype="multipart/form-data">
+    <label>Fichier Excel (.xlsx) ou CSV
+      <input type="file" name="file" accept=".xlsx,.xlsm,.csv" required>
+    </label>
+    <button type="submit">Continuer</button>
+  </form>
+  <ul class="hint">
+    <li>La ligne d'en-tête (celle qui contient « Email ») est détectée automatiquement.</li>
+    <li>Une adresse déjà en base met à jour le contact existant : aucun doublon n'est créé.</li>
+    <li>Une cellule vide dans le nouveau fichier n'efface jamais une information déjà connue.</li>
+    <li>Le fichier n'est pas conservé après l'import ; seuls son nom et la date sont gardés comme source.</li>
+  </ul>
+</article>
+{% endblock %}

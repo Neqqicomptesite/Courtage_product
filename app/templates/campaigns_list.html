@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Campagnes – ODDO Séquences{% endblock %}
+{% block content %}
+<h1>Campagnes</h1>
+{% if error %}<p class="error-box">{{ error }}</p>{% endif %}
+
+{% if rows %}
+<table class="striped">
+  <thead><tr><th>Campagne</th><th>Séquence</th><th>Statut</th><th>Inscrits</th><th>En cours</th><th>Réponses</th></tr></thead>
+  <tbody>
+    {% for c, seq, counts in rows %}
+      <tr>
+        <td><a href="/campaigns/{{ c.id }}">{{ c.name }}</a></td>
+        <td>{{ seq.name if seq else "—" }}</td>
+        <td><span class="badge camp-{{ c.status }}">{{ status_labels[c.status] }}</span></td>
+        <td>{{ counts.values()|sum }}</td>
+        <td>{{ (counts.get("scheduled", 0) + counts.get("waiting", 0) + counts.get("sending", 0)) }}</td>
+        <td>{{ counts.get("replied", 0) }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<article>
+  <header><strong>Nouvelle campagne</strong></header>
+  {% if not has_mailbox %}
+    <p class="warn-box">Configurez d'abord la boîte mail dans <a href="/settings">Réglages</a>.</p>
+  {% endif %}
+  <form method="post" action="/campaigns/new">
+    <div class="grid">
+      <label>Nom <input name="name" placeholder="ex. Vague 1 – DAF industrie" required></label>
+      <label>Séquence
+        <select name="sequence_id">{% for q in sequences %}<option value="{{ q.id }}">{{ q.name }}</option>{% endfor %}</select>
+      </label>
+    </div>
+    <p class="hint">Contacts visés (laisser « Tous » pour ne pas filtrer) :</p>
+    <div class="filter-grid">
+      {% macro sel(name, label, values) %}
+        <label>{{ label }}
+          <select name="{{ name }}"><option value="">Tous</option>
+            {% for v in values %}<option>{{ v }}</option>{% endfor %}</select>
+        </label>
+      {% endmacro %}
+      {{ sel("target_segment", "Cible", options.target_segment) }}
+      {{ sel("sector_family", "Famille de secteur", options.sector_family) }}
+      {{ sel("sequence_code", "Code séquence", options.sequence_code) }}
+      {{ sel("wave", "Vague", options.wave) }}
+      {{ sel("reliability", "Fiabilité", options.reliability) }}
+    </div>
+    <label class="check-inline"><input type="checkbox" name="stop_on_domain_reply">
+      Arrêter les relances si quelqu'un d'autre de la même entreprise répond
+      <small class="hint">(jamais appliqué aux adresses Gmail, Hotmail, Yahoo…)</small></label>
+    <button type="submit" {% if not has_mailbox %}disabled{% endif %}>Créer le brouillon</button>
+    <p class="hint">Rien n'est envoyé à la création : vous verrez la liste des contacts puis un écran de confirmation.</p>
+  </form>
+</article>
+{% endblock %}

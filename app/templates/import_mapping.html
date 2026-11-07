@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Correspondance des colonnes – ODDO Séquences{% endblock %}
+{% block content %}
+<h1>Importer : {{ meta.filename }}</h1>
+<p class="steps">1. Fichier › <strong>2. Colonnes</strong> › 3. Aperçu et validation</p>
+
+{% for e in errors %}<p class="error-box">{{ e }}</p>{% endfor %}
+
+{% if table.sheets|length > 1 %}
+  <form method="get" action="/contacts/import/{{ token }}" class="inline-form">
+    <label>Feuille
+      <select name="sheet" onchange="this.form.submit()">
+        {% for sh in table.sheets %}<option {% if sh == table.sheet %}selected{% endif %}>{{ sh }}</option>{% endfor %}
+      </select>
+    </label>
+  </form>
+{% endif %}
+
+<p>{{ table.rows|length }} ligne(s) de données, en-tête trouvé ligne {{ table.header_row }}.
+   Vérifiez à quoi correspond chaque colonne. Les colonnes « personnalisées » sont conservées et
+   utilisables dans les emails, par ex. <code>{% raw %}{{ custom.accroche_suggeree }}{% endraw %}</code>.</p>
+
+<form method="post" action="/contacts/import/{{ token }}/preview">
+  <input type="hidden" name="sheet" value="{{ table.sheet or '' }}">
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Colonne du fichier</th><th>Exemples</th><th>Champ</th></tr></thead>
+    <tbody>
+      {% for col in columns %}
+        <tr>
+          <td><strong>{{ col.header }}</strong></td>
+          <td><small class="hint">{% for s in col.samples %}{{ s|truncate(45) }}{% if not loop.last %} · {% endif %}{% endfor %}</small></td>
+          <td>
+            <select name="map_{{ col.index }}">
+              {% for val, label in choices %}
+                <option value="{{ val }}" {% if col.mapping == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+              <option value="{{ col.custom }}" {% if col.mapping == col.custom %}selected{% endif %}>
+                Champ personnalisé ({{ col.custom[7:] }})</option>
+            </select>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <div class="grid">
+    <button type="submit">Voir l'aperçu</button>
+    <button type="submit" formaction="/contacts/import/{{ token }}/cancel" formnovalidate class="secondary outline">Annuler</button>
+  </div>
+</form>
+{% endblock %}

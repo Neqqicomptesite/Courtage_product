@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}{{ seq.name }} – ODDO Séquences{% endblock %}
+{% block content %}
+<p><a href="/sequences">← Séquences</a></p>
+<div class="page-head">
+  <h1>{{ seq.name }}</h1>
+  <div class="actions"><a href="/sequences/{{ seq.id }}/preview" role="button">Aperçu par contact</a></div>
+</div>
+{% if ok %}<div class="flash">{{ ok }}</div>{% endif %}
+{% if error %}<p class="error-box">{{ error }}</p>{% endif %}
+{% if used_by %}<p class="warn-box">Utilisée par {{ used_by }} campagne(s) : les modifications s'appliqueront aux prochains envois.</p>{% endif %}
+
+<details class="help">
+  <summary>Variables disponibles</summary>
+  <p>{% for v in known_vars %}<code>{{ "{{ " ~ v ~ " }}" }}</code> {% endfor %}
+     <code>{% raw %}{{ custom.accroche_suggeree }}{% endraw %}</code> (toute colonne personnalisée importée).<br>
+     Valeur de repli : <code>{% raw %}{{ prenom | "Madame, Monsieur" }}{% endraw %}</code>.<br>
+     La signature et la ligne « répondez STOP » sont ajoutées automatiquement en bas de chaque email
+     (placez <code>{% raw %}{{ signature }}{% endraw %}</code> vous-même si vous voulez la mettre ailleurs).</p>
+</details>
+
+<form id="seq-form" method="post" action="/sequences/{{ seq.id }}">
+  <label>Nom de la séquence <input name="name" value="{{ seq.name }}"></label>
+
+  {% for st, variants in steps %}
+    {% set p = st.id ~ "_" %}
+    <article class="step">
+      <header class="step-head">
+        <strong>Étape {{ st.position }}</strong>
+        <span class="hint">
+          {% if st.position == 1 %}J0 — envoyée dès l'activation de la campagne
+          {% else %}J+{{ cumul[loop.index0] }}{{ " ouvrés" if st.business_days }} depuis l'étape 1{% endif %}
+        </span>
+      </header>
+
+      {% if st.position > 1 %}
+        <div class="grid">
+          <label>Délai depuis l'étape précédente (jours)
+            <input type="number" name="{{ p }}delay" min="0" max="90" value="{{ st.delay_days }}"></label>
+          <label class="check"><input type="checkbox" name="{{ p }}business" {% if st.business_days %}checked{% endif %}>
+            Jours ouvrés (hors week-end et jours fériés)</label>
+          <label class="check"><input type="checkbox" name="{{ p }}thread" {% if st.same_thread %}checked{% endif %}>
+            Répondre dans le même fil (objet « Re: … »)</label>
+        </div>
+      {% else %}
+        <input type="hidden" name="{{ p }}business" value="on">
+      {% endif %}
+
+      {% if st.position == 1 %}
+        <div class="grid">
+          <label>Objet A
+            <input name="{{ p }}subject_A" value="{{ variants.A.subject_template if variants.A else '' }}"></label>
+          <label>Objet B <small class="hint">(facultatif : test A/B)</small>
+            <input name="{{ p }}subject_B" value="{{ variants.B.subject_template if variants.B else '' }}"
+                   placeholder="Laisser vide pour un seul objet"></label>
+        </div>
+      {% elif not st.same_thread %}
+        <label>Objet (nouveau fil)
+          <input name="{{ p }}subject_A" value="{{ variants.A.subject_template if variants.A else '' }}"></label>
+      {% endif %}
+
+      <label>Corps du message (texte brut)
+        <textarea name="{{ p }}body" rows="{{ 10 if st.position == 1 else 6 }}" class="mono">{{ st.body_template }}</textarea>
+      </label>
+
+      {% if st.position > 1 %}
+        <button type="submit" form="del-{{ st.id }}" class="secondary outline small">Supprimer l'étape {{ st.position }}</button>
+      {% endif %}
+    </article>
+  {% endfor %}
+
+  <div class="grid">
+    <button type="submit">Enregistrer la séquence</button>
+    <button type="submit" form="add-step" class="secondary outline">Ajouter une étape</button>
+  </div>
+</form>
+
+{# Formulaires séparés : un formulaire HTML ne peut pas en contenir un autre. #}
+<form id="add-step" method="post" action="/sequences/{{ seq.id }}/steps/add"></form>
+{% for st, _ in steps if st.position > 1 %}
+  <form id="del-{{ st.id }}" method="post" action="/sequences/{{ seq.id }}/steps/{{ st.id }}/delete"
+        onsubmit="return confirm('Supprimer l\'étape {{ st.position }} ? Pensez à enregistrer vos modifications avant.');"></form>
+{% endfor %}
+
+<details>
+  <summary>Supprimer la séquence</summary>
+  <form method="post" action="/sequences/{{ seq.id }}/delete"
+        onsubmit="return confirm('Supprimer définitivement cette séquence ?');">
+    <button type="submit" class="contrast">Supprimer « {{ seq.name }} »</button>
+  </form>
+</details>
+{% endblock %}

@@ -1,0 +1,27 @@
+{# Choix du dossier Envoyés et des dossiers surveillés.
+   Inclus dans la page Réglages, et renvoyé par le test de connexion (remplacement « hors bande » HTMX). #}
+<div id="folder-fields" {% if oob %}hx-swap-oob="true"{% endif %}>
+  {% if folders %}
+    <label>Dossier « Envoyés » (copie des emails envoyés)
+      <select name="sent_folder">
+        <option value="">— Aucun (pas de copie) —</option>
+        {% for f in folders %}
+          <option value="{{ f.raw }}" {% if f.raw == mb.sent_folder %}selected{% endif %}>{{ f.display }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <fieldset>
+      <legend>Dossiers surveillés pour les réponses</legend>
+      <div class="folder-list">
+        {% for f in folders %}
+          <label><input type="checkbox" name="watched_folders" value="{{ f.raw }}"
+                 {% if f.raw in mb.watched_folders %}checked{% endif %}> {{ f.display }}</label>
+        {% endfor %}
+      </div>
+    </fieldset>
+  {% else %}
+    <p class="hint">Les dossiers (Envoyés, Spam…) seront détectés au premier « Tester la connexion ».</p>
+    {% if mb.sent_folder %}<input type="hidden" name="sent_folder" value="{{ mb.sent_folder }}">{% endif %}
+    {% for w in mb.watched_folders %}<input type="hidden" name="watched_folders" value="{{ w }}">{% endfor %}
+  {% endif %}
+</div>

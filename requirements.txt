@@ -1,0 +1,20 @@
+# Dépendances de l'application (installées par start.bat).
+# Seuls les paquets utilisés directement sont épinglés : pip résout lui-même
+# les dépendances propres à Windows (ex. pywin32-ctypes pour keyring).
+fastapi==0.162.0
+uvicorn==0.54.0
+jinja2==3.1.6
+python-multipart==0.0.33
+SQLAlchemy==2.1.6
+alembic==1.20.1
+APScheduler==3.11.3
+openpyxl==3.1.5
+keyring==25.7.0
+# tzdata n'est PAS figé : le Maroc change parfois ses règles d'heure,
+# il faut toujours la version la plus récente.
+tzdata>=2026.6
+# V3 (serveur en ligne) : base PostgreSQL (Supabase), connexion des employés,
+# coffre chiffré des mots de passe de boîte mail.
+psycopg[binary]==3.3.8
+PyJWT[crypto]==2.15.1
+cryptography==50.0.2

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ODDO Séquences – installation</title>
+<style>
+  :root { --blue: #244480; --green: #009454; --ink: #1f2430; --muted: #5d6475; --line: #e3e7ef; --bg: #f7f8fb; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 40px 20px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; color: var(--blue); }
+  .lead { color: var(--muted); margin: 0 0 28px; }
+  section { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; margin-bottom: 16px; }
+  h2 { font-size: 16px; margin: 0 0 10px; display: flex; gap: 10px; align-items: center; }
+  .n { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--blue); color: #fff; display: grid; place-items: center; font-size: 13px; }
+  ol, ul { margin: 0; padding-left: 20px; } li { margin: 4px 0; }
+  code, kbd { background: #eef1f6; border-radius: 6px; padding: 1px 6px; font: 13px Consolas, monospace; }
+  .warn { border-color: #f0c36d; background: #fffaf0; }
+  .ok { border-color: #9fd8bd; background: #f3fbf7; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; } td { border-top: 1px solid var(--line); padding: 6px 4px; vertical-align: top; }
+  td:first-child { color: var(--muted); width: 42%; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ODDO Séquences</h1>
+  <p class="lead">Campagnes de prospection par email, avec relances automatiques qui s'arrêtent dès qu'on vous répond. L'application tourne sur votre PC : vos contacts et vos emails restent chez vous.</p>
+
+  <section>
+    <h2><span class="n">1</span>Installer Python (une seule fois)</h2>
+    <ol>
+      <li>Téléchargez <b>Python 3.12</b> sur <code>python.org/downloads</code>.</li>
+      <li>Dans la première fenêtre de l'installateur, <b>cochez « Add python.exe to PATH »</b>, puis « Install Now ».</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="n">2</span>Installer l'application</h2>
+    <ol>
+      <li>Décompressez ce dossier <b>ODDO-Sequences</b> où vous voulez (par exemple dans <code>Documents</code>).</li>
+      <li>Double-cliquez sur <code>start.bat</code>. La première fois, l'installation prend quelques minutes (connexion internet nécessaire).</li>
+      <li>Votre navigateur s'ouvre sur <code>http://127.0.0.1:8765</code> : c'est l'application. Ajoutez-la à vos favoris.</li>
+      <li>Une <b>fenêtre noire</b> reste ouverte : c'est le moteur d'envoi. <b>La fermer arrête les envois</b> ; réduisez-la simplement.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="n">3</span>Connecter votre boîte mail</h2>
+    <p>Dans l'application : <b>Réglages → Boîte mail d'envoi</b>. Les informations se trouvent dans le cPanel : <b>E-mail → Comptes de messagerie → votre adresse → « Connecter des appareils »</b>, colonne « SSL/TLS ».</p>
+    <table>
+      <tr><td>Envoi (SMTP)</td><td>serveur « sortant », port 465, SSL</td></tr>
+      <tr><td>Lecture (IMAP)</td><td>serveur « entrant », port 993</td></tr>
+      <tr><td>Identifiant</td><td>en général votre adresse complète</td></tr>
+    </table>
+    <p>Cliquez sur <b>Tester la connexion</b> (un email de test arrive chez vous), vérifiez le dossier « Envoyés », ajoutez votre <b>signature</b>, puis <b>Enregistrez</b>. Le mot de passe est rangé dans le coffre-fort de Windows, jamais dans un fichier.</p>
+  </section>
+
+  <section>
+    <h2><span class="n">4</span>Ce qui est déjà prêt</h2>
+    <ul>
+      <li><b>Entreprises</b> : les compagnies partenaires, avec leur logo et leurs interlocuteurs par service.</li>
+      <li><b>Séquences</b> : 11 modèles rédigés (prospection, gestion, souscription) et les textes par fonction et par secteur.</li>
+      <li><b>Guide</b> (en bas du menu) : « Bien démarrer », le tour des écrans, les bons réflexes. Commencez par là.</li>
+    </ul>
+  </section>
+
+  <section class="warn">
+    <h2><span class="n">5</span>Toujours commencer en mode test</h2>
+    <p>Au départ, le <b>mode test</b> est activé (badge orange en haut) : chaque email part vers <b>votre propre adresse</b>, avec l'objet <code>[TEST → destinataire]</code>.</p>
+    <ol>
+      <li><b>Contacts → Nouveau contact</b> avec <b>votre propre adresse</b>.</li>
+      <li><b>Séquences → Gestion → G6 → Envoyer</b> → choisissez-vous → « Personnaliser d'abord » → remplacez les [crochets] → Envoyer.</li>
+      <li>Relisez l'email reçu. Puis seulement : <b>Réglages → Mode test</b> → désactiver (tapez REEL pour confirmer).</li>
+    </ol>
+    <p><b>Jamais d'essai sur un vrai contact</b> : ses relances encore prévues partiraient pour de vrai après le passage en mode réel.</p>
+  </section>
+
+  <section>
+    <h2><span class="n">6</span>Vos prospects</h2>
+    <p><b>Contacts → Importer → Télécharger le modèle Excel</b> : remplissez-le (listes déroulantes), puis importez-le. Pour écrire à un groupe : <b>Campagnes → Nouvelle campagne</b> ; à une ou quelques personnes : <b>Envoyer</b> sur une séquence.</p>
+  </section>
+
+  <section class="ok">
+    <h2><span class="n">7</span>Les bonnes pratiques</h2>
+    <ul>
+      <li>Nous envoyons tous depuis le même domaine <b>oddo.ma</b> : gardez les plafonds prévus (25 emails par jour, 10 par heure). Trop d'envois ou de rebonds pénalisent tout le monde.</li>
+      <li>Chacun a sa propre application : elle ne voit pas les envois des collègues. <b>Répartissez-vous les prospects</b> : deux personnes ne prospectent pas la même entreprise.</li>
+      <li>Seuls les <b>prospects</b> reçoivent de la prospection ; clients, assureurs et partenaires peuvent recevoir les séquences de gestion et de souscription.</li>
+      <li>L'application n'envoie rien quand le PC est éteint ou en veille ; elle rattrape le retard au redémarrage, un email à la fois.</li>
+      <li>Une sauvegarde de vos données est faite à chaque démarrage, dans <code>data\backups</code>. Ne supprimez jamais le dossier <code>data</code>.</li>
+      <li><b>Mises à jour</b> : l'application les cherche seule. Quand une nouvelle version est prête, la cloche le signale : <b>Réglages → Mise à jour → Installer et redémarrer</b>. Vos données ne bougent pas.</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

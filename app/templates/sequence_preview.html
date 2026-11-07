@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Aperçu – {{ seq.name }}{% endblock %}
+{% block content %}
+<p><a href="/sequences/{{ seq.id }}">← {{ seq.name }}</a></p>
+<h1>Aperçu par contact</h1>
+{% if ok %}<div class="flash">{{ ok }}</div>{% endif %}
+{% if error %}<p class="error-box">{{ error }}</p>{% endif %}
+
+{% if not contact %}
+  <article><p>Aucun contact en base. <a href="/contacts/import">Importez d'abord vos contacts</a>.</p></article>
+{% else %}
+<form method="get" action="/sequences/{{ seq.id }}/preview" class="grid">
+  <label>Contact
+    <select name="contact_id" onchange="this.form.submit()">
+      {% for c in contacts %}
+        <option value="{{ c.id }}" {% if c.id == contact.id %}selected{% endif %}>
+          {{ c.company or "—" }} — {{ c.first_name or "" }} {{ c.last_name or "" }} ({{ c.sequence_code or "sans code" }})</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% if labels|length > 1 %}
+    <label>Variante d'objet
+      <select name="variant" onchange="this.form.submit()">
+        {% for l in labels %}<option {% if l == variant %}selected{% endif %}>{{ l }}</option>{% endfor %}
+      </select>
+    </label>
+  {% endif %}
+</form>
+
+<p class="hint">Code séquence <code>{{ contact.sequence_code or "—" }}</code> : trame
+  <strong>{{ (contact.sequence_code or "").partition("-")[0] or "?" }}</strong> + paragraphe
+  <strong>{{ (contact.sequence_code or "").partition("-")[2] or "?" }}</strong>.
+  Dates estimées si la campagne démarrait maintenant, sans tenir compte des plafonds d'envoi.
+  {% if labels|length > 1 %}La variante réelle (A ou B) sera tirée au sort à l'inscription dans une campagne.{% endif %}</p>
+
+{% set n_problems = previews|map(attribute="problems")|map("length")|sum %}
+{% if n_problems %}
+  <p class="error-box">{{ n_problems }} problème(s) à corriger : une campagne ne pourra pas démarrer pour ce contact tant qu'ils existent.</p>
+{% else %}
+  <p class="flash">Aucun problème : toutes les variables sont résolues pour ce contact.</p>
+{% endif %}
+
+{% for p in previews %}
+  <article class="email-preview">
+    <header>
+      <strong>Étape {{ p.position }}</strong>
+      <span class="hint"> · prévue le {{ p.planned_at|local_long }}</span>
+    </header>
+    {% for pb in p.problems %}<p class="error-text">⚠ {{ pb }}</p>{% endfor %}
+    {% for w in p.warnings %}<p class="warn-text">{{ w }}</p>{% endfor %}
+    <dl class="mail-head">
+      <dt>À</dt><dd>{{ contact.email }}</dd>
+      <dt>Objet</dt><dd><strong>{{ p.subject or "(sans objet)" }}</strong></dd>
+    </dl>
+    <pre class="mail-body">{{ p.body }}</pre>
+  </article>
+{% endfor %}
+
+<form method="post" action="/sequences/{{ seq.id }}/preview/send">
+  <input type="hidden" name="contact_id" value="{{ contact.id }}">
+  <input type="hidden" name="variant" value="{{ variant }}">
+  <button type="submit" {% if not mailbox_email %}disabled{% endif %}>
+    M'envoyer cet aperçu{% if mailbox_email %} ({{ mailbox_email }}){% endif %}</button>
+  <p class="hint">Les {{ previews|length }} étapes partent à votre adresse uniquement, jamais au contact,
+     avec l'objet préfixé [APERÇU → {{ contact.email }}].</p>
+</form>
+{% endif %}
+{% endblock %}

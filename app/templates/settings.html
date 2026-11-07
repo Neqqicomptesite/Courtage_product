@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block title %}Réglages – ODDO Séquences{% endblock %}
+{% block content %}
+<h1>Réglages</h1>
+
+{% if flash == "boite" %}<div class="flash">Boîte mail enregistrée.</div>{% endif %}
+{% if flash == "envoi" %}<div class="flash">Réglages d'envoi enregistrés.</div>{% endif %}
+
+{# ---------------------------------------------------------------- Mode test #}
+<article>
+  <header><strong>Mode test</strong></header>
+  {% if test_mode %}
+    <p>Activé : chaque email part vers <strong>{{ mb.email }}</strong>, avec l'objet préfixé
+       <code>[TEST → destinataire@reel]</code>. Les réponses ne modifient aucun statut de contact.</p>
+    <form method="post" action="/settings/test-mode"
+          onsubmit="return confirm('Désactiver le mode test ? Les prochains emails partiront RÉELLEMENT aux contacts.');">
+      <input type="hidden" name="enabled" value="0">
+      <button type="submit" class="secondary outline">Désactiver le mode test</button>
+    </form>
+  {% else %}
+    <p class="ko">Désactivé : les emails partent réellement aux contacts.</p>
+    <form method="post" action="/settings/test-mode">
+      <input type="hidden" name="enabled" value="1">
+      <button type="submit">Réactiver le mode test</button>
+    </form>
+  {% endif %}
+</article>
+
+{# ---------------------------------------------------------------- Boîte mail #}
+<article>
+  <header><strong>Boîte mail</strong></header>
+  <form id="mailbox-form" method="post" action="/settings/mailbox">
+    <div class="grid">
+      <label>Nom affiché
+        <input name="display_name" value="{{ mb.display_name }}" required>
+        {% if errors.display_name %}<small class="error-text">{{ errors.display_name }}</small>{% endif %}
+      </label>
+      <label>Adresse email
+        <input name="email" type="email" value="{{ mb.email }}" required>
+        {% if errors.email %}<small class="error-text">{{ errors.email }}</small>{% endif %}
+      </label>
+    </div>
+
+    <h4>Envoi – serveur sortant (SMTP)</h4>
+    <div class="grid">
+      <label>Serveur sortant (SMTP)
+        <input name="smtp_host" value="{{ mb.smtp_host }}" placeholder="ex. mail.oddo.ma">
+        {% if errors.smtp_host %}<small class="error-text">{{ errors.smtp_host }}</small>{% endif %}
+      </label>
+      <label>Port et sécurité
+        <select name="smtp_security"
+                onchange="this.form.smtp_port.value = (this.value === 'ssl' ? 465 : 587)">
+          <option value="ssl" {% if mb.smtp_security == 'ssl' %}selected{% endif %}>465 – SSL</option>
+          <option value="starttls" {% if mb.smtp_security == 'starttls' %}selected{% endif %}>587 – STARTTLS</option>
+        </select>
+      </label>
+      <label>Port
+        <input name="smtp_port" type="number" value="{{ mb.smtp_port }}" min="1" max="65535">
+        {% if errors.smtp_port %}<small class="error-text">{{ errors.smtp_port }}</small>{% endif %}
+      </label>
+    </div>
+
+    <h4>Lecture – serveur entrant (IMAP)</h4>
+    <div class="grid">
+      <label>Serveur entrant (IMAP)
+        <input name="imap_host" value="{{ mb.imap_host }}" placeholder="ex. mail.oddo.ma">
+        {% if errors.imap_host %}<small class="error-text">{{ errors.imap_host }}</small>{% endif %}
+      </label>
+      <label>Port IMAP (SSL)
+        <input name="imap_port" type="number" value="{{ mb.imap_port }}" min="1" max="65535">
+        {% if errors.imap_port %}<small class="error-text">{{ errors.imap_port }}</small>{% endif %}
+      </label>
+    </div>
+
+    <h4>Identifiants (communs à SMTP et IMAP)</h4>
+    <div class="grid">
+      <label>Identifiant
+        <input name="username" value="{{ mb.username }}" autocomplete="username">
+        {% if errors.username %}<small class="error-text">{{ errors.username }}</small>{% endif %}
+      </label>
+      <label>Mot de passe
+        <input name="password" type="password" autocomplete="new-password"
+               placeholder="{{ '•••••••• (enregistré – laisser vide pour le conserver)' if has_password else '' }}">
+        {% if errors.password %}<small class="error-text">{{ errors.password }}</small>{% endif %}
+      </label>
+    </div>
+    <p class="hint">Le mot de passe est conservé dans le Gestionnaire d'identification Windows
+       (entrée « ODDO-Sequences »), jamais dans la base de l'application.</p>
+
+    {% include "partials/folder_fields.html" %}
+
+    <label>Signature (texte brut)
+      <textarea name="signature" rows="4">{{ mb.signature }}</textarea>
+    </label>
+
+    <label><input type="checkbox" name="send_test_email" checked> Envoyer un email de test à moi-même pendant le test</label>
+    <div class="grid">
+      <button type="button" class="secondary"
+              hx-post="/settings/test-connection" hx-target="#connection-report"
+              hx-indicator="#test-spinner" hx-disabled-elt="this">
+        Tester la connexion <span id="test-spinner" class="htmx-indicator">(en cours…)</span>
+      </button>
+      <button type="submit">Enregistrer la boîte mail</button>
+    </div>
+  </form>
+  <div id="connection-report"></div>
+</article>
+
+{# ---------------------------------------------------------------- Envoi #}
+<article>
+  <header><strong>Envoi</strong></header>
+  {% if errors.mailbox %}<p class="error-text">{{ errors.mailbox }}</p>{% endif %}
+  <form method="post" action="/settings/sending">
+    <fieldset>
+      <legend>Jours d'envoi</legend>
+      <div class="days">
+        {% for name in day_names %}
+          <label><input type="checkbox" name="send_days" value="{{ loop.index0 }}"
+                 {% if loop.index0 in s.send_days %}checked{% endif %}> {{ name }}</label>
+        {% endfor %}
+      </div>
+      {% if errors.send_days %}<small class="error-text">{{ errors.send_days }}</small>{% endif %}
+    </fieldset>
+
+    {% set w1 = s.send_windows[0] if s.send_windows|length > 0 else ["", ""] %}
+    {% set w2 = s.send_windows[1] if s.send_windows|length > 1 else ["", ""] %}
+    <div class="grid">
+      <label>Plage 1 : début <input name="w1_start" type="time" value="{{ w1[0] }}"></label>
+      <label>Plage 1 : fin <input name="w1_end" type="time" value="{{ w1[1] }}"></label>
+      <label>Plage 2 : début <input name="w2_start" type="time" value="{{ w2[0] }}"></label>
+      <label>Plage 2 : fin <input name="w2_end" type="time" value="{{ w2[1] }}"></label>
+    </div>
+    {% for k in ["w1_start", "w1_end", "w2_start", "w2_end", "windows"] %}
+      {% if errors[k] %}<small class="error-text">{{ errors[k] }}</small>{% endif %}
+    {% endfor %}
+    <p class="hint">Fuseau horaire : Africa/Casablanca (heure légale du Maroc, changements d'heure inclus).
+       Laissez la plage 2 vide pour n'en utiliser qu'une.</p>
+
+    <label>Jours fériés exclus (une ligne par jour : <code>AAAA-MM-JJ Libellé</code>)
+      <textarea name="holidays" rows="8" class="mono">{{ holidays_text }}</textarea>
+      {% if errors.holidays %}<small class="error-text">{{ errors.holidays }}</small>{% endif %}
+    </label>
+    <p class="hint">Les fêtes religieuses dépendent de l'observation de la lune : les dates marquées
+       « (estimé) » sont à corriger dès l'annonce officielle.</p>
+
+    <div class="grid">
+      <label>Plafond par jour
+        <input name="daily_cap" type="number" min="1" max="500" value="{{ caps.daily_cap }}">
+        {% if errors.daily_cap %}<small class="error-text">{{ errors.daily_cap }}</small>
+        {% elif caps.daily_cap|int > cap_warning %}<small class="warn-text">Au-delà de {{ cap_warning }} emails par jour, le risque de passer en spam augmente nettement.</small>{% endif %}
+      </label>
+      <label>Plafond par heure
+        <input name="hourly_cap" type="number" min="1" max="100" value="{{ caps.hourly_cap }}">
+        {% if errors.hourly_cap %}<small class="error-text">{{ errors.hourly_cap }}</small>{% endif %}
+      </label>
+      <label>Délai min. entre 2 envois (s)
+        <input name="min_gap_s" type="number" min="10" max="3600" value="{{ caps.min_gap_s }}">
+        {% if errors.min_gap_s %}<small class="error-text">{{ errors.min_gap_s }}</small>{% endif %}
+      </label>
+      <label>Délai max. (s)
+        <input name="max_gap_s" type="number" min="10" max="7200" value="{{ caps.max_gap_s }}">
+        {% if errors.max_gap_s %}<small class="error-text">{{ errors.max_gap_s }}</small>{% endif %}
+      </label>
+    </div>
+
+    <div class="grid">
+      <label><input type="checkbox" name="rampup_enabled" {% if s.rampup_enabled %}checked{% endif %}>
+        Montée en charge la première semaine</label>
+      <label>Emails par jour pendant la montée en charge
+        <input name="rampup_per_day" type="number" min="1" max="200" value="{{ s.rampup_per_day }}">
+        {% if errors.rampup_per_day %}<small class="error-text">{{ errors.rampup_per_day }}</small>{% endif %}
+      </label>
+    </div>
+
+    <label>Ligne de désinscription (ajoutée en bas de chaque email, obligatoire)
+      <input name="unsubscribe_line" value="{{ s.unsubscribe_line }}">
+      {% if errors.unsubscribe_line %}<small class="error-text">{{ errors.unsubscribe_line }}</small>{% endif %}
+    </label>
+
+    <label><input type="checkbox" name="auto_reply_continues" {% if s.auto_reply_continues %}checked{% endif %}>
+      Continuer la séquence quand le contact a un message d'absence</label>
+
+    <div class="grid">
+      <label>Heure du récapitulatif quotidien
+        <input name="digest_time" type="time" value="{{ s.digest_time }}">
+        {% if errors.digest_time %}<small class="error-text">{{ errors.digest_time }}</small>{% endif %}
+      </label>
+      <label>Destinataire du récapitulatif
+        <input name="digest_recipient" type="email" value="{{ s.digest_recipient }}" placeholder="{{ mb.email }}">
+        {% if errors.digest_recipient %}<small class="error-text">{{ errors.digest_recipient }}</small>{% endif %}
+      </label>
+    </div>
+
+    <button type="submit" {% if not mailbox_exists %}disabled title="Enregistrez d'abord la boîte mail"{% endif %}>
+      Enregistrer les réglages d'envoi
+    </button>
+  </form>
+</article>
+{% endblock %}

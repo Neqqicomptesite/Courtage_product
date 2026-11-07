@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}{{ c.first_name or "" }} {{ c.last_name or "" }} – ODDO Séquences{% endblock %}
+{% block content %}
+<p><a href="/contacts">← Contacts</a></p>
+<div class="page-head">
+  <h1>{{ c.first_name or "" }} {{ c.last_name or "" }}</h1>
+  <span class="badge st-{{ c.global_status }}">{{ status_labels[c.global_status] }}</span>
+</div>
+
+{% if ok %}<div class="flash">{{ ok }}</div>{% endif %}
+{% if error %}<p class="error-box">{{ error }}</p>{% endif %}
+{% if suppressed %}<p class="error-box">Cette adresse (ou son domaine) est dans la liste d'exclusion : elle ne sera jamais contactée.</p>{% endif %}
+
+<div class="grid two-cols">
+  <article>
+    <header><strong>Informations</strong></header>
+    <dl class="info">
+      <dt>Email</dt><dd>{{ c.email }}</dd>
+      <dt>Entreprise</dt><dd>{{ c.company or "—" }}</dd>
+      <dt>Poste</dt><dd>{{ c.job_title or "—" }}</dd>
+      <dt>Secteur</dt><dd>{{ c.sector or "—" }}{% if c.sector_family %} <small class="hint">({{ c.sector_family }})</small>{% endif %}</dd>
+      <dt>Cible</dt><dd>{{ c.target_segment or "—" }}</dd>
+      <dt>Code séquence</dt><dd><code>{{ c.sequence_code or "—" }}</code></dd>
+      <dt>Taille</dt><dd>{{ c.size_bucket or "—" }}</dd>
+      <dt>Vague</dt><dd>{{ c.wave or "—" }}</dd>
+      <dt>Fiabilité</dt><dd><span class="badge rel-{{ category|slug }}">{{ category }}</span> <small class="hint">{{ c.email_reliability or "" }}</small></dd>
+      <dt>Téléphone</dt><dd>{{ c.phone or "—" }}</dd>
+      <dt>Site web</dt><dd>{{ c.website or "—" }}</dd>
+      <dt>LinkedIn</dt><dd>{% if c.linkedin_url %}<a href="{{ c.linkedin_url }}" target="_blank" rel="noopener noreferrer">Voir le profil</a>{% else %}—{% endif %}</dd>
+      {% for k, v in (c.custom or {}).items() %}
+        <dt>{{ custom_labels.get(k) or k|replace("_", " ")|capitalize }}</dt><dd>{{ v }}</dd>
+      {% endfor %}
+      <dt>Source</dt><dd><small>{{ c.source or "—" }}</small></dd>
+    </dl>
+  </article>
+
+  <div>
+    <article>
+      <header><strong>Notes</strong></header>
+      <form method="post" action="/contacts/{{ c.id }}/notes">
+        <textarea name="notes" rows="4">{{ c.notes }}</textarea>
+        <button type="submit" class="secondary">Enregistrer les notes</button>
+      </form>
+    </article>
+
+    <article>
+      <header><strong>Campagnes</strong></header>
+      {% if enrollments %}
+        <ul class="plain">
+          {% for enr, camp in enrollments %}
+            <li>{{ camp.name }} — étape {{ enr.current_step }}, {{ enr.status }}
+              {% if enr.status in active_enr %}
+                <form method="post" action="/contacts/{{ c.id }}/enrollments/{{ enr.id }}/remove" class="inline-form">
+                  <button type="submit" class="secondary outline small">Retirer de la campagne</button>
+                </form>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}<p class="hint">Inscrit dans aucune campagne.</p>{% endif %}
+    </article>
+
+    <article>
+      <header><strong>Actions</strong></header>
+      {% if c.global_status == "active" %}
+        <form method="post" action="/contacts/{{ c.id }}/do-not-contact"
+              onsubmit="return confirm('Ne plus jamais contacter cette personne ? Ses séquences en cours s\'arrêtent.');">
+          <button type="submit" class="secondary">Ne plus contacter</button>
+        </form>
+      {% elif c.global_status != "unsubscribed" %}
+        <form method="post" action="/contacts/{{ c.id }}/reactivate">
+          <button type="submit" class="secondary">Réactiver</button>
+        </form>
+      {% endif %}
+      <details>
+        <summary>Supprimer définitivement les données de ce contact</summary>
+        <p class="hint">Droit d'effacement : le contact, ses emails et son historique sont supprimés.
+           Seule une empreinte de son adresse est gardée dans la liste d'exclusion pour ne jamais le recontacter.
+           Cette action est irréversible.</p>
+        <form method="post" action="/contacts/{{ c.id }}/erase">
+          <input name="confirm" placeholder="Tapez EFFACER pour confirmer" autocomplete="off">
+          <button type="submit" class="contrast">Effacer définitivement</button>
+        </form>
+      </details>
+    </article>
+  </div>
+</div>
+
+<article>
+  <header><strong>Chronologie</strong></header>
+  <ul class="timeline">
+    {% for it in timeline %}
+      <li class="tl-{{ it.kind }}"><small class="hint">{{ it.ts|local }}</small> — {{ it.title }}
+        {% if it.detail %}<br><small>{{ it.detail }}</small>{% endif %}</li>
+    {% endfor %}
+  </ul>
+</article>
+{% endblock %}

@@ -1,0 +1,12 @@
+.venv
+data/
+__pycache__/
+*.pyc
+.pytest_cache/
+frontend/node_modules/
+.coverage
+.ruff_cache/
+# jamais de secrets dans le dépôt
+secrets*.txt
+*.env
+.env*

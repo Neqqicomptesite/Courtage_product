@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}{{ camp.name }} – ODDO Séquences{% endblock %}
+{% block content %}
+<p><a href="/campaigns">← Campagnes</a></p>
+<div class="page-head">
+  <h1>{{ camp.name }} <span class="badge camp-{{ camp.status }}">{{ status_labels[camp.status] }}</span></h1>
+  <div class="actions">
+    {% if camp.status == "draft" %}
+      <a href="/campaigns/{{ camp.id }}/activate" role="button">Vérifier et activer…</a>
+    {% elif camp.status == "active" %}
+      <form method="post" action="/campaigns/{{ camp.id }}/pause" class="inline-form">
+        <button type="submit" class="secondary">Mettre en pause</button></form>
+    {% elif camp.status == "paused" %}
+      <form method="post" action="/campaigns/{{ camp.id }}/resume" class="inline-form">
+        <button type="submit">Reprendre</button></form>
+    {% endif %}
+  </div>
+</div>
+{% if ok %}<div class="flash">{{ ok }}</div>{% endif %}
+{% if error %}<p class="error-box">{{ error }}</p>{% endif %}
+
+<p class="hint">Séquence : <a href="/sequences/{{ seq.id }}">{{ seq.name }}</a> ·
+  Filtres : {% for k, v in (camp.filters or {}).items() %}<code>{{ v }}</code> {% else %}aucun (tous les contacts){% endfor %}
+  {% if camp.stop_on_domain_reply %}· arrêt si réponse de la même entreprise{% endif %}
+  {% if camp.activated_at %}· activée le {{ camp.activated_at|local }}{% endif %}</p>
+
+{% if camp.status == "draft" %}
+  {% set ok_c = cands|selectattr("excluded", "none")|list %}
+  <article>
+    <header><strong>{{ ok_c|length }} contact(s) seront inscrits</strong>
+      {% if cands|length > ok_c|length %} · {{ cands|length - ok_c|length }} exclu(s) automatiquement{% endif %}</header>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Contact</th><th>Entreprise</th><th>Code</th><th>Inscription</th></tr></thead>
+      <tbody>
+      {% for c in cands %}
+        <tr>
+          <td><a href="/contacts/{{ c.contact.id }}">{{ c.contact.first_name or "" }} {{ c.contact.last_name or "" }}</a></td>
+          <td>{{ c.contact.company or "—" }}</td>
+          <td><code>{{ c.contact.sequence_code or "—" }}</code></td>
+          <td>{% if c.excluded %}<span class="badge st-do_not_contact">Exclu : {{ c.excluded }}</span>
+              {% elif c.other_campaigns %}<span class="badge rel-moyenne">Déjà dans : {{ c.other_campaigns|join(", ") }}</span>
+              {% else %}<span class="badge rel-bonne">OK</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </article>
+  <form method="post" action="/campaigns/{{ camp.id }}/delete" onsubmit="return confirm('Supprimer ce brouillon ?');">
+    <button type="submit" class="secondary outline small">Supprimer le brouillon</button>
+  </form>
+{% else %}
+  {% include "partials/indicators.html" %}
+  <p class="hint">En cours : {{ counts.get("scheduled", 0) }} programmé(s), {{ counts.get("waiting", 0) }} en attente de relance
+    {% if counts.get("error") %}, <span class="ko">{{ counts.get("error") }} en erreur</span>{% endif %}
+    {% if counts.get("needs_review") %}, <span class="ko">{{ counts.get("needs_review") }} à vérifier</span>{% endif %}.</p>
+
+  <div class="table-wrap"><table class="striped">
+    <thead><tr><th>Contact</th><th>Variante</th><th>Étape suivante</th><th>Prévue le</th><th>Statut</th><th></th></tr></thead>
+    <tbody>
+    {% for enr, c in rows %}
+      <tr>
+        <td><a href="/contacts/{{ c.id }}">{{ c.first_name or "" }} {{ c.last_name or "" }}</a><br><small class="hint">{{ c.company or "" }}</small></td>
+        <td>{{ enr.variant_label or "—" }}</td>
+        <td>{{ enr.current_step if enr.status in ["scheduled", "waiting", "sending", "error", "needs_review"] else "—" }}</td>
+        <td>{{ enr.next_due_at|local_long if enr.next_due_at else "—" }}</td>
+        <td><span class="badge enr-{{ enr.status }}">{{ enr_labels[enr.status] }}</span>
+            {% if enr.last_error %}<br><small class="error-text">{{ enr.last_error }}</small>{% endif %}</td>
+        <td class="row-actions">
+          {% if enr.status in ["scheduled", "waiting"] %}
+            <form method="post" action="/campaigns/enrollments/{{ enr.id }}/send-now" class="inline-form"
+                  onsubmit="return confirm('Envoyer cette étape maintenant ?');">
+              <button type="submit" class="secondary outline small">Envoyer maintenant</button></form>
+            <form method="post" action="/campaigns/enrollments/{{ enr.id }}/skip" class="inline-form"
+                  onsubmit="return confirm('Sauter cette étape pour ce contact ?');">
+              <button type="submit" class="secondary outline small">Sauter l'étape</button></form>
+          {% elif enr.status == "needs_review" %}
+            <form method="post" action="/campaigns/enrollments/{{ enr.id }}/confirm-sent" class="inline-form">
+              <button type="submit" class="secondary small">Il est dans mes Envoyés</button></form>
+            <form method="post" action="/campaigns/enrollments/{{ enr.id }}/retry" class="inline-form">
+              <button type="submit" class="secondary outline small">Il n'est pas parti : renvoyer</button></form>
+          {% elif enr.status == "error" %}
+            <form method="post" action="/campaigns/enrollments/{{ enr.id }}/retry" class="inline-form">
+              <button type="submit" class="secondary outline small">Réessayer</button></form>
+          {% endif %}
+          {% if enr.status in ["scheduled", "waiting", "error", "needs_review"] %}
+            <form method="post" action="/contacts/{{ c.id }}/enrollments/{{ enr.id }}/remove" class="inline-form"
+                  onsubmit="return confirm('Retirer ce contact de la campagne ?');">
+              <button type="submit" class="secondary outline small">Retirer</button></form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+{% endif %}
+{% endblock %}

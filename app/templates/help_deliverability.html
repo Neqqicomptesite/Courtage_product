@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Aide délivrabilité – ODDO Séquences{% endblock %}
+{% block content %}
+<h1>Aide délivrabilité</h1>
+<p>Pour que vos emails arrivent en boîte de réception plutôt qu'en spam :</p>
+
+<h3>1. Demander à Heberjahiz de vérifier trois réglages DNS pour oddo.ma</h3>
+<ul>
+  <li><strong>SPF</strong> : autorise les serveurs de Heberjahiz à envoyer au nom de oddo.ma.</li>
+  <li><strong>DKIM</strong> : signe chaque email pour prouver qu'il n'a pas été modifié.</li>
+  <li><strong>DMARC</strong> : indique aux destinataires quoi faire si SPF ou DKIM échoue.</li>
+</ul>
+<p>Demandez-leur aussi leur <strong>limite d'envoi par heure</strong> pour votre boîte, et réglez le
+   plafond horaire de l'application en dessous.</p>
+
+<h3>2. Règles déjà appliquées par l'application</h3>
+<ul>
+  <li>Plafond de 25 emails par jour par défaut, avec un délai aléatoire entre deux envois.</li>
+  <li>Emails en texte brut, sans pixel de suivi ni lien réécrit.</li>
+  <li>Une ligne « répondez STOP » en bas de chaque email.</li>
+</ul>
+
+<h3>3. Bonnes pratiques</h3>
+<ul>
+  <li>Au plus un lien par email.</li>
+  <li>Commencer par les contacts dont l'email est jugé « Bonne ».</li>
+  <li>Surveiller les rebonds : au-delà de quelques pourcents, arrêter et nettoyer la liste.</li>
+</ul>
+<p class="hint">Ces conseils sont généraux ; ils ne remplacent pas la vérification auprès de votre hébergeur.</p>
+{% endblock %}

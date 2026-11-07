@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Liste d'exclusion – ODDO Séquences{% endblock %}
+{% block content %}
+<p><a href="/contacts">← Contacts</a></p>
+<h1>Liste d'exclusion</h1>
+<p>Adresses et domaines qui ne recevront <strong>jamais</strong> d'email, vérifiés avant chaque envoi.
+   Les demandes « STOP » y sont ajoutées automatiquement et ne peuvent pas être retirées.</p>
+
+{% if ok %}<div class="flash">{{ ok }}</div>{% endif %}
+{% if error %}<p class="error-box">{{ error }}</p>{% endif %}
+
+<article>
+  <form method="post" action="/contacts/exclusions/add" class="grid">
+    <input name="entry" placeholder="nom@entreprise.ma ou entreprise.ma (domaine entier)" required>
+    <input name="note" placeholder="Raison (facultatif)">
+    <button type="submit">Ajouter</button>
+  </form>
+</article>
+
+{% if rows %}
+<table class="striped">
+  <thead><tr><th>Adresse ou domaine</th><th>Raison</th><th>Ajouté le</th><th></th></tr></thead>
+  <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{% if r.email_or_domain.startswith(hash_prefix) %}<em>Contact effacé (empreinte)</em>
+            {% elif r.email_or_domain.startswith("@") %}Domaine entier : <strong>{{ r.email_or_domain[1:] }}</strong>
+            {% else %}{{ r.email_or_domain }}{% endif %}</td>
+        <td>{{ r.reason }}</td>
+        <td>{{ r.created_at|local }}</td>
+        <td>{% if r.reason.startswith(manual_reason) %}
+              <form method="post" action="/contacts/exclusions/{{ r.id }}/delete" class="inline-form"
+                    onsubmit="return confirm('Retirer cette entrée de la liste d\'exclusion ?');">
+                <button type="submit" class="secondary outline small">Retirer</button>
+              </form>
+            {% endif %}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="hint">La liste est vide.</p>{% endif %}
+{% endblock %}

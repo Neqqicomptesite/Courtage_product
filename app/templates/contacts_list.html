@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Contacts – ODDO Séquences{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Contacts</h1>
+  <div class="actions">
+    <a href="/contacts/exclusions" role="button" class="secondary outline">Liste d'exclusion</a>
+    <a href="/contacts/import" role="button">Importer un fichier</a>
+  </div>
+</div>
+
+{% if imported %}
+  {% set n = imported.split("-") %}
+  <div class="flash">Import terminé : {{ n[0] }} nouveau(x), {{ n[1] }} mis à jour, {{ n[2] }} ignoré(s).</div>
+{% endif %}
+{% if request.query_params.get("erased") %}
+  <div class="flash">Données du contact effacées définitivement. Son adresse ne sera plus jamais contactée.</div>
+{% endif %}
+
+<form method="get" action="/contacts" class="filters">
+  <input type="search" name="q" value="{{ f.q }}" placeholder="Rechercher : nom, entreprise, email, poste…">
+  <div class="filter-grid">
+    {% macro select(name, label, values) %}
+      <label>{{ label }}
+        <select name="{{ name }}" onchange="this.form.submit()">
+          <option value="">Tous</option>
+          {% for v in values %}
+            {% set val = v[0] if v is not string else v %}
+            {% set txt = v[1] if v is not string else v %}
+            <option value="{{ val }}" {% if f[name] == val|string %}selected{% endif %}>{{ txt }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    {% endmacro %}
+    {{ select("target_segment", "Cible", options.target_segment) }}
+    {{ select("sector_family", "Famille de secteur", options.sector_family) }}
+    {{ select("sequence_code", "Code séquence", options.sequence_code) }}
+    {{ select("wave", "Vague", options.wave) }}
+    {{ select("reliability", "Fiabilité", options.reliability) }}
+    {{ select("status", "Statut", options.status) }}
+    {{ select("campaign_id", "Campagne", options.campaigns) }}
+  </div>
+  <div class="filter-actions">
+    <button type="submit">Filtrer</button>
+    {% if f.active %}<a href="/contacts">Effacer les filtres</a>{% endif %}
+  </div>
+</form>
+
+<p class="hint">{{ contacts|length }} contact(s) affiché(s) sur {{ total }}.</p>
+
+{% if contacts %}
+<div class="table-wrap">
+<table class="striped">
+  <thead>
+    <tr><th>Contact</th><th>Entreprise</th><th>Poste</th><th>Code</th><th>Vague</th><th>Fiabilité</th><th>Statut</th></tr>
+  </thead>
+  <tbody>
+    {% for c in contacts %}
+      {% set cat = category(c.email_reliability) %}
+      <tr>
+        <td><a href="/contacts/{{ c.id }}">{{ c.first_name or "" }} {{ c.last_name or "" }}</a><br>
+            <small class="hint">{{ c.email }}</small></td>
+        <td>{{ c.company or "—" }}</td>
+        <td><small>{{ c.job_title or "—" }}</small></td>
+        <td><code>{{ c.sequence_code or "—" }}</code></td>
+        <td>{{ c.wave or "—" }}</td>
+        <td><span class="badge rel-{{ cat|slug }}"
+                  title="{{ c.email_reliability or '' }}">{{ cat }}</span></td>
+        <td><span class="badge st-{{ c.global_status }}">{{ status_labels[c.global_status] }}</span></td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% elif total == 0 %}
+  <article><p>Aucun contact pour l'instant. <a href="/contacts/import">Importez votre fichier Excel</a>.</p></article>
+{% else %}
+  <article><p>Aucun contact ne correspond à ces filtres.</p></article>
+{% endif %}
+{% endblock %}

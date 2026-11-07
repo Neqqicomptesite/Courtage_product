@@ -1,0 +1,328 @@
+{
+ "version": 1,
+ "remove_sequences": [
+  "Prospection PME – 3 étapes",
+  "PME",
+  "Délégation"
+ ],
+ "target_blocks": {
+  "FIN": "En tant que responsable des finances de {{ entreprise | \"votre entreprise\" }}, vous suivez de près le coût de vos assurances. Nous vous proposons une revue gratuite de vos contrats en cours. Nous comparons vos garanties et vos primes avec ce que proposent les principales compagnies du marché, et nous vous indiquons clairement ce qui peut être amélioré, sans engagement.",
+  "RH": "La couverture de vos salariés (santé, prévoyance, retraite) est un vrai levier de fidélisation, à condition qu'elle reste lisible et au bon prix. En tant que courtier, nous mettons ces contrats en concurrence auprès de plusieurs compagnies. Nous accompagnons aussi vos équipes au quotidien : adhésions, remboursements, départs.",
+  "DIR": "Dans une PME, les assurances sont souvent réparties entre plusieurs contrats et plusieurs interlocuteurs. Nous vous proposons un bilan global des assurances de {{ entreprise | \"votre entreprise\" }} et des vôtres en tant que dirigeant. Ensuite, vous n'avez plus qu'un seul interlocuteur pour tout : contrats, renouvellements et sinistres."
+ },
+ "sector_blocks": {
+  "IND": "Dans l'industrie, un arrêt de production après un incendie ou une panne majeure coûte souvent plus cher que les dégâts eux-mêmes. Nous vérifions notamment votre multirisque industrielle, le bris de machine, votre responsabilité civile et votre couverture accidents du travail.",
+  "SRV": "Pour une société de services, le principal risque est souvent la mise en cause par un client ou la perte de données. Nous regardons en priorité votre responsabilité civile professionnelle, la cyber-assurance et la complémentaire santé de vos collaborateurs.",
+  "BTP": "Dans le BTP et l'immobilier, les maîtres d'ouvrage et les appels d'offres sont exigeants sur les assurances. Nous vérifions vos garanties tous risques chantier, votre responsabilité civile (décennale comprise) et la couverture accidents du travail de vos équipes.",
+  "COM": "Dans le commerce et la distribution, vos stocks et vos points de vente concentrent l'essentiel du risque. Nous examinons votre multirisque (stocks, locaux, pertes d'exploitation), votre responsabilité civile et, le cas échéant, votre flotte de véhicules.",
+  "TRA": "Dans le transport et la logistique, chaque véhicule immobilisé et chaque marchandise endommagée pèsent directement sur vos marges. Nous examinons votre flotte automobile, l'assurance des marchandises transportées et la couverture accidents du travail de vos chauffeurs et de vos équipes.",
+  "AGRO": "Dans l'agroalimentaire, un incident sur un site ou sur un produit peut avoir des conséquences lourdes. Nous vérifions notamment votre multirisque industrielle, votre responsabilité civile produits et votre couverture accidents du travail.",
+  "SANTE": "Dans la santé et la pharmacie, la responsabilité professionnelle et la responsabilité du fait des produits sont au cœur des enjeux. Nous examinons ces garanties, ainsi que votre multirisque et la complémentaire santé de vos équipes."
+ },
+ "sequences": [
+  {
+   "code": "P1",
+   "name": "P1 · Prospection entreprise (3 emails)",
+   "category": "prospection",
+   "steps": [
+    {
+     "delay_days": 0,
+     "business_days": true,
+     "same_thread": false,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe vous contacte de la part d'ODDO Assurances, cabinet de courtage en assurances à Casablanca.\n\n{{ bloc_cible }}\n\n{{ bloc_secteur }}\n\nSeriez-vous disponible pour un échange de 20 minutes la semaine prochaine ? Je vous présenterais notre approche et les points sur lesquels nous pourrions vous être utiles.\n\nBien cordialement,",
+     "subjects": [
+      "{{ entreprise }} : vos assurances, un regard extérieur ?",
+      "Un regard extérieur sur vos assurances ?"
+     ]
+    },
+    {
+     "delay_days": 3,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe me permets de revenir vers vous au sujet de mon message ci-dessous.\n\nLa revue que nous proposons est gratuite et sans engagement : il suffit de nous transmettre vos contrats en cours, et nous vous présentons nos constats lors d'un échange de 20 minutes.\n\nQuel moment vous conviendrait ?\n\nBien cordialement,"
+    },
+    {
+     "delay_days": 4,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe ne veux pas encombrer votre boîte : c'est mon dernier message à ce sujet.\n\nSi la question de vos assurances se pose plus tard (renouvellement, nouveau projet, sinistre mal pris en charge), n'hésitez pas à revenir vers moi. Je serai ravi d'en parler.\n\nEt si quelqu'un d'autre s'occupe de ce sujet chez vous, je vous remercie de m'indiquer son nom.\n\nBien cordialement,"
+    }
+   ]
+  },
+  {
+   "code": "P2",
+   "name": "P2 · Suite à un rendez-vous",
+   "category": "prospection",
+   "steps": [
+    {
+     "delay_days": 0,
+     "business_days": true,
+     "same_thread": false,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nMerci pour le temps que vous m'avez accordé lors de notre échange.\n\nPour préparer notre analyse, pourriez-vous nous transmettre les documents suivants :\n- les conditions particulières de vos contrats en cours ;\n- le relevé de sinistres des trois dernières années, si vous l'avez ;\n- les dates d'échéance de vos contrats.\n\nDès réception, nous consultons les compagnies et revenons vers vous avec nos propositions.\n\nBien cordialement,",
+     "subjects": [
+      "Suite à notre échange – documents pour l'analyse de vos assurances"
+     ]
+    },
+    {
+     "delay_days": 4,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe me permets de revenir vers vous concernant les documents évoqués ci-dessous.\n\nSi c'est plus simple, une copie ou une photo de vos conditions particulières suffit pour commencer.\n\nBien cordialement,"
+    },
+    {
+     "delay_days": 5,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nPetit rappel au sujet de notre analyse : nous restons à votre disposition dès que vous aurez pu rassembler les documents.\n\nSi le calendrier a changé de votre côté, dites-le-moi simplement et je reviendrai vers vous au moment opportun.\n\nBien cordialement,"
+    }
+   ]
+  },
+  {
+   "code": "P3",
+   "name": "P3 · Avant l'échéance des contrats",
+   "category": "prospection",
+   "steps": [
+    {
+     "delay_days": 0,
+     "business_days": true,
+     "same_thread": false,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe vous contacte de la part d'ODDO Assurances, cabinet de courtage en assurances à Casablanca.\n\nLa période de renouvellement est le meilleur moment pour vérifier que vos contrats sont toujours adaptés, au bon prix. Avant l'échéance, nous pouvons mettre vos assurances en concurrence auprès de plusieurs compagnies et vous présenter une comparaison claire, sans engagement.\n\nSouhaitez-vous que nous en parlions quelques minutes ?\n\nBien cordialement,",
+     "subjects": [
+      "{{ entreprise }} : avant le renouvellement de vos assurances",
+      "Avant le renouvellement de vos assurances"
+     ]
+    },
+    {
+     "delay_days": 5,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe reviens vers vous au sujet du renouvellement de vos assurances.\n\nPour que la mise en concurrence soit utile, il faut idéalement la lancer quelques semaines avant l'échéance. Si le sujet vous intéresse, il suffit de me répondre et je vous indique les documents nécessaires.\n\nBien cordialement,"
+    }
+   ]
+  },
+  {
+   "code": "G1",
+   "name": "G1 · Demande d'avenant",
+   "category": "gestion",
+   "steps": [
+    {
+     "delay_days": 0,
+     "business_days": true,
+     "same_thread": false,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nPour le compte de notre client [Nom de l'assuré], nous vous remercions d'émettre un avenant sur la police n° [N° de police].\n\nObjet de l'avenant : [Objet de l'avenant]\nDate d'effet souhaitée : [Date d'effet]\n\nMerci de nous adresser l'avenant ainsi que, le cas échéant, l'ajustement de prime correspondant.\n\nBien cordialement,",
+     "subjects": [
+      "Demande d'avenant – police [N° de police] – [Nom de l'assuré]"
+     ]
+    },
+    {
+     "delay_days": 3,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe me permets de revenir vers vous concernant la demande d'avenant ci-dessous. Pourriez-vous me confirmer sa prise en charge et le délai d'émission ?\n\nBien cordialement,"
+    },
+    {
+     "delay_days": 4,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nSans retour de votre part, je relance la demande d'avenant ci-dessous : notre client attend ce document. Merci de m'indiquer si un élément vous manque pour l'émettre.\n\nBien cordialement,"
+    }
+   ]
+  },
+  {
+   "code": "G2",
+   "name": "G2 · Demande de délégation bancaire",
+   "category": "gestion",
+   "steps": [
+    {
+     "delay_days": 0,
+     "business_days": true,
+     "same_thread": false,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nPour le compte de notre client [Nom de l'assuré], nous vous remercions d'établir une délégation de bénéfice au profit de [Banque] sur la police n° [N° de police].\n\nVous trouverez ci-joint la demande de la banque.\n\nMerci de nous adresser l'attestation de délégation dès qu'elle est établie, afin que nous la transmettions à la banque.\n\nBien cordialement,",
+     "subjects": [
+      "Délégation bancaire – police [N° de police] – [Nom de l'assuré]"
+     ]
+    },
+    {
+     "delay_days": 3,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe me permets de revenir vers vous concernant la demande de délégation ci-dessous. La banque attend l'attestation pour avancer sur le dossier de notre client : pourriez-vous m'indiquer le délai d'émission ?\n\nBien cordialement,"
+    },
+    {
+     "delay_days": 4,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe relance la demande de délégation bancaire ci-dessous. Merci de m'indiquer si un document complémentaire est nécessaire.\n\nBien cordialement,"
+    }
+   ]
+  },
+  {
+   "code": "G3",
+   "name": "G3 · Déclaration de sinistre",
+   "category": "gestion",
+   "steps": [
+    {
+     "delay_days": 0,
+     "business_days": true,
+     "same_thread": false,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous déclarons, pour le compte de notre client [Nom de l'assuré], le sinistre suivant :\n\nPolice n° : [N° de police]\nDate du sinistre : [Date du sinistre]\nCirconstances : [Circonstances]\n\nVous trouverez ci-joint les pièces dont nous disposons à ce stade. Merci de nous communiquer la référence du dossier et, le cas échéant, les coordonnées de l'expert désigné.\n\nBien cordialement,",
+     "subjects": [
+      "Déclaration de sinistre – police [N° de police] – [Nom de l'assuré]"
+     ]
+    },
+    {
+     "delay_days": 3,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe me permets de revenir vers vous concernant la déclaration de sinistre ci-dessous. Pourriez-vous me communiquer la référence du dossier ?\n\nBien cordialement,"
+    },
+    {
+     "delay_days": 4,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nSans retour de votre part, je relance la déclaration de sinistre ci-dessous. Merci de m'indiquer si des pièces complémentaires sont nécessaires.\n\nBien cordialement,"
+    }
+   ]
+  },
+  {
+   "code": "G4",
+   "name": "G4 · Suivi de sinistre",
+   "category": "gestion",
+   "steps": [
+    {
+     "delay_days": 0,
+     "business_days": true,
+     "same_thread": false,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nPourriez-vous nous faire un point sur l'avancement du dossier sinistre référence [Réf. sinistre] (police n° [N° de police], assuré [Nom de l'assuré]) ?\n\nNotre client souhaite connaître l'état du dossier et le délai prévisible de règlement.\n\nBien cordialement,",
+     "subjects": [
+      "Suivi du sinistre [Réf. sinistre] – [Nom de l'assuré]"
+     ]
+    },
+    {
+     "delay_days": 5,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe me permets de revenir vers vous concernant le dossier sinistre ci-dessous. Pourriez-vous m'indiquer où en est son instruction ?\n\nBien cordialement,"
+    },
+    {
+     "delay_days": 5,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe relance à nouveau le suivi du dossier sinistre ci-dessous, toujours sans nouvelles. Pourriez-vous me rappeler ou m'indiquer l'interlocuteur en charge ?\n\nBien cordialement,"
+    }
+   ]
+  },
+  {
+   "code": "G5",
+   "name": "G5 · Demande d'attestation",
+   "category": "gestion",
+   "steps": [
+    {
+     "delay_days": 0,
+     "business_days": true,
+     "same_thread": false,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nPourriez-vous nous adresser [Document demandé] pour la police n° [N° de police], au nom de [Nom de l'assuré] ?\n\nNotre client en a besoin pour [Motif].\n\nBien cordialement,",
+     "subjects": [
+      "Demande d'attestation – police [N° de police] – [Nom de l'assuré]"
+     ]
+    },
+    {
+     "delay_days": 2,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe me permets de revenir vers vous concernant la demande ci-dessous : notre client attend ce document. Pourriez-vous me l'adresser ?\n\nBien cordialement,"
+    },
+    {
+     "delay_days": 3,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe relance la demande de document ci-dessous. Merci de m'indiquer si un élément vous manque.\n\nBien cordialement,"
+    }
+   ]
+  },
+  {
+   "code": "G6",
+   "name": "G6 · Documents à fournir (client)",
+   "category": "gestion",
+   "steps": [
+    {
+     "delay_days": 0,
+     "business_days": true,
+     "same_thread": false,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nPour finaliser votre dossier [Objet du dossier], il nous manque les éléments suivants :\n\n[Liste des documents]\n\nVous pouvez simplement nous les transmettre en réponse à cet email.\n\nBien cordialement,",
+     "subjects": [
+      "Votre dossier [Objet du dossier] : documents à nous transmettre"
+     ]
+    },
+    {
+     "delay_days": 4,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe me permets de revenir vers vous concernant les documents ci-dessous, nécessaires pour finaliser votre dossier. N'hésitez pas à m'appeler si l'un d'eux pose difficulté.\n\nBien cordialement,"
+    },
+    {
+     "delay_days": 5,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nPetit rappel : votre dossier reste en attente des documents ci-dessous. Dès réception, nous nous chargeons du reste.\n\nBien cordialement,"
+    }
+   ]
+  },
+  {
+   "code": "S1",
+   "name": "S1 · Demande de cotation (compagnie)",
+   "category": "souscription",
+   "steps": [
+    {
+     "delay_days": 0,
+     "business_days": true,
+     "same_thread": false,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation au profit de notre client [Nom du client], dont l'activité est [Activité].\n\nRisque à couvrir : [Risque à couvrir]\nDate d'effet souhaitée : [Date d'effet]\n\nVous trouverez ci-joint les éléments du dossier. Merci de nous adresser votre meilleure proposition, avec les garanties, franchises et prime correspondantes.\n\nBien cordialement,",
+     "subjects": [
+      "Demande de cotation – [Nom du client] – [Risque à couvrir]"
+     ]
+    },
+    {
+     "delay_days": 3,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe me permets de revenir vers vous concernant la demande de cotation ci-dessous. Pourriez-vous m'indiquer quand nous pourrons recevoir votre proposition ?\n\nBien cordialement,"
+    },
+    {
+     "delay_days": 4,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe relance la demande de cotation ci-dessous : nous devons revenir vers notre client prochainement. Merci de m'indiquer si un élément complémentaire vous est nécessaire.\n\nBien cordialement,"
+    }
+   ]
+  },
+  {
+   "code": "S2",
+   "name": "S2 · Envoi de proposition (client)",
+   "category": "souscription",
+   "steps": [
+    {
+     "delay_days": 0,
+     "business_days": true,
+     "same_thread": false,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nSuite à notre échange, vous trouverez ci-joint notre proposition pour [Objet de la proposition].\n\nNous avons consulté plusieurs compagnies et retenu l'offre qui nous paraît la mieux adaptée à vos besoins. Je reste à votre disposition pour la parcourir ensemble et répondre à vos questions.\n\nBien cordialement,",
+     "subjects": [
+      "Notre proposition – [Objet de la proposition]"
+     ]
+    },
+    {
+     "delay_days": 4,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe me permets de revenir vers vous au sujet de notre proposition ci-dessous. Avez-vous pu la consulter ? Je peux vous appeler pour en parler si c'est plus simple.\n\nBien cordialement,"
+    },
+    {
+     "delay_days": 6,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe reviens vers vous une dernière fois au sujet de notre proposition. Si vous souhaitez l'ajuster (garanties, franchises, budget), dites-le-moi et je relance les compagnies.\n\nBien cordialement,"
+    }
+   ]
+  }
+ ]
+}

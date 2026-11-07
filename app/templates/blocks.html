@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Blocs de contenu – ODDO Séquences{% endblock %}
+{% block content %}
+<p><a href="/sequences">← Séquences</a></p>
+<h1>Blocs de contenu</h1>
+{% if ok %}<div class="flash">{{ ok }}</div>{% endif %}
+
+<details class="help">
+  <summary>Comment ça marche ?</summary>
+  <p>Dans l'étape d'une séquence, <code>{% raw %}{{ bloc_cible }}{% endraw %}</code> est remplacé par la trame de la cible du contact,
+     et <code>{% raw %}{{ bloc_secteur }}{% endraw %}</code> par le paragraphe de son secteur. Pour un contact <code>FIN-IND</code> :
+     trame <strong>FIN</strong> + paragraphe <strong>IND</strong>.</p>
+  <p>Un bloc peut contenir des variables :
+    {% for v in known_vars if not v.startswith("bloc") %}<code>{{ "{{ " ~ v ~ " }}" }}</code> {% endfor %}
+    et <code>{% raw %}{{ custom.accroche_suggeree }}{% endraw %}</code>.
+    Valeur de repli si le champ est vide : <code>{% raw %}{{ prenom | "Madame, Monsieur" }}{% endraw %}</code>.</p>
+  <p>Tant qu'un bloc contient « {{ todo }} », les campagnes qui l'utilisent ne peuvent pas démarrer.</p>
+</details>
+
+{% for kind, title in [("target", "Trames par cible"), ("sector", "Paragraphes par secteur")] %}
+  <h2>{{ title }}</h2>
+  {% for b in blocks if b.kind == kind %}
+    <article id="bloc-{{ b.key }}">
+      <header><strong>{{ b.key }}</strong> — {{ labels.get(b.key, "") }}
+        {% if todo in b.body %}<span class="badge rel-moyenne">à rédiger</span>{% else %}<span class="badge rel-bonne">rédigé</span>{% endif %}
+      </header>
+      <form method="post" action="/sequences/blocks/{{ b.id }}">
+        <textarea name="body" rows="{{ 6 if kind == 'target' else 4 }}">{{ b.body }}</textarea>
+        <button type="submit" class="secondary">Enregistrer {{ b.key }}</button>
+      </form>
+    </article>
+  {% endfor %}
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,515 @@
+{
+ "version": 1,
+ "source": "Liste_contacts.xlsx (Omar, 04/11/2026)",
+ "companies": [
+  {
+   "name": "Sanlam Allianz",
+   "aliases": [
+    "Sanlam",
+    "Allianz",
+    "Sanlam Allianz"
+   ],
+   "domain": "sanlamallianz.ma",
+   "logo": "sanlam.png",
+   "people": [
+    {
+     "first_name": "Omar",
+     "last_name": "Seffar",
+     "job_title": "Souscripteur",
+     "department": "souscription",
+     "seniority": "junior",
+     "email": "omar.seffar@sanlamallianz.ma"
+    },
+    {
+     "first_name": "Youssef",
+     "last_name": "Yakane",
+     "job_title": "Souscripteur",
+     "department": "souscription",
+     "seniority": "senior",
+     "email": "youssef.yakane@sanlamallianz.ma"
+    },
+    {
+     "first_name": "Mohamed",
+     "last_name": "El Farichi",
+     "job_title": "Souscripteur Flotte",
+     "department": "souscription",
+     "seniority": "junior",
+     "email": "mohammed.farichi@sanlamallianz.ma"
+    },
+    {
+     "first_name": "Hajar",
+     "last_name": "Eddery",
+     "job_title": "Souscripteur particulier prévoyance & retraite",
+     "department": "souscription",
+     "seniority": "junior",
+     "email": "hajar.eddery@sanlamallianz.ma"
+    },
+    {
+     "first_name": "Yassine",
+     "last_name": "El Aaydi",
+     "job_title": "Souscripteur maladie",
+     "department": "souscription",
+     "seniority": "junior",
+     "email": "yassine.elaaydi@sanlamallianz.ma"
+    },
+    {
+     "first_name": "Mehdi",
+     "last_name": "Rtimy",
+     "job_title": "Directeur animation réseau et courtage",
+     "department": "souscription",
+     "seniority": "directeur",
+     "email": "mehdi.rtimy@sanlamallianz.ma"
+    },
+    {
+     "first_name": "Hajar",
+     "last_name": "Zarai",
+     "job_title": "Souscripteur maladie",
+     "department": "souscription",
+     "seniority": "directeur",
+     "email": "hajar.zarai@sanlamallianz.ma"
+    },
+    {
+     "first_name": "Ismail",
+     "last_name": "Berdai",
+     "job_title": "Souscripteur",
+     "department": "souscription",
+     "seniority": "directeur",
+     "email": "ismail.berdai@sanlamallianz.ma"
+    },
+    {
+     "first_name": "Imane",
+     "last_name": "El Arfaoui",
+     "job_title": "Gestionnaire production AT/RC",
+     "department": "gestion",
+     "seniority": "junior",
+     "email": "imane.elarfaoui@sanlamallianz.ma"
+    },
+    {
+     "first_name": "Amine",
+     "last_name": "Sekkat",
+     "job_title": "Production flotte",
+     "department": "production",
+     "seniority": "directeur",
+     "email": "amine.sekkat@sanlamallianz.ma"
+    },
+    {
+     "first_name": "El Housnia",
+     "last_name": "Moundiri",
+     "job_title": "Gestionnaire production Multirisque",
+     "department": "gestion",
+     "seniority": "senior",
+     "email": "elhousnia.moundiri@sanlamallianz.ma"
+    },
+    {
+     "first_name": "Siham",
+     "last_name": "Benfares",
+     "job_title": "Production Incendie & Risques Techniques",
+     "department": "production",
+     "seniority": "junior",
+     "email": "siham.benfares@sanlamallianz.ma"
+    }
+   ]
+  },
+  {
+   "name": "Wafa Assurance",
+   "aliases": [
+    "Wafa",
+    "Wafa Assurance",
+    "Wafaassurance"
+   ],
+   "domain": "wafaassurance.co.ma",
+   "logo": "wafa_assurance.png",
+   "people": [
+    {
+     "first_name": "Yassine",
+     "last_name": "Laoud",
+     "job_title": "Souscripteur",
+     "department": "souscription",
+     "seniority": "junior",
+     "email": "yassine.laoud@wafaassurance.co.ma"
+    },
+    {
+     "first_name": "Rabii",
+     "last_name": "Akka",
+     "job_title": "Souscripteur maladie",
+     "department": "souscription",
+     "seniority": "senior",
+     "email": "rabii.akka@wafaassurance.co.ma"
+    },
+    {
+     "first_name": "Meryem",
+     "last_name": "Moussafir",
+     "job_title": "Souscripteur flotte",
+     "department": "souscription",
+     "seniority": "junior",
+     "email": "meryam.moussafir@wafaassurance.co.ma"
+    },
+    {
+     "first_name": "Zineb",
+     "last_name": "El Mamoune Alaoui",
+     "job_title": "Souscripteur flotte",
+     "department": "souscription",
+     "seniority": "senior",
+     "email": "zineb.elmamounealaoui@wafaassurance.co.ma"
+    },
+    {
+     "first_name": "Nawal",
+     "last_name": "Hadri",
+     "job_title": "Directrice risque entreprise",
+     "department": "souscription",
+     "seniority": "directeur",
+     "email": "nawal.hadri@wafaassurance.co.ma"
+    },
+    {
+     "first_name": "Nawal",
+     "last_name": "Lamkhanet",
+     "job_title": "Directrice animation reseau et courtage",
+     "department": "souscription",
+     "seniority": "directeur",
+     "email": "nawal.lamkhanet@wafaassurance.co.ma"
+    },
+    {
+     "first_name": "Hanae",
+     "last_name": "Bennis",
+     "job_title": "Souscripteur Affaires Facultatives",
+     "department": "souscription",
+     "seniority": "senior",
+     "email": "hanae.bennis@wafaassurance.co.ma"
+    },
+    {
+     "first_name": "Maria",
+     "last_name": "Zerradi",
+     "job_title": "Souscripteur Affaire facultatives",
+     "department": "souscription",
+     "seniority": "senior",
+     "email": "maria.zerradi@wafaassurance.co.ma"
+    },
+    {
+     "first_name": "Mohcine",
+     "last_name": "Badr",
+     "job_title": "Souscripteur Affaire facultatives",
+     "department": "souscription",
+     "seniority": "senior",
+     "email": "mohcine.badr@wafaassurance.co.ma"
+    },
+    {
+     "first_name": "Zakarya",
+     "last_name": "Bekkar",
+     "job_title": "Gestionnaire auto",
+     "department": "gestion",
+     "seniority": "junior",
+     "email": "zakarya.bekkar@wafaassurance.co.ma"
+    },
+    {
+     "first_name": "Sofia",
+     "last_name": "Hassouni",
+     "job_title": "Gestionnaire auto",
+     "department": "gestion",
+     "seniority": "junior",
+     "email": "sofia.hassouni@wafaassurance.co.ma"
+    },
+    {
+     "first_name": "Youssef",
+     "last_name": "El Boufi",
+     "job_title": "Gestionnaire",
+     "department": "gestion",
+     "seniority": "junior",
+     "email": "youssef.elboufi@wafaassurance.co.ma"
+    },
+    {
+     "first_name": "Said",
+     "last_name": "Boutayeb",
+     "job_title": "directeur sinistre auto matériel",
+     "department": "gestion",
+     "seniority": "directeur",
+     "email": "said.boutayeb@wafaassurance.co.ma"
+    }
+   ]
+  },
+  {
+   "name": "AtlantaSanad",
+   "aliases": [
+    "Atlanta Sanad",
+    "AtlantaSanad",
+    "Atlanta",
+    "Sanad"
+   ],
+   "domain": "atlantasanad.ma",
+   "logo": "atlantasanad.png",
+   "people": [
+    {
+     "first_name": "Sabria",
+     "last_name": "Akhezzan",
+     "job_title": "Souscripteur RC et dommages",
+     "department": "souscription",
+     "seniority": "junior",
+     "email": "s.akhezzan@atlantasanad.ma"
+    },
+    {
+     "first_name": "Mohamed",
+     "last_name": "El Moustadraf",
+     "job_title": "Souscripteur",
+     "department": "souscription",
+     "seniority": "senior",
+     "email": "m.elmoustadraf@atlantasanad.ma"
+    },
+    {
+     "first_name": "Sanaa",
+     "last_name": "Benmouina",
+     "job_title": "Souscripteur",
+     "department": "souscription",
+     "seniority": "junior",
+     "email": "s.benmouina@atlantasanad.ma"
+    },
+    {
+     "first_name": "Omar",
+     "last_name": "Baroudi",
+     "job_title": "Souscripteur",
+     "department": "souscription",
+     "seniority": "directeur",
+     "email": "o.baroudi@atlantasanad.ma"
+    },
+    {
+     "first_name": "Lahouceine",
+     "last_name": "Adnas",
+     "job_title": "Gestionnaire service AT",
+     "department": "gestion",
+     "seniority": "junior",
+     "email": "l.adnas@atlantasanad.ma"
+    },
+    {
+     "first_name": "Hayat",
+     "last_name": "Lamjhadi",
+     "job_title": "Gestionnaire",
+     "department": "gestion",
+     "seniority": "junior",
+     "email": "h.lamjahdi@atlantasanad.ma"
+    },
+    {
+     "first_name": "Bouchra",
+     "last_name": "Troussi",
+     "job_title": "Gestionnaire",
+     "department": "gestion",
+     "seniority": "senior",
+     "email": "b.troussi@atlantasanad.ma"
+    },
+    {
+     "first_name": "Mouhcine",
+     "last_name": "Badr",
+     "job_title": "Gestionnaire",
+     "department": "gestion",
+     "seniority": "senior",
+     "email": "m.badr@atlantasanad.ma"
+    }
+   ]
+  },
+  {
+   "name": "AXA Assurance Maroc",
+   "aliases": [
+    "AXA",
+    "AXA Assurance",
+    "AXA Assurance Maroc"
+   ],
+   "domain": "axa.ma",
+   "logo": "axa_assurance.png",
+   "people": [
+    {
+     "first_name": "Marouane",
+     "last_name": "Oubelkhir",
+     "job_title": "Souscripteur",
+     "department": "souscription",
+     "seniority": "senior",
+     "email": "marouane.oubelkhir@axa.ma"
+    },
+    {
+     "first_name": "Sanaa",
+     "last_name": "Jelal",
+     "job_title": "Souscription AT",
+     "department": "souscription",
+     "seniority": "junior",
+     "email": "sanaa.jelal@axa.ma"
+    },
+    {
+     "first_name": "Meriem",
+     "last_name": "Hadrouni",
+     "job_title": "Directrice souscription",
+     "department": "souscription",
+     "seniority": "directeur",
+     "email": "meriem.hadrouni@axa.ma"
+    },
+    {
+     "first_name": "Chaimaa",
+     "last_name": "Zinad",
+     "job_title": "Souscription santé & prévoyance",
+     "department": "souscription",
+     "seniority": "senior",
+     "email": "chaimaa.zinad@axa.ma"
+    },
+    {
+     "first_name": "Meriem",
+     "last_name": "Bouajjaj",
+     "job_title": "Souscription AT",
+     "department": "souscription",
+     "seniority": "junior",
+     "email": "meriem.bouajjaj@axa.ma"
+    },
+    {
+     "first_name": "Youssef",
+     "last_name": "Zarari",
+     "job_title": "Souscription Particulier prévoyance et retraite",
+     "department": "souscription",
+     "seniority": "junior",
+     "email": "youssef.zarari@axa.ma"
+    },
+    {
+     "first_name": "Ghizlaine",
+     "last_name": "Makhloufi",
+     "job_title": "Souscription prévoyance & retraite",
+     "department": "souscription",
+     "seniority": "directeur",
+     "email": "ghizlane.makhloufi@axa.ma"
+    },
+    {
+     "first_name": "Baddredine",
+     "last_name": "Zhouri",
+     "job_title": "Souscription",
+     "department": "souscription",
+     "seniority": "directeur",
+     "email": "badreddine.zhouri@axa.ma"
+    },
+    {
+     "first_name": "Imane",
+     "last_name": "Ichkou",
+     "job_title": "Souscription flotte & RD particuliers",
+     "department": "souscription",
+     "seniority": "senior",
+     "email": "imane.ichkou@axa.ma"
+    },
+    {
+     "first_name": "Abdelhakim",
+     "last_name": "Mouslim",
+     "job_title": "Gestion / production",
+     "department": "gestion",
+     "seniority": "senior",
+     "email": "abdelhakim.mouslim@axa.ma"
+    },
+    {
+     "first_name": "Naima",
+     "last_name": "El Madabi",
+     "job_title": "Gestion prévoyance",
+     "department": "gestion",
+     "seniority": "junior",
+     "email": "naima.elmadabi@axa.ma"
+    },
+    {
+     "first_name": "Adil",
+     "last_name": "Belarfaoui",
+     "job_title": "Gestion prévoyance",
+     "department": "gestion",
+     "seniority": "junior",
+     "email": "adil.belarfaoui@axa.ma"
+    }
+   ]
+  },
+  {
+   "name": "RMA Assurance",
+   "aliases": [
+    "RMA",
+    "RMA Assurance",
+    "RMA Watanya"
+   ],
+   "domain": "rmaassurance.com",
+   "logo": "rma_assurance.png",
+   "people": [
+    {
+     "first_name": "Anas",
+     "last_name": "Himer",
+     "job_title": "Souscription",
+     "department": "souscription",
+     "seniority": "senior",
+     "email": "a.himer@rmaassurance.com"
+    },
+    {
+     "first_name": "Souhayb",
+     "last_name": "Laglaoui",
+     "job_title": "Souscription TRC",
+     "department": "souscription",
+     "seniority": "junior",
+     "email": "s.laglaoui@rmaassurance.com"
+    },
+    {
+     "first_name": "El Mehdi",
+     "last_name": "Malki",
+     "job_title": "Souscription TRC",
+     "department": "souscription",
+     "seniority": "senior",
+     "email": "e.malki@rmaassurance.com"
+    },
+    {
+     "first_name": "Nisrine",
+     "last_name": "Lahlou",
+     "job_title": "Souscription particulier",
+     "department": "souscription",
+     "seniority": "senior",
+     "email": "n.lahlou@rmaassurance.com"
+    },
+    {
+     "first_name": "Sara",
+     "last_name": "Merdade",
+     "job_title": "Souscription Particulier",
+     "department": "souscription",
+     "seniority": "junior",
+     "email": "s.merdade@rmaassurance.com"
+    },
+    {
+     "first_name": "Dounia",
+     "last_name": "Benlamouine",
+     "job_title": "Directeur Martime et transport",
+     "department": "maritime_transport",
+     "seniority": "directeur",
+     "email": "d.benlamouine@rmaassurance.com"
+    },
+    {
+     "first_name": "Najlaa",
+     "last_name": "Chiheb",
+     "job_title": "Souscription particulier",
+     "department": "souscription",
+     "seniority": "senior",
+     "email": "n.chiheb@rmaassurance.com"
+    },
+    {
+     "first_name": "Rachid",
+     "last_name": "Raghai",
+     "job_title": "Directeur Souscription",
+     "department": "souscription",
+     "seniority": "directeur",
+     "email": "r.raghai@rmaassurance.com"
+    },
+    {
+     "first_name": "Nadia",
+     "last_name": "El Mimouni",
+     "job_title": "Gestion / production",
+     "department": "gestion",
+     "seniority": "directeur",
+     "email": "n.elmimouni@rmaassurance.com"
+    },
+    {
+     "first_name": "Fatim Ezzahra",
+     "last_name": "Nefsi",
+     "job_title": "Gestion / production",
+     "department": "gestion",
+     "seniority": "senior",
+     "email": "f.nefsi@rmaassurance.com"
+    },
+    {
+     "first_name": "Hamza",
+     "last_name": "Karkar",
+     "job_title": "Gestion / production",
+     "department": "gestion",
+     "seniority": "junior",
+     "email": "h.karkar@rmaassurance.com"
+    }
+   ]
+  }
+ ]
+}

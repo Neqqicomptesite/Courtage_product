@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Palette ODDO (valeurs « teinte saturation luminosité », format attendu par shadcn/ui).
+   Bleu #244480 et vert #009454 relevés sur le logo, anthracite #303030 pour le texte. */
+@layer base {
+  :root {
+    --background: 220 20% 98%;
+    --foreground: 0 0% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 12%;
+    --primary: 219 56% 32%;            /* bleu ODDO */
+    --primary-foreground: 0 0% 100%;
+    --brand-green: 154 100% 29%;       /* vert ODDO */
+    --brand-green-foreground: 0 0% 100%;
+    --secondary: 220 16% 95%;
+    --secondary-foreground: 0 0% 19%;
+    --muted: 220 16% 95%;
+    --muted-foreground: 220 8% 44%;
+    --accent: 219 40% 95%;
+    --accent-foreground: 219 56% 28%;
+    --destructive: 0 72% 46%;
+    --destructive-foreground: 0 0% 100%;
+    --warning: 35 92% 42%;
+    --warning-foreground: 0 0% 100%;
+    --success: 154 100% 29%;
+    --success-foreground: 0 0% 100%;
+    --border: 220 14% 90%;
+    --input: 220 14% 88%;
+    --ring: 219 56% 40%;
+    --sidebar: 0 0% 100%;
+    --sidebar-foreground: 0 0% 19%;
+    --radius: 0.65rem;
+  }
+  .dark {
+    --background: 222 24% 7%;
+    --foreground: 220 14% 94%;
+    --card: 222 20% 10%;
+    --card-foreground: 220 14% 94%;
+    --popover: 222 20% 10%;
+    --popover-foreground: 220 14% 94%;
+    --primary: 217 72% 64%;
+    --primary-foreground: 222 30% 10%;
+    --brand-green: 154 65% 45%;
+    --brand-green-foreground: 222 30% 8%;
+    --secondary: 222 16% 15%;
+    --secondary-foreground: 220 14% 90%;
+    --muted: 222 16% 15%;
+    --muted-foreground: 220 10% 62%;
+    --accent: 219 30% 18%;
+    --accent-foreground: 217 72% 78%;
+    --destructive: 0 70% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --warning: 38 92% 56%;
+    --warning-foreground: 222 30% 8%;
+    --success: 154 65% 45%;
+    --success-foreground: 222 30% 8%;
+    --border: 222 14% 18%;
+    --input: 222 14% 22%;
+    --ring: 217 72% 64%;
+    --sidebar: 222 22% 9%;
+    --sidebar-foreground: 220 14% 88%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  html { -webkit-font-smoothing: antialiased; }
+  body { @apply bg-background text-foreground font-sans; font-feature-settings: "cv11", "ss01"; }
+  /* Chiffres alignés dans les tableaux et les indicateurs */
+  .tabular { font-variant-numeric: tabular-nums; }
+}

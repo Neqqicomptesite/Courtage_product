@@ -1,0 +1,33 @@
+{# Résultat du test de connexion, inséré par HTMX dans #connection-report. #}
+<article class="report">
+  {% if errors %}
+    <p class="ko">Impossible de lancer le test :</p>
+    <ul>{% for msg in errors.values() %}<li>• {{ msg }}</li>{% endfor %}</ul>
+  {% elif report %}
+    <p class="{{ 'ok' if report.ok else 'ko' }}">
+      {{ "Connexion réussie." if report.ok else "Au moins une vérification a échoué." }}
+    </p>
+    <ul>
+      {% for st in report.steps %}
+        <li><span class="{{ 'ok' if st.ok else 'ko' }}">{{ "✓" if st.ok else "✗" }} {{ st.label }}</span> — {{ st.detail }}</li>
+      {% endfor %}
+    </ul>
+    {% if report.folders %}
+      <details open>
+        <summary>Dossiers de la boîte ({{ report.folders|length }})</summary>
+        <ul>
+          {% for f in report.folders %}
+            <li>{{ f.display_name }}
+              {% if f.raw_name == report.sent_folder %}<strong> ← Envoyés détecté</strong>{% endif %}
+              {% if f.raw_name == report.junk_folder %}<strong> ← Spam détecté</strong>{% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </details>
+      <p class="hint">Vérifiez les choix pré-remplis ci-dessus, puis cliquez sur « Enregistrer ».</p>
+    {% endif %}
+  {% endif %}
+</article>
+{% if report and folders %}
+  {% with oob=true %}{% include "partials/folder_fields.html" %}{% endwith %}
+{% endif %}

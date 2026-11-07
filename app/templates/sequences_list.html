@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Séquences – ODDO Séquences{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Séquences</h1>
+  <div class="actions"><a href="/sequences/blocks" role="button" class="secondary outline">Blocs de contenu</a></div>
+</div>
+{% if ok %}<div class="flash">{{ ok }}</div>{% endif %}
+
+{% if todo_blocks %}
+  <p class="warn-box">{{ todo_blocks|length }} bloc(s) encore à rédiger : {{ todo_blocks|join(", ") }}.
+     <a href="/sequences/blocks">Les rédiger</a> — une campagne ne pourra pas démarrer tant qu'un bloc qu'elle utilise n'est pas rédigé.</p>
+{% endif %}
+
+<p class="hint">Chaque email est composé d'une <strong>trame par cible</strong> (FIN, RH, DIR) et d'un
+   <strong>paragraphe par secteur</strong> (IND, SRV…), choisis d'après le code séquence du contact (ex. FIN-IND).
+   Une seule séquence suffit donc pour les 21 combinaisons.</p>
+
+<table class="striped">
+  <thead><tr><th>Séquence</th><th>Étapes</th><th>Campagnes</th><th></th></tr></thead>
+  <tbody>
+    {% for seq, n_steps, n_camp in rows %}
+      <tr>
+        <td><a href="/sequences/{{ seq.id }}">{{ seq.name }}</a></td>
+        <td>{{ n_steps }}</td>
+        <td>{{ n_camp }}</td>
+        <td><a href="/sequences/{{ seq.id }}/preview">Aperçu</a></td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<article>
+  <form method="post" action="/sequences/new" class="grid">
+    <input name="name" placeholder="Nom de la nouvelle séquence" required>
+    <button type="submit">Créer (3 étapes : J0, J+3, J+7 ouvrés)</button>
+  </form>
+</article>
+{% endblock %}

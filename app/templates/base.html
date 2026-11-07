@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="fr" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}ODDO Séquences{% endblock %}</title>
+  <link rel="stylesheet" href="/static/vendor/pico-2.1.1.min.css">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/vendor/htmx-2.0.11.min.js" defer></script>
+</head>
+<body>
+  {% set menu = [
+    ("/classique", "Tableau de bord (classique)", true),
+    ("/v2/", "Nouvelle interface", true),
+    ("/contacts", "Contacts", true),
+    ("/sequences", "Séquences", true),
+    ("/campaigns", "Campagnes", true),
+    ("/replies", "Réponses", true),
+    ("/settings", "Réglages", true),
+  ] %}
+  <header class="app-header container">
+    <nav>
+      <ul><li><strong>ODDO Séquences</strong></li></ul>
+      <ul>
+        {% for href, label, ready in menu %}
+          {% if ready %}
+            <li><a href="{{ href }}" {% if nav == href or (href != "/" and nav.startswith(href)) %}aria-current="page"{% endif %}>{{ label }}{% if href == "/replies" %} <span id="reply-count" class="count">{{ to_classify if to_classify else "" }}</span>{% endif %}</a></li>
+          {% else %}
+            <li><span class="soon" title="Disponible dans un prochain jalon">{{ label }}</span></li>
+          {% endif %}
+        {% endfor %}
+      </ul>
+    </nav>
+  </header>
+
+  <main class="container">
+    {% if test_mode %}
+      <div class="banner banner-test" role="status">
+        <span>Mode test activé : tous les emails partent vers votre propre adresse.</span>
+      </div>
+    {% else %}
+      <div class="banner banner-live" role="alert">
+        <span>Mode test désactivé : les emails partent réellement aux contacts.</span>
+        <form method="post" action="/settings/test-mode">
+          <input type="hidden" name="enabled" value="1">
+          <button type="submit" class="secondary">Réactiver le mode test</button>
+        </form>
+      </div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="app-footer">
+    Les envois n'ont lieu que lorsque l'application est ouverte et le PC allumé.
+    · <a href="/aide/delivrabilite">Aide délivrabilité</a>
+  </footer>
+</body>
+</html>

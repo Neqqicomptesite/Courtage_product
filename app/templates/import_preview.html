@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Aperçu de l'import – ODDO Séquences{% endblock %}
+{% block content %}
+<h1>Importer : {{ meta.filename }}</h1>
+<p class="steps">1. Fichier › 2. Colonnes › <strong>3. Aperçu et validation</strong></p>
+
+<div class="stats">
+  <article><span class="big">{{ plan.of("new")|length }}</span>nouveaux</article>
+  <article><span class="big">{{ plan.of("update")|length }}</span>mis à jour</article>
+  <article><span class="big">{{ plan.of("ignore")|length }}</span>ignorés</article>
+  <article><span class="big">{{ plan.suppressed|length }}</span>dans la liste d'exclusion</article>
+</div>
+
+{% if plan.of("ignore") %}
+  <details open>
+    <summary>Lignes ignorées ({{ plan.of("ignore")|length }})</summary>
+    <table><thead><tr><th>Ligne</th><th>Raison</th></tr></thead><tbody>
+      {% for r in plan.of("ignore") %}<tr><td>{{ r.row_no }}</td><td>{{ r.reason }}</td></tr>{% endfor %}
+    </tbody></table>
+  </details>
+{% endif %}
+
+{% if plan.suppressed %}
+  <details open>
+    <summary>Adresses présentes dans la liste d'exclusion ({{ plan.suppressed|length }})</summary>
+    <p class="hint">Elles sont importées mais ne seront jamais inscrites dans une campagne.</p>
+    <ul>{% for r in plan.suppressed %}<li>Ligne {{ r.row_no }} : {{ r.email }}</li>{% endfor %}</ul>
+  </details>
+{% endif %}
+
+{% if plan.warned %}
+  <details open>
+    <summary>Avertissements ({{ plan.warned|length }})</summary>
+    <ul>{% for r in plan.warned %}<li>Ligne {{ r.row_no }} ({{ r.email }}) : {{ r.warnings|join(", ") }}</li>{% endfor %}</ul>
+  </details>
+{% endif %}
+
+<form method="post" action="/contacts/import/{{ token }}/commit">
+  <input type="hidden" name="sheet" value="{{ sheet or '' }}">
+  {% for m in mapping %}<input type="hidden" name="map_{{ loop.index0 }}" value="{{ m }}">{% endfor %}
+  <div class="grid">
+    <button type="submit">Importer {{ plan.of("new")|length + plan.of("update")|length }} contact(s)</button>
+    <a href="/contacts/import/{{ token }}{% if sheet %}?sheet={{ sheet|urlencode }}{% endif %}" role="button" class="secondary outline">Revenir aux colonnes</a>
+  </div>
+</form>
+{% endblock %}

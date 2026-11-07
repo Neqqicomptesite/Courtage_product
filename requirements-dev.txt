@@ -1,0 +1,6 @@
+# Outils de test (inutiles pour utiliser l'application au quotidien).
+-r requirements.txt
+pytest==9.2.0
+httpx==0.28.1
+aiosmtpd==1.4.6
+keyrings.alt==5.0.2

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Réponses – ODDO Séquences{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Réponses</h1>
+  <div class="actions"><a href="/export" role="button" class="secondary outline">Exporter (Excel)</a></div>
+</div>
+
+<nav class="filter-tabs">
+  {% for key, label in filters.items() %}
+    <a href="/replies?f={{ key }}" {% if key == f %}aria-current="page"{% endif %}>{{ label }}</a>
+  {% endfor %}
+</nav>
+
+{% if not items %}
+  <article><p>{% if f == "unclassified" %}Aucune réponse à classer. 🎉{% else %}Aucune réponse dans cette catégorie.{% endif %}</p>
+    <p class="hint">Les réponses arrivent automatiquement à chaque lecture de la boîte (environ toutes les 10 minutes).</p></article>
+{% endif %}
+
+{% for m, c in items %}
+  {% with hide=false, error="", oob_count=false %}{% include "partials/reply_card.html" %}{% endwith %}
+{% endfor %}
+{% endblock %}

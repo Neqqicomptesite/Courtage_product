@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Tableau de bord</h1>
+{% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+{% if imap_error %}<p class="error-box"><strong>Lecture de la boîte impossible :</strong> {{ imap_error }}.
+  Par sécurité, aucun email ne part tant que les réponses ne peuvent pas être vérifiées.</p>{% endif %}
+
+{% if engine_error %}<p class="error-box"><strong>Envois suspendus :</strong> {{ engine_error }}
+  <a href="/settings">Vérifier les réglages</a></p>{% endif %}
+
+<article class="status-bar">
+  <div><small>Mode test</small><strong class="{{ 'warn' if test_mode else 'ko' }}">{{ "Activé" if test_mode else "Désactivé (envois réels)" }}</strong></div>
+  <div><small>Moteur d'envoi</small><strong class="{{ 'ok' if engine_running else 'ko' }}">{{ "En marche" if engine_running else "Arrêté" }}</strong>
+       <small class="hint">dernier passage : {{ last_tick|local("%H:%M") if last_tick else "—" }}</small></div>
+  <div><small>Envoyés aujourd'hui</small>
+       <strong>{% if counters %}{{ counters.today }} / {{ counters.daily_cap }}{% else %}—{% endif %}</strong>
+       {% if counters %}<small class="hint">cette heure : {{ counters.last_hour }} / {{ counters.hourly_cap }}</small>{% endif %}</div>
+  <div><small>Prochain envoi prévu</small>
+       <strong>{% if next_due %}{{ (next_due if not not_before or next_due > not_before else not_before)|local_long }}{% else %}—{% endif %}</strong></div>
+  <div><small>Dernière lecture de la boîte</small><strong>{{ last_sync|local if last_sync else "jamais" }}</strong>
+       <form method="post" action="/sync" class="inline-form">
+         <button type="submit" class="secondary outline small">Synchroniser maintenant</button></form></div>
+</article>
+
+{% if to_review %}
+  <article>
+    <header><strong>À vérifier ({{ to_review|length }})</strong></header>
+    <table>
+      <thead><tr><th>Contact</th><th>Campagne</th><th>Problème</th><th></th></tr></thead>
+      <tbody>
+      {% for enr, c, camp in to_review %}
+        <tr>
+          <td><a href="/contacts/{{ c.id }}">{{ c.first_name or "" }} {{ c.last_name or "" }}</a><br><small class="hint">{{ c.company or "" }}</small></td>
+          <td><a href="/campaigns/{{ camp.id }}">{{ camp.name }}</a> · étape {{ enr.current_step }}</td>
+          <td><small>{{ enr.last_error or enr.status }}</small></td>
+          <td class="row-actions">
+            {% if enr.status == "needs_review" %}
+              <form method="post" action="/campaigns/enrollments/{{ enr.id }}/confirm-sent" class="inline-form">
+                <button type="submit" class="secondary small">Il est dans mes Envoyés</button></form>
+              <form method="post" action="/campaigns/enrollments/{{ enr.id }}/retry" class="inline-form">
+                <button type="submit" class="secondary outline small">Il n'est pas parti : renvoyer</button></form>
+            {% else %}
+              <form method="post" action="/campaigns/enrollments/{{ enr.id }}/retry" class="inline-form">
+                <button type="submit" class="secondary outline small">Réessayer</button></form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </article>
+{% endif %}
+
+{% if unmatched %}
+  <article>
+    <header><strong>Réponses non rattachées ({{ unmatched|length }})</strong></header>
+    <p class="hint">Messages venant d'une autre adresse d'une entreprise prospectée. Rattachez-les au bon contact
+      pour arrêter ses relances, ou ignorez-les.</p>
+    {% for m, sugg in unmatched %}
+      <div class="unmatched">
+        <p><strong>{{ m.subject or "(sans objet)" }}</strong> <small class="hint">· reçu le {{ m.received_at|local }}</small><br>
+          <small>{{ m.body_text|truncate(220) }}</small></p>
+        <div class="row-actions">
+          {% if sugg %}
+            <form method="post" action="/replies/{{ m.id }}/attach" class="inline-form">
+              <input type="hidden" name="contact_id" value="{{ sugg.id }}">
+              <button type="submit" class="secondary small">Rattacher à {{ sugg.first_name or "" }} {{ sugg.last_name or "" }} ({{ sugg.company or sugg.email }})</button>
+            </form>
+          {% endif %}
+          <form method="post" action="/replies/{{ m.id }}/dismiss" class="inline-form">
+            <button type="submit" class="secondary outline small">Ignorer</button></form>
+        </div>
+      </div>
+    {% endfor %}
+  </article>
+{% endif %}
+
+{% if callbacks %}
+  <article>
+    <header><strong>Rappels du jour ({{ callbacks|length }})</strong></header>
+    <table><tbody>
+      {% for m, c in callbacks %}
+        <tr id="cb-{{ m.id }}">
+          <td><a href="/contacts/{{ c.id }}">{{ c.first_name or "" }} {{ c.last_name or "" }}</a> · {{ c.company or c.email }}
+              {% if c.phone %}<br><small>{{ c.phone }}</small>{% endif %}</td>
+          <td><small>prévu le {{ m.callback_on.strftime("%d/%m/%Y") }}{% if m.note %} — {{ m.note }}{% endif %}</small></td>
+          <td><button type="button" class="secondary outline small" hx-post="/replies/{{ m.id }}/callback-done"
+                      hx-target="#cb-{{ m.id }}" hx-swap="outerHTML">Rappel effectué</button></td>
+        </tr>
+      {% endfor %}
+    </tbody></table>
+  </article>
+{% endif %}
+
+{% if not mailbox_configured %}
+  <article>
+    <header><strong>Première étape : configurer la boîte mail</strong></header>
+    <p>Renseignez les serveurs SMTP et IMAP de Heberjahiz, puis cliquez sur « Tester la connexion ».</p>
+    <a href="/settings" role="button">Aller aux réglages</a>
+  </article>
+{% elif n_contacts == 0 %}
+  <article>
+    <header><strong>Étape suivante : importer vos contacts</strong></header>
+    <p>La boîte mail est configurée. Importez maintenant votre fichier Excel de prospects.</p>
+    <a href="/contacts/import" role="button">Importer un fichier</a>
+  </article>
+{% else %}
+  <h2>Résultats (toutes campagnes)</h2>
+  {% include "partials/indicators.html" %}
+
+  <article>
+    <header><strong>File d'envoi – 7 prochains jours ({{ queue|length }}{{ "+" if queue|length == 100 }})</strong></header>
+    {% if queue %}
+      <p class="hint">Heures indicatives : le moteur envoie un email à la fois, selon les plafonds et le délai entre deux envois.
+        {% if test_mode %}Mode test : tout partira vers votre adresse.{% endif %}</p>
+      <div class="table-wrap"><table class="striped">
+        <thead><tr><th>Prévu le</th><th>Contact</th><th>Campagne</th><th>Étape</th><th></th></tr></thead>
+        <tbody>
+        {% for enr, c, camp in queue %}
+          <tr>
+            <td>{{ enr.next_due_at|local_long }}</td>
+            <td><a href="/contacts/{{ c.id }}">{{ c.first_name or "" }} {{ c.last_name or "" }}</a><br><small class="hint">{{ c.company or "" }}</small></td>
+            <td><a href="/campaigns/{{ camp.id }}">{{ camp.name }}</a></td>
+            <td>{{ enr.current_step }}</td>
+            <td class="row-actions">
+              <form method="post" action="/campaigns/enrollments/{{ enr.id }}/send-now" class="inline-form"
+                    onsubmit="return confirm('Envoyer cette étape maintenant ?');">
+                <button type="submit" class="secondary outline small">Envoyer maintenant</button></form>
+              <form method="post" action="/campaigns/enrollments/{{ enr.id }}/skip" class="inline-form"
+                    onsubmit="return confirm('Sauter cette étape pour ce contact ?');">
+                <button type="submit" class="secondary outline small">Sauter l'étape</button></form>
+              <form method="post" action="/contacts/{{ c.id }}/enrollments/{{ enr.id }}/remove" class="inline-form"
+                    onsubmit="return confirm('Retirer ce contact de la campagne ?');">
+                <button type="submit" class="secondary outline small">Retirer</button></form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    {% elif not active_campaigns %}
+      <p>Aucune campagne active. <a href="/campaigns">Créer une campagne</a></p>
+    {% else %}
+      <p class="hint">Aucun envoi prévu dans les 7 prochains jours.</p>
+    {% endif %}
+  </article>
+{% endif %}
+{% endblock %}

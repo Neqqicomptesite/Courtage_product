@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Journal – ODDO Séquences{% endblock %}
+{% block content %}
+<h1>Journal</h1>
+<p class="hint">Toutes les actions de l'application, les plus récentes en premier (300 lignes au plus).
+  Le fichier technique détaillé est dans <code>data\logs\app.log</code>.</p>
+
+<form method="get" action="/journal" class="grid">
+  <label>Catégorie
+    <select name="entity" onchange="this.form.submit()">
+      {% for k, v in entities.items() %}<option value="{{ k }}" {% if k == entity %}selected{% endif %}>{{ v }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Gravité
+    <select name="level" onchange="this.form.submit()">
+      <option value="">Tout</option>
+      <option value="warning" {% if level == "warning" %}selected{% endif %}>Avertissements et erreurs</option>
+      <option value="error" {% if level == "error" %}selected{% endif %}>Erreurs seulement</option>
+    </select>
+  </label>
+  <label>Rechercher <input type="search" name="q" value="{{ q }}" placeholder="ex. rebond, STOP, campagne…"></label>
+</form>
+
+{% if rows %}
+<div class="table-wrap"><table class="striped">
+  <thead><tr><th>Date</th><th>Catégorie</th><th>Événement</th></tr></thead>
+  <tbody>
+    {% for e in rows %}
+      <tr class="log-{{ e.level }}">
+        <td><small>{{ e.ts|local("%d/%m/%Y %H:%M:%S") }}</small></td>
+        <td><small>{{ entities.get(e.entity or "", e.entity or "—") }}</small></td>
+        <td>{% if e.level in ("warning", "error") %}<strong class="{{ 'ko' if e.level == 'error' else 'warn' }}">{{ "Erreur" if e.level == "error" else "Attention" }} :</strong> {% endif %}
+            {% if e.entity == "contact" and e.entity_id %}<a href="/contacts/{{ e.entity_id }}">{{ e.text }}</a>
+            {% elif e.entity == "campaign" and e.entity_id %}<a href="/campaigns/{{ e.entity_id }}">{{ e.text }}</a>
+            {% else %}{{ e.text }}{% endif %}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table></div>
+{% else %}<p class="hint">Aucun événement pour ces critères.</p>{% endif %}
+{% endblock %}

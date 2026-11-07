@@ -1,0 +1,30 @@
+"""Applique les migrations Alembic (appelé par le lanceur et par les tests)."""
+from alembic import command
+from alembic.config import Config
+
+from app.paths import PROJECT_DIR, database_url
+
+
+def upgrade_to_head() -> None:
+    cfg = Config(str(PROJECT_DIR / "alembic.ini"))
+    cfg.set_main_option("script_location", str(PROJECT_DIR / "migrations"))
+    url = database_url()
+    if url.startswith("postgresql"):
+        # V3 : une base PostgreSQL neuve est créée d'un coup à partir des modèles, puis
+        # marquée « à jour ». L'historique des migrations SQLite (0001 à 0010) ne s'y applique
+        # pas ; les migrations suivantes, elles, doivent marcher sur les deux bases.
+        from sqlalchemy import create_engine, inspect
+
+        from app import models  # noqa: F401
+        from app.db import Base
+        engine = create_engine(url)
+        try:
+            if "alembic_version" not in inspect(engine).get_table_names():
+                Base.metadata.create_all(engine)
+                cfg.attributes["db_url"] = url
+                command.stamp(cfg, "head")
+                return
+        finally:
+            engine.dispose()
+        cfg.attributes["db_url"] = url
+    command.upgrade(cfg, "head")
