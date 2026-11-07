@@ -91,7 +91,7 @@ def create_app(testing: bool = False) -> FastAPI:
         # V3 (revue externe) : en-têtes de sécurité sur toutes les réponses
         response = await call_next(request)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")  # aperçu des PDF dans l'appli
         response.headers.setdefault("Referrer-Policy", "same-origin")
         return response
 

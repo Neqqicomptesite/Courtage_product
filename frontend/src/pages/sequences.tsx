@@ -22,6 +22,10 @@ export const CATEGORIES: { value: SequenceCategory; label: string; hint: string 
   { value: "souscription", label: "Souscription", hint: "Pour vos échanges de souscription avec clients et assureurs." },
 ];
 
+/** V3 : branches des demandes de cotation (sous-onglets de Souscription), dans cet ordre. */
+export const BRANCHES = ["Flotte", "Accidents du travail", "Prévoyance", "Retraite", "RC professionnelle", "RC exploitation",
+  "Multirisque", "Multirisque habitation", "Transport", "Tous risques chantier"];
+
 export function SequencesPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -33,7 +37,13 @@ export function SequencesPage() {
   const [name, setName] = useState("");
   const [newType, setNewType] = useState<SequenceCategory>("prospection");
   const [single, setSingle] = useState(false);  // V2.23 : un seul email = un modèle réutilisable
-  const items = (data?.items ?? []).filter((q) => (q.category ?? "prospection") === type);
+  const branch = params.get("branche");
+  const setBranch = (b: string | null) => setParams((p) => { const n = new URLSearchParams(p); if (b) n.set("branche", b); else n.delete("branche"); return n; }, { replace: true });
+  const ofType = (data?.items ?? []).filter((q) => (q.category ?? "prospection") === type);
+  const branchesHere = [...BRANCHES.filter((b) => ofType.some((q) => q.branch === b)),
+    ...[...new Set(ofType.map((q) => q.branch).filter((b): b is string => !!b && !BRANCHES.includes(b)))].sort()];
+  const hasOther = ofType.some((q) => !q.branch);
+  const items = type !== "souscription" || !branch ? ofType : ofType.filter((q) => (branch === "autres" ? !q.branch : q.branch === branch));
   const count = (t: SequenceCategory) => (data?.items ?? []).filter((q) => (q.category ?? "prospection") === t).length;
   const startCreate = () => { setNewType(type); setName(""); setSingle(false); setCreating(true); };
   const [toDelete, setToDelete] = useState<{ id: number; name: string } | null>(null);
@@ -94,6 +104,16 @@ export function SequencesPage() {
         ))}
       </div>
       <p className="-mt-2 mb-5 text-sm text-muted-foreground">{CATEGORIES.find((c) => c.value === type)?.hint}</p>
+      {type === "souscription" && branchesHere.length > 0 && (
+        <div className="-mt-2 mb-5 flex flex-wrap gap-1.5" role="tablist" aria-label="Branches">
+          {[{ key: null as string | null, label: "Toutes" }, ...branchesHere.map((b) => ({ key: b, label: b })), ...(hasOther ? [{ key: "autres", label: "Autres" }] : [])].map((b) => (
+            <button key={b.key ?? "all"} role="tab" aria-selected={branch === b.key} onClick={() => setBranch(b.key)}
+              className={cn("rounded-full border px-3 py-1 text-xs transition-colors", branch === b.key ? "border-primary bg-primary/10 font-medium text-primary" : "text-muted-foreground hover:bg-accent")}>
+              {b.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {!data ? (
         <div className="grid gap-4 md:grid-cols-2">{[0, 1].map((i) => <Skeleton key={i} className="h-36 rounded-xl" />)}</div>

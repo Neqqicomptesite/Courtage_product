@@ -319,7 +319,7 @@ def test_interface_security_headers(server):  # noqa: F811
     r = server.get("/v2/", headers={"Origin": "http://testserver"})
     csp = r.headers["content-security-policy"]
     assert "script-src 'self' 'sha256-" in csp and "frame-ancestors 'none'" in csp and "test.supabase.co" in csp
-    assert r.headers["x-frame-options"] == "DENY" and r.headers["x-content-type-options"] == "nosniff"
+    assert r.headers["x-frame-options"] == "SAMEORIGIN" and r.headers["x-content-type-options"] == "nosniff"
 
 
 def test_new_colleague_mailbox_form_is_prefilled(server):  # noqa: F811

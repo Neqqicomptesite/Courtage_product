@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  AlertTriangle, Archive, Building2, CalendarClock, CalendarPlus, CheckCheck, Clock, Forward, Phone, Inbox, Loader2, Mail, Paperclip, PenSquare, RefreshCw, Reply, Rocket, Search, Send, UserPlus, Users,
+  AlertTriangle, Archive, Ban, Building2, CalendarClock, CalendarPlus, CheckCheck, Clock, Forward, Phone, Inbox, Loader2, Mail, Paperclip, PenSquare, RefreshCw, Reply, Rocket, Search, Send, UserPlus, Users,
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -277,6 +277,27 @@ function Reader({ item, folder, actions }: { item: MailItem; folder: string; act
       toastError(e, "Archivage impossible");
     } finally { setArchiving(false); }
   };
+  // V3 : « Spam » : l'email part dans les Indésirables de la boîte (annulable), comme dans Outlook
+  const [junking, setJunking] = useState(false);
+  const isJunkFolder = /junk|spam|ind[ée]sirable/i.test(folder);
+  const spam = async () => {
+    if (junking || isJunkFolder) return;
+    setJunking(true);
+    try {
+      const r = await api.mailSpam(folder, item.uid);
+      window.dispatchEvent(new CustomEvent("oddo-mail-archived", { detail: { uid: item.uid } }));
+      qc.invalidateQueries({ queryKey: ["mail"] });
+      qc.invalidateQueries({ queryKey: ["awaiting"] });
+      toast.success("Email mis dans les indésirables", {
+        description: item.subject || undefined,
+        action: r.message_id ? { label: "Annuler", onClick: () => void api.mailUnarchive(r.message_id, folder, "junk")
+          .then(() => { qc.invalidateQueries({ queryKey: ["mail"] }); qc.invalidateQueries({ queryKey: ["awaiting"] }); toast.success("Email remis dans la boîte"); })
+          .catch((e) => toastError(e, "Annulation impossible")) } : undefined,
+      });
+    } catch (e) {
+      toastError(e, "Impossible de le mettre en spam");
+    } finally { setJunking(false); }
+  };
   // raccourcis R et S envoyés par la liste (V2.11)
   useEffect(() => {
     const onArchive = () => void archive();
@@ -303,6 +324,11 @@ function Reader({ item, folder, actions }: { item: MailItem; folder: string; act
           {!folder.toLowerCase().includes("archive") && (
             <Button variant="outline" onClick={() => void archive()} disabled={archiving} title="Ranger dans le dossier Archives (touche E)">
               {archiving ? <Loader2 className="animate-spin" /> : <Archive />} Archiver
+            </Button>
+          )}
+          {!isJunkFolder && (
+            <Button variant="outline" onClick={() => void spam()} disabled={junking} title="Mettre dans le dossier Indésirables (annulable)">
+              {junking ? <Loader2 className="animate-spin" /> : <Ban />} Spam
             </Button>
           )}
           <Button variant="outline" onClick={() => void forward()} disabled={!m || forwarding} title="Transférer à quelqu'un, avec les pièces jointes (touche F)">

@@ -464,3 +464,8 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
      Sauvegarde : contrôle de relecture, copie chiffrée hors serveur (Supabase Storage),
      état remonté par /api/health, script de restauration testé.
      Non retenu : « GET /api/notifications modifie des données » (vérifié : aucune écriture).
+279. **Finitions (07/11)** : bouton Spam (dossier Indésirables de la boîte, annulable ; pas de
+     blocage de l'expéditeur, choix d'Omar) ; aperçu des pièces jointes dans l'appli (PDF, images,
+     Word .docx via mammoth, Excel .xlsx, CSV, texte ; cadre sans script) ; onglet « Prochains
+     envois » d'une campagne (rendu identique au moteur) ; 10 demandes de cotation par branche
+     (Souscription → sous-onglets ; colonne sequence.branch, migration 0013 ; données de départ v2).

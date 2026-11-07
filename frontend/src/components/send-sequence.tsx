@@ -568,7 +568,7 @@ function ReviewView({ seqId, body }: { seqId: number; body: SendPayload }) {
   );
 }
 
-function EmailCard({ email, to, name, from, ab }: { email: ReviewEmail; to: string; name: string; from: { name: string; email: string } | null; ab: boolean }) {
+export function EmailCard({ email, to, name, from, ab }: { email: ReviewEmail; to: string; name: string; from: { name: string; email: string } | null; ab: boolean }) {
   return (
     <article className="overflow-hidden rounded-xl border bg-card shadow-sm" aria-label={`Aperçu : ${email.subject}`}>
       <header className="space-y-1 border-b bg-muted/30 px-4 py-3 text-sm">

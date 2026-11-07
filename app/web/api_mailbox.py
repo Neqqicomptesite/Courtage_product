@@ -98,6 +98,17 @@ def message_part(uid: int, index: int, folder: str = "INBOX", download: int = 0)
     return Response(data, media_type=media, headers=headers)
 
 
+@router.get("/messages/{uid:int}/preview/{index:int}")
+def message_part_preview(uid: int, index: int, folder: str = "INBOX"):
+    """V3 : aperçu d'une pièce jointe (PDF, image, Word, Excel, CSV, texte) avant téléchargement."""
+    from app import attachment_preview
+    try:
+        data, ctype, name = mbx.get_part(folder, uid, index)
+    except mbx.MailboxUnavailable as exc:
+        raise _unavailable(exc) from None
+    return {"name": name, "type": ctype, "size": len(data), **attachment_preview.preview(data, ctype, name)}
+
+
 @router.post("/messages/{uid:int}/forward")
 def message_forward(uid: int, folder: str = "INBOX"):
     """V2.19 : prépare le transfert d'un email : ses pièces jointes (et photos intégrées) sont
@@ -139,10 +150,21 @@ def archive_message(uid: int, folder: str = "INBOX"):
         raise _unavailable(exc) from None
 
 
+@router.post("/messages/{uid:int}/spam")
+def spam_message(uid: int, folder: str = "INBOX"):
+    """V3 : « Spam » : l'email part dans le dossier des indésirables de la boîte (comme dans
+    Outlook), jamais supprimé ; annulable."""
+    try:
+        return mbx.archive(folder, uid, kind="junk")
+    except mbx.MailboxUnavailable as exc:
+        raise _unavailable(exc) from None
+
+
 @router.post("/unarchive")
 def unarchive_message(body: dict):
+    kind = "junk" if body.get("kind") == "junk" else "archive"
     try:
-        ok = mbx.unarchive((body.get("message_id") or "").strip(), (body.get("folder") or "INBOX").strip())
+        ok = mbx.unarchive((body.get("message_id") or "").strip(), (body.get("folder") or "INBOX").strip(), kind=kind)
     except mbx.MailboxUnavailable as exc:
         raise _unavailable(exc) from None
     if not ok:

@@ -101,6 +101,9 @@ export type ReviewEmail = { position: number; subject: string; body: string; pla
 export type ReviewPerson = { contact: ContactRef; to: string; refused: string | null; problems: string[]; overlap: unknown[]; emails: ReviewEmail[] };
 export type SequenceReview = { sequence: { id: number; name: string }; steps: number; total_steps: number; ab_subjects: boolean; test_mode: boolean;
   from: { name: string; email: string } | null; people: ReviewPerson[] };
+/** V3 : prochains envois d'une campagne, rendus comme par le moteur. */
+export type CampaignUpcoming = { total: number; test_mode: boolean; campaign_status: string; from: { name: string; email: string } | null;
+  items: { enrollment_id: number; contact: ContactRef; to: string; status: string; variant: string | null; emails: ReviewEmail[] }[] };
 export type SequenceCategory = "prospection" | "gestion" | "souscription";
 export type Kind = "prospect" | "client" | "insurer" | "partner";
 export type CompanySummary = {
@@ -131,7 +134,11 @@ export type MailMessage = Omit<MailItem, "seen" | "has_attachments" | "size"> & 
   attachments: MailAttachment[];
   html: string | null; remote_images: boolean;
 };
-export type MailAttachment = { index: number; name: string; size: number; type: string; inline: boolean; viewable: boolean; url: string };
+export type MailAttachment = { index: number; name: string; size: number; type: string; inline: boolean; viewable: boolean; url: string;
+  previewable?: boolean };
+/** V3 : aperçu d'une pièce jointe (PDF, image, Word, Excel, CSV, texte). */
+export type AttachmentPreview = { name: string; type: string; size: number; kind: "pdf" | "image" | "html" | "text" | "none";
+  html?: string; text?: string; truncated?: boolean; reason?: string };
 export type MailFolders = { items: { raw: string; display: string; label: string; rank: number }[]; sent: string | null; watched: string[] };
 export type MailDraft = {
   to: string; cc?: string; subject: string; body: string; in_reply_to?: string | null; references?: string[];
@@ -226,12 +233,12 @@ export type StepData = {
   subject_b: string;
   attachments: Attachment[];  // V2.8
 };
-export type SequenceData = { id: number; name: string; category: SequenceCategory; campaigns: number; steps: StepData[];
+export type SequenceData = { id: number; name: string; category: SequenceCategory; branch?: string | null; campaigns: number; steps: StepData[];
   shared?: boolean; editable?: boolean };
 export type SequenceFull = SequenceData & { variables: string[]; custom_fields: string[] };
 export type SequenceList = {
   todo_blocks: string[];
-  items: { id: number; name: string; category: SequenceCategory; steps: number; campaigns: number; created_at: string; total_days: number }[];
+  items: { id: number; name: string; category: SequenceCategory; branch?: string | null; steps: number; campaigns: number; created_at: string; total_days: number }[];
   categories: Option[];
 };
 export type PreviewStep = {
@@ -511,7 +518,11 @@ export const api = {
   mailList: (folder: string, days: number, refresh = false) => request<MailList>(`/api/mailbox/messages${qs({ folder, days, refresh: refresh || undefined })}`),
   mailForward: (folder: string, uid: number) => request<{ attachments: Attachment[]; skipped: string[] }>(`/api/mailbox/messages/${uid}/forward${qs({ folder })}`, { method: "POST" }),
   mailArchive: (folder: string, uid: number) => request<{ archive_folder: string; message_id: string }>(`/api/mailbox/messages/${uid}/archive${qs({ folder })}`, { method: "POST" }),
-  mailUnarchive: (message_id: string, folder: string) => request<{ ok: boolean }>("/api/mailbox/unarchive", { method: "POST", json: { message_id, folder } }),
+  mailUnarchive: (message_id: string, folder: string, kind: "archive" | "junk" = "archive") =>
+    request<{ ok: boolean }>("/api/mailbox/unarchive", { method: "POST", json: { message_id, folder, kind } }),
+  mailSpam: (folder: string, uid: number) => request<{ archive_folder: string; message_id: string }>(`/api/mailbox/messages/${uid}/spam${qs({ folder })}`, { method: "POST" }),
+  campaignUpcoming: (id: number) => request<CampaignUpcoming>(`/api/campaigns/${id}/upcoming`),
+  mailPreview: (partUrl: string) => request<AttachmentPreview>(partUrl.replace("/part/", "/preview/")),
   mailMessage: (folder: string, uid: number) => request<MailMessage>(`/api/mailbox/messages/${uid}${qs({ folder })}`),
   mailSend: (d: MailDraft) => request<{ id: number; test_mode: boolean; to: string }>("/api/mailbox/send", { method: "POST", json: d }),
   picker: (q: string) => request<(ContactRef & { job_title?: string | null })[]>(`/api/contacts-picker${qs({ q })}`),
@@ -537,9 +548,9 @@ export const api = {
     request<{ id: number }>("/api/sequences", { method: "POST", json: { name, category, steps } }),
   sequenceDuplicate: (id: number) => request<{ id: number }>(`/api/sequences/${id}/duplicate`, { method: "POST" }),
   sequence: (id: number) => request<SequenceFull>(`/api/sequences/${id}`),
-  sequenceSave: (id: number, name: string, steps: StepData[], category?: SequenceCategory) =>
+  sequenceSave: (id: number, name: string, steps: StepData[], category?: SequenceCategory, branch?: string | null) =>
     request<SequenceData>(`/api/sequences/${id}`, {
-      method: "PUT", json: { name, category, steps: steps.map((s) => ({ ...s, attachment_ids: s.attachments.map((a) => a.id) })) },
+      method: "PUT", json: { name, category, branch: branch ?? "", steps: steps.map((s) => ({ ...s, attachment_ids: s.attachments.map((a) => a.id) })) },
     }),
   sequenceDelete: (id: number) => request(`/api/sequences/${id}`, { method: "DELETE" }),
   stepAdd: (id: number) => request<SequenceData>(`/api/sequences/${id}/steps`, { method: "POST" }),

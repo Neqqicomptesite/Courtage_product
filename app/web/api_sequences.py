@@ -50,7 +50,7 @@ CATEGORIES = {"prospection": "Prospection", "gestion": "Gestion", "souscription"
 
 def _sequence_json(s, seq: Sequence) -> dict:
     from app.current import is_admin, user_id
-    return {"id": seq.id, "name": seq.name, "category": seq.category, "campaigns": ss.campaigns_using(s, seq),
+    return {"id": seq.id, "name": seq.name, "category": seq.category, "branch": seq.branch, "campaigns": ss.campaigns_using(s, seq),
             "steps": [_step_json(s, st) for st in ss.steps_of(s, seq)],
             # V3 : modèle commun (modifiable par l'administrateur) ou personnel (par son auteur)
             "shared": seq.owner_id is None, "editable": is_admin() or seq.owner_id == user_id()}
@@ -65,7 +65,7 @@ def sequences():
             select(Step.sequence_id, func.count(Step.id), func.sum(Step.delay_days)).group_by(Step.sequence_id))}
         used = dict(s.execute(select(Campaign.sequence_id, func.count(Campaign.id)).group_by(Campaign.sequence_id)).all())
         return {"todo_blocks": todo, "items": [
-            {"id": q.id, "name": q.name, "category": q.category, "steps": steps.get(q.id, (0, 0))[0],
+            {"id": q.id, "name": q.name, "category": q.category, "branch": q.branch, "steps": steps.get(q.id, (0, 0))[0],
              "campaigns": used.get(q.id, 0),
              "created_at": iso(q.created_at),
              "total_days": steps.get(q.id, (0, 0))[1]}
@@ -93,7 +93,7 @@ def sequence_duplicate(sid: int):
     with get_session() as s:
         src = _seq(s, sid)
         from app.current import user_id
-        copy = Sequence(name=f"{src.name} (copie)", category=src.category, owner_id=user_id())
+        copy = Sequence(name=f"{src.name} (copie)", category=src.category, branch=src.branch, owner_id=user_id())
         s.add(copy)
         s.flush()
         for st in ss.steps_of(s, src):
@@ -140,6 +140,7 @@ class StepIn(BaseModel):
 class SequenceIn(BaseModel):
     name: str = Field(max_length=200)
     category: str | None = Field(default=None, pattern="^(prospection|gestion|souscription)$")
+    branch: str | None = Field(default=None, max_length=40)
     steps: list[StepIn]
 
 
@@ -153,6 +154,8 @@ def sequence_save(sid: int, body: SequenceIn):
             if ss.campaigns_using(s, seq):
                 raise HTTPException(409, "Séquence déjà utilisée par une campagne : son type ne peut plus changer (dupliquez-la).")
             seq.category = body.category
+        if body.branch is not None:
+            seq.branch = body.branch.strip() or None
         steps = {st.id: st for st in ss.steps_of(s, seq)}
         for item in body.steps:
             st = steps.get(item.id)

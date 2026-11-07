@@ -21,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { AttachmentChips, fileSize, uploadFiles } from "@/components/composer";
 import { api, type SequenceCategory, type SequenceFull, type StepData } from "@/lib/api";
-import { CATEGORIES } from "@/pages/sequences";
+import { BRANCHES, CATEGORIES } from "@/pages/sequences";
 import { formatDayTime, fullName } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -51,18 +51,19 @@ function Editor({ initial }: { initial: SequenceFull }) {
   const qc = useQueryClient();
   const [name, setName] = useState(initial.name);
   const [category, setCategory] = useState<SequenceCategory>(initial.category ?? "prospection");
+  const [branch, setBranch] = useState<string>(initial.branch ?? "");
   const [steps, setSteps] = useState<StepData[]>(initial.steps);
   const [selected, setSelected] = useState(initial.steps[0]?.id);
   const [state, setState] = useState<SaveState>("saved");
   const [version, setVersion] = useState(0); // incrémenté à chaque enregistrement : rafraîchit l'aperçu
   const [toDelete, setToDelete] = useState<StepData | null>(null);
-  const latest = useRef({ name, steps, category });
-  latest.current = { name, steps, category };
+  const latest = useRef({ name, steps, category, branch });
+  latest.current = { name, steps, category, branch };
   const used = initial.campaigns > 0;
 
   // ---------------------------------------------------------------- enregistrement automatique
   const save = useMutation({
-    mutationFn: () => api.sequenceSave(initial.id, latest.current.name, latest.current.steps, latest.current.category),
+    mutationFn: () => api.sequenceSave(initial.id, latest.current.name, latest.current.steps, latest.current.category, latest.current.branch),
     onMutate: () => setState("saving"),
     onSuccess: () => {
       setState((s) => (s === "saving" ? "saved" : s));
@@ -95,7 +96,7 @@ function Editor({ initial }: { initial: SequenceFull }) {
 
   const structural = (fn: () => Promise<{ steps: StepData[] }>, after?: (s: StepData[]) => void) => async () => {
     try {
-      await api.sequenceSave(initial.id, latest.current.name, latest.current.steps, latest.current.category); // d'abord ce qui est en cours
+      await api.sequenceSave(initial.id, latest.current.name, latest.current.steps, latest.current.category, latest.current.branch); // d'abord ce qui est en cours
       const res = await fn();
       setSteps(res.steps);
       setState("saved");
@@ -138,6 +139,16 @@ function Editor({ initial }: { initial: SequenceFull }) {
           ))}
         </div>
         <span className="text-xs text-muted-foreground">{CATEGORIES.find((c) => c.value === category)?.hint}</span>
+        {category === "souscription" && (
+          <label className="ml-auto flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Branche</span>
+            <select value={branch} aria-label="Branche" className="h-8 rounded-md border bg-background px-2 text-sm"
+              onChange={(e) => { setBranch(e.target.value); latest.current.branch = e.target.value; touch(); }}>
+              <option value="">Autre / aucune</option>
+              {BRANCHES.map((b) => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </label>
+        )}
       </div>
       {used && (
         <p className="rounded-lg border border-warning/40 bg-warning/5 px-4 py-2.5 text-sm">

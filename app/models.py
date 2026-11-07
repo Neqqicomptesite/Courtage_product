@@ -178,6 +178,7 @@ class Sequence(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(200))
     category: Mapped[str] = mapped_column(String(15), default="prospection", server_default="prospection")
+    branch: Mapped[str | None] = mapped_column(String(40))  # V3 : branche (cotations : flotte, AT…)
     # V3 : modèle personnel d'un employé (vide = modèle commun à l'équipe)
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id", ondelete="SET NULL"), index=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)

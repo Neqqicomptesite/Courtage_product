@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle, ArrowLeft, ArrowRight, CalendarCheck, CalendarClock, CheckCircle2, Download, Filter, ListOrdered, Loader2, MoreHorizontal,
-  Pause, Play, Rocket, Search, Send, ShieldCheck, SkipForward, Trash2, UserMinus, Users,
+  Eye, Pause, Play, Rocket, Search, Send, ShieldCheck, SkipForward, Trash2, UserMinus, Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { Outcomes, StepFunnel } from "@/components/charts";
+import { EmailCard } from "@/components/send-sequence";
 import { CampaignStatus, ConfirmDialog, EmptyState, EnrollmentStatus, KindBadge, PageHeader, toastError } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -427,6 +428,45 @@ const VIEWS = [
   { key: "issues", label: "À vérifier", match: (s: string) => ["error", "needs_review"].includes(s) },
 ];
 
+/** V3 : les prochains emails de la campagne, tels qu'ils partiront. */
+function UpcomingEmails({ campaignId }: { campaignId: number }) {
+  const { data, isLoading } = useQuery({ queryKey: ["campaign-upcoming", campaignId], queryFn: () => api.campaignUpcoming(campaignId) });
+  const [open, setOpen] = useState<number | null>(null);
+  if (isLoading || !data) return <p className="flex items-center gap-2 p-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Préparation des emails…</p>;
+  if (!data.items.length) return <p className="p-8 text-center text-sm text-muted-foreground">Aucun email prévu dans cette campagne.</p>;
+  return (
+    <div className="space-y-3 p-4">
+      <p className="text-sm text-muted-foreground">
+        {data.total} personne{data.total > 1 ? "s" : ""} avec des emails prévus{data.total > data.items.length ? ` (les ${data.items.length} premières)` : ""}.
+        Le texte est exactement celui qui partira ; les relances ne partent que s'il n'y a pas de réponse.
+        {data.test_mode && <> <b>Mode test</b> : ils arriveront dans votre boîte.</>}
+        {data.campaign_status === "paused" && <> Campagne <b>en pause</b> : rien ne part avant « Reprendre ».</>}
+      </p>
+      {data.items.map((it) => {
+        const isOpen = open === it.enrollment_id;
+        return (
+          <div key={it.enrollment_id} className="rounded-lg border">
+            <button type="button" onClick={() => setOpen(isOpen ? null : it.enrollment_id)} aria-expanded={isOpen}
+              className="flex w-full flex-wrap items-center gap-3 px-4 py-3 text-left text-sm hover:bg-muted/40">
+              <span className="min-w-0 flex-1 truncate"><span className="font-medium">{fullName(it.contact)}</span> <span className="text-muted-foreground">&lt;{it.to}&gt;</span></span>
+              <span className="text-xs text-muted-foreground">
+                {it.emails.length} email{it.emails.length > 1 ? "s" : ""} · prochain {it.emails[0]?.planned_at ? formatDayTime(it.emails[0].planned_at) : "—"}
+              </span>
+              {it.emails.some((e) => e.problems.length) && <Badge variant="destructive">À corriger</Badge>}
+              <span className="text-xs text-primary">{isOpen ? "Masquer" : "Voir les emails"}</span>
+            </button>
+            {isOpen && (
+              <div className="grid gap-3 border-t bg-muted/20 p-3 lg:grid-cols-2">
+                {it.emails.map((e) => <EmailCard key={e.position} email={e} to={it.to} name={fullName(it.contact)} from={data.from} ab={false} />)}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function CampaignDetailPage() {
   const id = Number(useParams().id);
   const qc = useQueryClient();
@@ -466,7 +506,7 @@ export function CampaignDetailPage() {
   });
 
   if (!data) return <Skeleton className="h-96 rounded-xl" />;
-  const list = data.enrollments.filter((e) => VIEWS.find((v) => v.key === view)!.match(e.status));
+  const list = view === "upcoming" ? [] : data.enrollments.filter((e) => VIEWS.find((v) => v.key === view)!.match(e.status));
 
   return (
     <>
@@ -532,8 +572,13 @@ export function CampaignDetailPage() {
                   </button>
                 );
               })}
+              <span className="flex-1" />
+              <button onClick={() => setView("upcoming")}
+                className={cn("flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors", view === "upcoming" ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:text-foreground")}>
+                <Eye className="size-3.5" /> Prochains envois
+              </button>
             </div>
-            {list.length === 0 ? <p className="p-8 text-center text-sm text-muted-foreground">Aucun contact dans cette vue.</p> : (
+            {view === "upcoming" ? <UpcomingEmails campaignId={data.id} /> : list.length === 0 ? <p className="p-8 text-center text-sm text-muted-foreground">Aucun contact dans cette vue.</p> : (
               <div className="divide-y">
                 {list.map((e) => (
                   <div key={e.id} className="grid items-center gap-3 px-4 py-3 text-sm sm:grid-cols-[minmax(0,1.4fr)_13rem_minmax(0,1fr)_2.5rem]">

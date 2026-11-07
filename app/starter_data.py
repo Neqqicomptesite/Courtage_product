@@ -151,7 +151,7 @@ def apply_sequences(s: Session, force: bool = False) -> dict:
     for spec in data["sequences"]:
         if spec["name"] in existing:
             continue
-        seq = Sequence(name=spec["name"], category=spec["category"])
+        seq = Sequence(name=spec["name"], category=spec["category"], branch=spec.get("branch"))
         s.add(seq)
         s.flush()
         for pos, stp in enumerate(spec["steps"], start=1):

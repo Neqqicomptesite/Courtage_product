@@ -296,7 +296,8 @@ def get_message(folder: str, uid: int, imap_factory=None) -> dict:
             continue  # autre version du texte, pas une pièce jointe
         payload = part.get_payload(decode=True) or b""
         attachments.append({"index": i, "name": _part_name(part, i), "size": len(payload), "type": ctype,
-                            "inline": inline, "viewable": ctype in VIEWABLE, "url": part_url(i)})
+                            "inline": inline, "viewable": ctype in VIEWABLE, "url": part_url(i),
+                            "previewable": _previewable(ctype, _part_name(part, i))})
     return {
         "uid": int(uid), "folder": folder,
         "from_name": _decode(name) or addr, "from_email": addr.lower(),
@@ -312,6 +313,11 @@ def get_message(folder: str, uid: int, imap_factory=None) -> dict:
 # Types affichés directement dans le navigateur ; tout le reste est téléchargé (et s'ouvre avec
 # Word, Excel… sur le PC). Jamais de HTML ni de SVG affiché tel quel : ils pourraient contenir du code.
 VIEWABLE = {"image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp", "application/pdf", "text/plain"}
+
+
+def _previewable(ctype: str, name: str) -> bool:
+    from app.attachment_preview import kind_of
+    return kind_of(ctype, name) is not None
 
 
 def forwardable_parts(folder: str, uid: int, imap_factory=None) -> list[tuple[bytes, str, str]]:
@@ -356,6 +362,7 @@ def _quote_folder(name: str) -> str:  # réexport pour l'envoi manuel
 # Outlook. Rien d'autre ne change (ni lu / non lu, ni les autres emails du dossier).
 
 ARCHIVE_NAMES = ("archive", "archives")
+JUNK_NAMES = ("junk", "spam", "courrier indesirable", "indesirables", "bulk", "junk e-mail", "junk email")
 
 
 def _caps(conn) -> set[str]:
@@ -393,6 +400,35 @@ def archive_folder(conn) -> str:
     return target
 
 
+def junk_folder(conn) -> str:
+    """V3 : dossier des indésirables du serveur : celui marqué \\Junk, sinon « Junk / Spam /
+    Courrier indésirable », sinon on le crée (« INBOX.Junk » sur cPanel, « Junk » ailleurs)."""
+    items = transport.list_folders(conn)
+    for f in items:
+        if any(fl.lower() in ("\\junk", "\\spam") for fl in f.flags):
+            return f.raw_name
+    for f in items:
+        name = f.raw_name
+        for prefix in ("INBOX.", "INBOX/"):
+            if name.startswith(prefix):
+                name = name[len(prefix):]
+        if inbound.fold(name) in JUNK_NAMES:
+            return f.raw_name
+    target = "INBOX.Junk" if any(f.raw_name.startswith("INBOX.") for f in items) else "Junk"
+    typ, data = conn.create(_quote(target))
+    if typ != "OK":
+        raise MailboxUnavailable(f"Impossible de créer le dossier des indésirables : {data!r}")
+    try:
+        conn.subscribe(_quote(target))
+    except Exception:  # noqa: BLE001
+        pass
+    return target
+
+
+def _target(conn, kind: str) -> str:
+    return junk_folder(conn) if kind == "junk" else archive_folder(conn)
+
+
 def _move(conn, uid: int, dest: str) -> None:
     caps = _caps(conn)
     if "MOVE" in caps:
@@ -409,13 +445,15 @@ def _move(conn, uid: int, dest: str) -> None:
     conn.uid("EXPUNGE", str(int(uid)))  # UID EXPUNGE : uniquement CET email
 
 
-def archive(folder: str, uid: int, imap_factory=None) -> dict:
+def archive(folder: str, uid: int, imap_factory=None, kind: str = "archive") -> dict:
+    """Déplace l'email vers les archives (kind="archive") ou les indésirables (kind="junk")."""
     ctx = _context()
     conn = _open(ctx, imap_factory)
     try:
-        dest = archive_folder(conn)
+        dest = _target(conn, kind)
         if dest == folder:
-            raise MailboxUnavailable("Cet email est déjà dans les archives.")
+            raise MailboxUnavailable("Cet email est déjà dans les indésirables." if kind == "junk"
+                                     else "Cet email est déjà dans les archives.")
         typ, _ = conn.select(_quote(folder))  # lecture-écriture, pour ce seul déplacement
         if typ != "OK":
             raise MailboxUnavailable(f"Dossier « {folder} » inaccessible.")
@@ -424,21 +462,21 @@ def archive(folder: str, uid: int, imap_factory=None) -> dict:
         mid = str(message_from_bytes(raw or b"", policy=policy.default).get("Message-ID") or "").strip()
         _move(conn, uid, dest)
     except imaplib.IMAP4.error as exc:
-        raise MailboxUnavailable(f"Archivage impossible : {exc}") from None
+        raise MailboxUnavailable(f"Déplacement impossible : {exc}") from None
     finally:
         _close(conn)
     invalidate()
     return {"archive_folder": dest, "message_id": mid}
 
 
-def unarchive(message_id: str, to_folder: str = "INBOX", imap_factory=None) -> bool:
+def unarchive(message_id: str, to_folder: str = "INBOX", imap_factory=None, kind: str = "archive") -> bool:
     """« Annuler » : remet l'email (retrouvé par son Message-ID) dans son dossier d'origine."""
     if not message_id:
         return False
     ctx = _context()
     conn = _open(ctx, imap_factory)
     try:
-        dest = archive_folder(conn)
+        dest = _target(conn, kind)
         typ, _ = conn.select(_quote(dest))
         if typ != "OK":
             return False

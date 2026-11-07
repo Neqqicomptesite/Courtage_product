@@ -18,3 +18,4 @@ tzdata>=2026.6
 psycopg[binary]==3.3.8
 PyJWT[crypto]==2.15.1
 cryptography==50.0.2
+mammoth==1.13.0   # V3 : aperçu des documents Word reçus

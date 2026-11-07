@@ -146,6 +146,57 @@ async def activate(cid: int, body: ActivateIn):
     return await run_in_threadpool(do)
 
 
+@router.get("/campaigns/{cid:int}/upcoming")
+def campaign_upcoming(cid: int, limit: int = 50):
+    """V3 : les prochains emails de la campagne, exactement comme ils partiront (même rendu que
+    le moteur : variante A/B tirée, textes personnalisés, objet « Re: » du fil, signature,
+    pièces jointes), avec la date prévue. Les relances ne partent que sans réponse."""
+    from app import attachments_service, settings_store
+    from app.engine import DUE_STATUSES, _thread_chain
+    with get_session() as s:
+        camp = _camp(s, cid)
+        seq = s.get(Sequence, camp.sequence_id)
+        mb = get_primary(s)
+        window = SendWindow.from_settings(s)
+        unsubscribe = ss.unsubscribe_for(s, seq) if seq else ""
+        q = (select(Enrollment, Contact).join(Contact, Contact.id == Enrollment.contact_id)
+             .where(Enrollment.campaign_id == camp.id, Enrollment.status.in_(DUE_STATUSES))
+             .order_by(Enrollment.next_due_at.is_(None), Enrollment.next_due_at, Enrollment.id))
+        total = s.scalar(select(func.count()).select_from(q.subquery()))
+        items = []
+        all_steps = ss.steps_of(s, seq) if seq else []
+        base_atts = {st.position: attachments_service.of_step(s, st.id) for st in all_steps}
+        for enr, contact in s.execute(q.limit(max(1, min(limit, 200)))):
+            steps = ss.steps_for(s, seq, enr)
+            remaining = steps[enr.current_step - 1:]
+            if not remaining:
+                continue
+            ctx = ss.build_context(s, contact)
+            chain = _thread_chain(s, enr)
+            first_subject = chain[0].subject if chain else ss.compose_step(
+                ctx, steps[0], ss.variants_of(s, steps[0]), enr.variant_label, "", unsubscribe,
+                (enr.overrides or {}).get("1")).subject
+            emails, prev = [], None
+            for st in remaining:
+                when = enr.next_due_at if prev is None else window.step_due(prev, st)
+                prev = when or utcnow()
+                ov = (enr.overrides or {}).get(str(st.position))
+                c = ss.compose_step(ctx, st, ss.variants_of(s, st), enr.variant_label, first_subject, unsubscribe, ov)
+                if st.position == 1:
+                    first_subject = c.subject
+                extra = (ov or {}).get("attachment_ids") or []
+                atts = base_atts.get(st.position, []) + [a for a in attachments_service.get_many(s, extra)
+                                                          if a.id not in {x.id for x in base_atts.get(st.position, [])}]
+                emails.append({"position": st.position, "subject": c.subject, "body": c.body, "planned_at": iso(when),
+                               "same_thread": st.same_thread, "problems": c.problems, "warnings": c.warnings,
+                               "attachments": [attachments_service.as_json(a) for a in atts]})
+            items.append({"enrollment_id": enr.id, "contact": contact_ref(contact), "to": contact.email,
+                          "status": enr.status, "variant": enr.variant_label, "emails": emails})
+        return {"total": total, "items": items, "test_mode": bool(settings_store.get(s, "test_mode")),
+                "from": {"name": mb.display_name, "email": mb.email} if mb else None,
+                "campaign_status": camp.status}
+
+
 @router.get("/campaigns/{cid:int}")
 def campaign_detail(cid: int):
     with get_session() as s:
