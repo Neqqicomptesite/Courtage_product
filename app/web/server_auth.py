@@ -18,6 +18,14 @@ from app.current import as_user
 PUBLIC = ("/api/auth/config", "/api/health")
 
 
+def _cookie(raw: str, name: str) -> str:
+    for part in raw.split(";"):
+        k, _, v = part.strip().partition("=")
+        if k == name:
+            return v.strip()
+    return ""
+
+
 class SupabaseAuthMiddleware:
     def __init__(self, app: ASGIApp):
         self.app = app
@@ -30,6 +38,11 @@ class SupabaseAuthMiddleware:
         headers = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
         token = headers.get("authorization", "")
         token = token[7:].strip() if token.lower().startswith("bearer ") else ""
+        if not token and scope.get("method") in ("GET", "HEAD"):
+            # Liens ouverts directement par le navigateur (export Excel, pièces jointes, images
+            # d'un mail) : ils ne peuvent pas porter d'en-tête. L'interface recopie le jeton dans
+            # un cookie SameSite=Strict, accepté seulement en lecture (GET).
+            token = _cookie(headers.get("cookie", ""), "oddo_at")
         try:
             if not token:
                 raise auth.AuthError("Connexion requise.")

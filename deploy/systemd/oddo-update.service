@@ -1,0 +1,6 @@
+[Unit]
+Description=ODDO Séquences : mise à jour depuis GitHub
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/update.sh

@@ -49,7 +49,7 @@ export function DashboardPage() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" asChild>
-            <a href="/export"><Download /> Exporter</a>
+            <a href="/api/export"><Download /> Exporter</a>
           </Button>
           <Button asChild>
             <Link to="/campaigns/new"><Send /> Nouvelle campagne</Link>

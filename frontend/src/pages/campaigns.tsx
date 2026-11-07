@@ -478,7 +478,7 @@ export function CampaignDetailPage() {
           {data.activated_at && <> · lancée le {formatDayTime(data.activated_at)}</>}
           {data.start_at && !data.started && new Date(data.start_at) > new Date() && <Badge variant="info" className="ml-2"><CalendarClock className="mr-1 size-3" />Démarre {formatDayTime(data.start_at)}</Badge>}</>}
         actions={<>
-          {data.status !== "draft" && <Button variant="outline" asChild><a href={`/export?campaign_id=${data.id}`}><Download /> Exporter</a></Button>}
+          {data.status !== "draft" && <Button variant="outline" asChild><a href={`/api/export?campaign_id=${data.id}`}><Download /> Exporter</a></Button>}
           {data.status === "active" && <Button variant="outline" onClick={() => action.mutate("pause")}><Pause /> Mettre en pause</Button>}
           {data.status === "paused" && <Button onClick={() => action.mutate("resume")}><Play /> Reprendre</Button>}
           {["draft", "active", "paused"].includes(data.status) && !data.started && <Button variant="outline" onClick={() => setPlanning(true)}><CalendarClock /> Démarrage</Button>}

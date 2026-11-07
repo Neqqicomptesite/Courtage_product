@@ -1,0 +1,22 @@
+[Unit]
+Description=ODDO Séquences (appli + moteur d'envoi)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=oddo
+Group=oddo
+WorkingDirectory=/opt/oddo
+EnvironmentFile=/etc/oddo/env
+EnvironmentFile=/etc/oddo/host.env
+Environment=ODDO_DATA_DIR=/var/lib/oddo
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/oddo/.venv/bin/python -m app.server
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

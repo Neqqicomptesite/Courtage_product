@@ -101,7 +101,7 @@ export function ContactsPage() {
       <PageHeader title="Contacts" description={data ? `${data.total} contacts au total` : undefined}
         actions={<>
           <Button variant="ghost" asChild><Link to="/contacts/exclusions"><ShieldOff /> Exclusions</Link></Button>
-          <Button variant="outline" asChild><a href="/export"><Download /> Exporter</a></Button>
+          <Button variant="outline" asChild><a href="/api/export"><Download /> Exporter</a></Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild><Button variant="outline"><Upload /> Importer</Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end">

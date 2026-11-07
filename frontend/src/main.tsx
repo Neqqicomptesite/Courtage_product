@@ -23,6 +23,8 @@ import { RepliesPage } from "@/pages/replies";
 import { SequenceEditorPage } from "@/pages/sequence-editor";
 import { SequencesPage } from "@/pages/sequences";
 import { SettingsPage } from "@/pages/settings";
+import { AuthGate } from "@/pages/login";
+import { TeamPage } from "@/pages/team";
 
 // React Query garde les réponses de l'API en mémoire et les rafraîchit quand la fenêtre
 // reprend le focus : l'écran reste à jour sans recharger la page.
@@ -56,6 +58,7 @@ const router = createBrowserRouter(
         { path: "companies/:id", element: <CompanyPage /> },
         { path: "agenda", element: <AgendaPage /> },
         { path: "settings", element: <SettingsPage /> },
+        { path: "equipe", element: <TeamPage /> },
         {
           path: "guide", element: <GuideLayout />, children: [
             { index: true, element: <GuideHome /> },
@@ -75,7 +78,9 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={200}>
-        <RouterProvider router={router} />
+        <AuthGate>
+          <RouterProvider router={router} />
+        </AuthGate>
         <Toaster position="bottom-right" richColors closeButton />
       </TooltipProvider>
     </QueryClientProvider>

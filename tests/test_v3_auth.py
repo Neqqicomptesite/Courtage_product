@@ -175,3 +175,36 @@ def test_classic_pages_not_served_on_server(server):
     for path in ("/contacts/export", "/export", "/replies", "/settings/mailbox", "/sequences/1"):
         assert server.get(path, headers={"Origin": "http://testserver"}).status_code == 404, path
     assert server.get("/classique", follow_redirects=False).status_code in (302, 307)
+
+
+def test_cookie_token_only_for_reading(server):
+    """Le jeton en cookie (liens d'export, pièces jointes) marche en GET, jamais en écriture."""
+    cookie = {"Cookie": f"oddo_at={tok('omar@oddo.ma')}", "Origin": "http://testserver"}
+    assert server.get("/api/me", headers=cookie).status_code == 200
+    assert server.post("/api/admin/users", json={"email": "x@oddo.ma"}, headers=cookie).status_code == 401
+
+
+def test_export_via_api(server):
+    r = server.get("/api/export", headers=H("omar@oddo.ma"))
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/vnd.openxml")
+    assert server.get("/api/export").status_code == 401
+
+
+def test_invite_link_returns_to_app(server, monkeypatch):
+    from app.web import api_users
+    seen = {}
+
+    class R:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    def fake_urlopen(req, timeout=0):
+        seen["url"] = req.full_url
+        return R()
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", "sb_secret_test")
+    monkeypatch.setenv("ODDO_PUBLIC_URL", "https://sequences.example.ma/")
+    monkeypatch.setattr(api_users.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(api_users, "is_server_mode", lambda: True)
+    r = server.post("/api/admin/users", json={"email": "new@oddo.ma", "full_name": "New"}, headers=H("omar@oddo.ma"))
+    assert r.status_code == 200 and r.json()["invite_error"] is None
+    assert seen["url"].endswith("/auth/v1/invite?redirect_to=https%3A%2F%2Fsequences.example.ma%2Fv2%2F")

@@ -1,0 +1,6 @@
+[Unit]
+Description=ODDO Séquences : sauvegarde de la base
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/backup.sh

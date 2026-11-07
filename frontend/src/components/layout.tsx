@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Inbox,
   LayoutDashboard,
+  LogOut,
   ListOrdered,
   Menu,
   Moon,
@@ -13,6 +14,7 @@ import {
   Search,
   Settings,
   Sun,
+  UserCog,
   Users,
   X,
 } from "lucide-react";
@@ -27,10 +29,13 @@ import { ReminderDialog } from "@/pages/agenda";
 import { SendSequenceDialog } from "@/components/send-sequence";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api, type Status } from "@/lib/api";
 import { relativeTime } from "@/lib/format";
+import { signOut } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
+import { useMe } from "@/pages/login";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -132,6 +137,10 @@ function Logo({ className }: { className?: string }) {
 
 function Sidebar({ status, onNavigate }: { status: Status | undefined; onNavigate?: () => void }) {
   const location = useLocation();
+  const me = useMe();
+  const nav = me?.server_mode && me.role === "admin"
+    ? [...NAV.slice(0, -1), { to: "/equipe", label: "Équipe", icon: UserCog }, NAV[NAV.length - 1]]
+    : NAV;
   return (
     <div className="flex h-full flex-col">
       <div className="px-5 pb-6 pt-6">
@@ -139,8 +148,8 @@ function Sidebar({ status, onNavigate }: { status: Status | undefined; onNavigat
         <p className="mt-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Séquences</p>
       </div>
       <nav className="flex-1 space-y-0.5 px-3">
-        {NAV.map((n) => {
-          const count = n.badge && status ? status[n.badge] : 0;
+        {nav.map((n) => {
+          const count = "badge" in n && n.badge && status ? status[n.badge] : 0;
           const alsoActive = "also" in n && n.also?.some((p) => location.pathname.startsWith(p));
           return (
             <NavLink key={n.to} to={n.to} end={n.end} onClick={onNavigate}
@@ -162,6 +171,32 @@ function Sidebar({ status, onNavigate }: { status: Status | undefined; onNavigat
         <p className="px-3">Version {status?.version ?? "2"}</p>
       </div>
     </div>
+  );
+}
+
+/** V3 : l'employé connecté et la déconnexion (rien sur le poste unique). */
+function UserMenu() {
+  const me = useMe();
+  if (!me?.server_mode) return null;
+  const label = me.full_name || me.email;
+  const initials = label.split(/[\s.@]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("");
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="flex size-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground" aria-label={`Compte : ${label}`}>
+          {initials}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        <div className="px-2 py-1.5">
+          <p className="truncate text-sm font-medium">{label}</p>
+          <p className="truncate text-xs text-muted-foreground">{me.email} · {me.role === "admin" ? "Administrateur" : "Employé"}</p>
+        </div>
+        <DropdownMenuSeparator />
+        {me.role === "admin" && <DropdownMenuItem asChild><NavLink to="/equipe"><UserCog /> Équipe</NavLink></DropdownMenuItem>}
+        <DropdownMenuItem onSelect={() => void signOut()}><LogOut /> Se déconnecter</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -224,6 +259,7 @@ export function Layout() {
             <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Changer de thème">
               {theme === "dark" ? <Sun /> : <Moon />}
             </Button>
+            <UserMenu />
           </div>
         </header>
         <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:py-7">

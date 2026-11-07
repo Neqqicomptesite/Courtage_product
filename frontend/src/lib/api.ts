@@ -1,5 +1,6 @@
 // Accès à l'API Python (/api/...). Les types décrivent exactement ce que renvoie app/web/api.py :
 // si l'un change, TypeScript signale les écrans à adapter au moment de la compilation.
+import { accessToken, AUTH_LOST } from "@/lib/auth";
 
 export type Counters = { today: number; last_hour: number; daily_cap: number; hourly_cap: number };
 
@@ -417,13 +418,23 @@ export class ApiError extends Error {
   }
 }
 
+/** V3 : un employé (compte de connexion). */
+export type TeamUser = {
+  id: number; email: string; full_name: string; role: "admin" | "user"; active: boolean; linked: boolean;
+  last_seen_at: string | null; mailbox: string | null; contacts: number;
+};
+export type Me = (TeamUser & { server_mode: true }) | { id: null; role: "admin"; server_mode: false };
+
 async function request<T>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
   const { json, ...rest } = init ?? {};
+  const token = await accessToken(); // V3 : employé connecté (null sur le poste unique)
   const res = await fetch(path, {
     ...rest,
     body: json !== undefined ? JSON.stringify(json) : rest.body,
-    headers: { Accept: "application/json", ...(json !== undefined ? { "Content-Type": "application/json" } : {}), ...(rest.headers || {}) },
+    headers: { Accept: "application/json", ...(json !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(rest.headers || {}) },
   });
+  if (res.status === 401 && token) window.dispatchEvent(new Event(AUTH_LOST));
   if (!res.ok) {
     let detail: unknown = null;
     try {
@@ -590,6 +601,14 @@ export const api = {
   reminderDelete: (id: number) => request(`/api/reminders/${id}`, { method: "DELETE" }),
   notifications: () => request<{ items: Notification[]; unseen: number }>("/api/notifications"),
   notificationsSeen: (keys?: string[]) => request("/api/notifications/seen", { method: "POST", json: keys ? { keys } : {} }),
+
+  me: () => request<Me>("/api/me"),
+  team: () => request<TeamUser[]>("/api/admin/users"),
+  teamInvite: (body: { email: string; full_name: string; role: "admin" | "user" }) =>
+    request<TeamUser & { invite_error: string | null }>("/api/admin/users", { method: "POST", json: body }),
+  teamUpdate: (id: number, body: { full_name?: string; role?: "admin" | "user"; active?: boolean }) =>
+    request<TeamUser>(`/api/admin/users/${id}`, { method: "PATCH", json: body }),
+  teamResend: (id: number) => request<{ invite_error: string | null }>(`/api/admin/users/${id}/resend`, { method: "POST" }),
 
   testConnection: (body: MailboxSettings & { password?: string; send_test_email: boolean }) =>
     request<ConnectionReport>("/api/settings/test-connection", { method: "POST", json: body }),

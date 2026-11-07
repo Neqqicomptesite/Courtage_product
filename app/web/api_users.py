@@ -73,7 +73,13 @@ def _supabase_invite(email: str) -> str | None:
     c = auth.config()
     if not (c.url and c.secret_key):
         return "Supabase n'est pas configuré sur le serveur."
-    req = urllib.request.Request(f"{c.url}/auth/v1/invite", data=json.dumps({"email": email}).encode(), method="POST",
+    import os
+    from urllib.parse import quote
+    url = f"{c.url}/auth/v1/invite"
+    public = os.environ.get("ODDO_PUBLIC_URL", "").strip().rstrip("/")
+    if public:  # le lien du mail ramène sur l'appli (sinon : « Site URL » réglée dans Supabase)
+        url += "?redirect_to=" + quote(public + "/v2/", safe="")
+    req = urllib.request.Request(url, data=json.dumps({"email": email}).encode(), method="POST",
                                  headers={"apikey": c.secret_key, "Authorization": f"Bearer {c.secret_key}",
                                           "Content-Type": "application/json"})
     try:

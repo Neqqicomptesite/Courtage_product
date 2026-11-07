@@ -440,3 +440,16 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
 | 270 | Captures du guide | Avenant et cotation : nouvelle étape « Vérifiez les emails exacts » ; captures refaites (avenant, rendez-vous, délégation, sinistre, cotation) | Suit 264 et 266. |
 | 271 | Envoyés sans réponse (retour) | Retour au comportement d'avant pour les séquences : une personne apparaît N jours ouvrés après chaque email resté sans réponse, même si une relance automatique est encore prévue. On garde seulement la correction « une réponse à un échange plus ancien ne la masque plus » | Choix d'Omar (V2.25.1) : « c'était mieux avant ». Remplace la 1re partie de 268. |
 | 272 | Relance prévue, visible | Dans « Envoyés sans réponse » : une pastille « Relance 1 prévue jeudi 12/11 09:00 » sur la ligne, et dans le lecteur un encadré (quelle relance, quand, quelle séquence, « Voir le suivi »). La cloche ajoute « relance auto prévue … » | Demande d'Omar (V2.25.1) : garder la personne dans la liste, mais voir qu'un email automatique arrive. |
+
+## V3 – serveur en ligne (novembre 2026)
+
+273. **Hébergement** : base Supabase (PostgreSQL, Londres) + petit serveur Hetzner en Allemagne (~6 €/mois),
+     préféré au serveur « gratuit » Google (US) : adresse IP payante chez Google, et chaque page aurait fait
+     des allers-retours États-Unis ↔ Londres. Données hébergées en Europe.
+274. **Connexion** : Supabase Auth (email + mot de passe), sur invitation seulement. Le serveur vérifie le
+     jeton (JWKS) et n'accepte que les employés invités (table app_user).
+275. **Liens directs** (export Excel, pièces jointes, images des mails) : le jeton est recopié dans un cookie
+     SameSite=Strict limité à /api, accepté seulement en lecture (GET). Les écritures exigent l'en-tête.
+276. **Pages « classiques » V1** : absentes du serveur (elles ne vérifient pas la connexion).
+277. **Déploiement** : deploy/install.sh (cloud-init) ; mises à jour automatiques depuis GitHub toutes les
+     15 min ; sauvegarde pg_dump + fichiers chaque nuit, 30 jours sur le serveur.
