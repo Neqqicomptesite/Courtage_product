@@ -252,6 +252,12 @@ def process_raw(s: Session, mb: Mailbox, raw: bytes, folder: str | None, uid: in
         report.add("already_seen")
         return None
 
+    # Cotalis : réponse d'une compagnie à une demande de cotation (fil d'un dossier)
+    from app import quotes
+    if quotes.on_inbound(s, mb.id, a, raw, folder, uid):
+        report.add("quote_reply")
+        return None
+
     m = _match(s, a)
     if m.contact is None and m.suggestion is None:
         report.add("unrelated")  # sans rapport avec la prospection : on ne stocke rien

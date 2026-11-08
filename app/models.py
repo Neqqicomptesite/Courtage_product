@@ -396,5 +396,103 @@ class Reminder(Base):
     contact_id: Mapped[int | None] = mapped_column(ForeignKey("contact.id", ondelete="CASCADE"), index=True)
     company_id: Mapped[int | None] = mapped_column(ForeignKey("company.id", ondelete="CASCADE"), index=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id", ondelete="CASCADE"), index=True)  # V3
+    # Cotalis : rappel lié à un dossier de cotation (relance d'une compagnie)
+    quote_case_id: Mapped[int | None] = mapped_column(ForeignKey("quote_case.id", ondelete="CASCADE"), index=True)
     done_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+# ---------------------------------------------------------------------------------------------
+# Cotalis, phase 1 : dossiers de cotation. Visibles par toute l'équipe du cabinet (un dossier se
+# reprend facilement par un collègue), avec un responsable. Toutes ces tables portent org_id.
+
+QUOTE_STAGES = ("new", "info", "consulting", "offers", "proposed", "won", "lost")
+QUOTE_INSURER_STATUSES = ("to_send", "sent", "reminded", "replied", "offer", "declined")
+QUOTE_EVENT_KINDS = ("created", "stage", "note", "fields", "email_out", "email_in", "file", "insurer", "edit")
+QUOTE_FILE_KINDS = ("client", "offer", "other")
+
+
+def _current_org() -> int:
+    from app.current import org_id
+    return org_id()
+
+
+class QuoteCase(Base):
+    """Un dossier de cotation : un client, une branche, des compagnies consultées."""
+    __tablename__ = "quote_case"
+    __table_args__ = (_in("stage", QUOTE_STAGES),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    org_id: Mapped[int] = mapped_column(Integer, default=_current_org, server_default="1", index=True)
+    ref: Mapped[str] = mapped_column(String(20), index=True)          # COT-2026-0001
+    title: Mapped[str] = mapped_column(String(200), default="")
+    branch: Mapped[str] = mapped_column(String(40))                   # même libellé que sequence.branch
+    stage: Mapped[str] = mapped_column(String(12), default="new", server_default="new", index=True)
+    lost_reason: Mapped[str | None] = mapped_column(String(255))
+    company_id: Mapped[int | None] = mapped_column(ForeignKey("company.id", ondelete="SET NULL"), index=True)
+    contact_id: Mapped[int | None] = mapped_column(ForeignKey("contact.id", ondelete="SET NULL"), index=True)
+    client_name: Mapped[str] = mapped_column(String(255), default="")  # nom affiché (entreprise ou particulier)
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id", ondelete="SET NULL"), index=True)
+    due_on: Mapped[date | None] = mapped_column(Date, index=True)      # proposition attendue par le client
+    current_insurer: Mapped[str | None] = mapped_column(String(120))
+    current_premium: Mapped[int | None] = mapped_column(Integer)       # MAD par an
+    fields: Mapped[dict] = mapped_column(JSON, default=dict)           # fiche de la branche
+    notes: Mapped[str] = mapped_column(Text, default="", server_default="")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    closed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class QuoteInsurer(Base):
+    """Une compagnie consultée pour un dossier, et où en est sa réponse."""
+    __tablename__ = "quote_insurer"
+    __table_args__ = (UniqueConstraint("case_id", "company_id"), _in("status", QUOTE_INSURER_STATUSES))
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    org_id: Mapped[int] = mapped_column(Integer, default=_current_org, server_default="1", index=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("quote_case.id", ondelete="CASCADE"), index=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("company.id", ondelete="CASCADE"))
+    contact_id: Mapped[int | None] = mapped_column(ForeignKey("contact.id", ondelete="SET NULL"))
+    status: Mapped[str] = mapped_column(String(10), default="to_send", server_default="to_send")
+    sent_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    sent_by: Mapped[int | None] = mapped_column(ForeignKey("app_user.id", ondelete="SET NULL"))
+    reminders_sent: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    last_message_id: Mapped[str | None] = mapped_column(String(255))  # pour relancer dans le même fil
+    first_subject: Mapped[str | None] = mapped_column(Text)
+    replied_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    offer_premium: Mapped[int | None] = mapped_column(Integer)          # MAD par an
+    notes: Mapped[str] = mapped_column(Text, default="", server_default="")
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
+class QuoteEvent(Base):
+    """Historique d'un dossier : création, étapes, notes, emails envoyés et reçus, documents."""
+    __tablename__ = "quote_event"
+    __table_args__ = (_in("kind", QUOTE_EVENT_KINDS),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    org_id: Mapped[int] = mapped_column(Integer, default=_current_org, server_default="1", index=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("quote_case.id", ondelete="CASCADE"), index=True)
+    insurer_id: Mapped[int | None] = mapped_column(ForeignKey("quote_insurer.id", ondelete="SET NULL"))
+    kind: Mapped[str] = mapped_column(String(10))
+    text: Mapped[str] = mapped_column(Text, default="")
+    data: Mapped[dict | None] = mapped_column(JSON)
+    message_id: Mapped[str | None] = mapped_column(String(255), index=True)  # emails : rattachement des réponses
+    user_id: Mapped[int | None] = mapped_column(Integer, default=lambda: _current_user())
+    ts: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, index=True)
+
+
+class QuoteFile(Base):
+    """Document rangé dans un dossier (pièce du client, offre d'une compagnie…)."""
+    __tablename__ = "quote_file"
+    __table_args__ = (_in("kind", QUOTE_FILE_KINDS),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    org_id: Mapped[int] = mapped_column(Integer, default=_current_org, server_default="1", index=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("quote_case.id", ondelete="CASCADE"), index=True)
+    attachment_id: Mapped[int] = mapped_column(ForeignKey("attachment.id", ondelete="CASCADE"))
+    insurer_id: Mapped[int | None] = mapped_column(ForeignKey("quote_insurer.id", ondelete="SET NULL"))
+    kind: Mapped[str] = mapped_column(String(8), default="client", server_default="client")
+    label: Mapped[str] = mapped_column(String(120), default="", server_default="")  # « Liste du parc »…
+    user_id: Mapped[int | None] = mapped_column(Integer, default=lambda: _current_user())
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)

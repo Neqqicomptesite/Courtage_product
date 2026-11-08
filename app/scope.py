@@ -7,13 +7,16 @@ s'applique que lorsqu'un employé est « en cours » (app.current) : en poste un
 les tâches qui doivent tout voir (anti-doublon entre collègues, administrateur), rien n'est filtré.
 
 Pour lire sans filtre : .execution_options(oddo_all=True) sur la requête.
+
+Cotalis : les dossiers de cotation (quote_*) sont communs à l'équipe mais propres au cabinet :
+ils sont toujours filtrés par org_id (un seul cabinet pour l'instant).
 """
 from __future__ import annotations
 
 from sqlalchemy import event, or_, select
 from sqlalchemy.orm import ORMExecuteState, Session, with_loader_criteria
 
-from app.current import user_id
+from app.current import org_id, user_id
 
 _mailbox_of: dict[int, int] = {}  # employé -> sa boîte (cache ; une boîte ne change pas de propriétaire)
 
@@ -38,6 +41,12 @@ def forget_cache() -> None:
 def _apply(state: ORMExecuteState) -> None:
     if not state.is_select or state.execution_options.get("oddo_all"):
         return
+    # Cotalis : tables du cabinet (org_id). Toujours filtrées, employé en cours ou non.
+    from app.models import QuoteCase, QuoteEvent, QuoteFile, QuoteInsurer
+    org = org_id()
+    state.statement = state.statement.options(*(
+        with_loader_criteria(m, lambda t: t.org_id == org, include_aliases=True, track_closure_variables=True)
+        for m in (QuoteCase, QuoteInsurer, QuoteEvent, QuoteFile)))
     uid = user_id()
     if uid is None:
         return

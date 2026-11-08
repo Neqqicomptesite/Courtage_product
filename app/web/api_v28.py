@@ -135,7 +135,8 @@ def _reminder_json(s, r: Reminder) -> dict:
     return {"id": r.id, "source": "reminder", "kind": r.kind, "kind_label": KIND_LABELS[r.kind], "title": r.title,
             "notes": r.notes or "", "due_on": r.due_on.isoformat(), "due_time": r.due_time,
             "done": r.done_at is not None, "done_at": iso(r.done_at), "created_at": iso(r.created_at),
-            "contact": contact_ref(contact), "company": _company_ref(company)}
+            "contact": contact_ref(contact), "company": _company_ref(company),
+            "quote_case_id": r.quote_case_id}  # Cotalis : rappel lié à un dossier de cotation
 
 
 def _parse(body: dict, partial: bool = False) -> dict:

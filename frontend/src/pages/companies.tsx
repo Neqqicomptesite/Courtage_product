@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError, api, type CompanyDetail, type CompanyInput, type Department, type Kind, type Seniority } from "@/lib/api";
 import { RemindersPanel, openReminder } from "@/pages/agenda";
+import { QuotesPanel } from "@/pages/quotes";
 import { openSendSequence } from "@/components/send-sequence";
 import { formatDayTime, fullName } from "@/lib/format";
 import { cn, safeUrl } from "@/lib/utils";
@@ -46,7 +47,7 @@ export const SENIORITIES: { value: Seniority; label: string }[] = [
   { value: "directeur", label: "Directeur de département" }, { value: "senior", label: "Senior" }, { value: "junior", label: "Junior" },
 ];
 
-function Logo({ name, kind, src, className }: { name: string; kind: Kind; src?: string | null; className?: string }) {
+export function Logo({ name, kind, src, className }: { name: string; kind: Kind; src?: string | null; className?: string }) {
   if (src) {
     return (
       <div className={cn("flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-white p-1", className)}>
@@ -279,6 +280,7 @@ export function CompanyPage() {
               <p className="mt-3 text-xs text-muted-foreground">Le type s'applique à toutes les personnes de l'entreprise. Seuls les prospects reçoivent des séquences de prospection.</p>
             </CardContent>
           </Card>
+          {data.kind !== "insurer" && <QuotesPanel company={{ id: data.id, name: data.name }} />}
           <RemindersPanel company={{ id: data.id, name: data.name }} />
           <Card>
             <CardHeader><CardTitle>Notes {notes.isPending && <span className="text-xs font-normal text-muted-foreground">enregistrement…</span>}</CardTitle></CardHeader>

@@ -351,7 +351,7 @@ export type ReminderKind = "call" | "email" | "quote" | "meeting" | "renewal" | 
 export type ReminderItem = {
   id: number; source: "reminder" | "callback"; kind: ReminderKind; kind_label: string; title: string; notes: string;
   due_on: string; due_time: string | null; done: boolean; done_at: string | null; created_at: string | null;
-  contact: ContactRef | null; company: { id: number; name: string; kind: Kind } | null;
+  contact: ContactRef | null; company: { id: number; name: string; kind: Kind } | null; quote_case_id?: number | null;
 };
 export type ReminderList = { items: ReminderItem[]; kinds: Option[]; today: string };
 export type ReminderInput = {
@@ -427,6 +427,45 @@ export class ApiError extends Error {
     this.existingId = existingId;
   }
 }
+
+
+/* ---------------------------------------------------------------- Cotalis : dossiers de cotation */
+export type QuoteStage = "new" | "info" | "consulting" | "offers" | "proposed" | "won" | "lost";
+export type InsurerStatus = "to_send" | "sent" | "reminded" | "replied" | "offer" | "declined";
+export type BranchField = { key: string; label: string; type?: "text" | "number" | "date" | "choice" | "textarea";
+  options?: string[]; unit?: string; placeholder?: string; hint?: string };
+export type BranchDef = { name: string; fields: BranchField[]; docs: string[] };
+export type QuoteSummary = {
+  id: number; ref: string; title: string; branch: string; stage: QuoteStage; client_name: string;
+  company_id: number | null; contact_id: number | null; owner_id: number | null; owner_name: string | null;
+  due_on: string | null; late: boolean; missing: number; insurers: number; insurer_counts: Record<InsurerStatus, number>;
+  best_offer: number | null; current_premium: number | null; lost_reason: string | null; created_at: string; updated_at: string;
+};
+export type QuotePerson = { id: number; email: string; name: string; department: string | null };
+export type QuoteInsurerRow = {
+  id: number; company_id: number; company: string; logo: string | null; contact: QuotePerson | null; status: InsurerStatus;
+  sent_at: string | null; replied_at: string | null; reminders_sent: number; offer_premium: number | null; notes: string;
+  sent_by_name: string | null;
+};
+export type QuoteFileRow = Attachment & { file_id: number; kind: "client" | "offer" | "other"; label: string; insurer_id: number | null; created_at: string };
+export type QuoteEventRow = {
+  id: number; kind: "created" | "stage" | "note" | "fields" | "email_out" | "email_in" | "file" | "insurer" | "edit";
+  text: string; insurer_id: number | null; user_name: string | null; ts: string; mine: boolean;
+  data: null | { subject?: string; body?: string; from?: string; to?: string[]; folder?: string; uid?: number;
+    attachments?: ({ name: string; index: number } | string)[]; auto_reply?: boolean; test_mode?: boolean };
+};
+export type QuoteDetail = QuoteSummary & {
+  fields: Record<string, string>; notes: string; current_insurer: string | null; closed_at: string | null;
+  branch_def: BranchDef; missing_labels: string[];
+  company: { id: number; name: string } | null; contact: QuotePerson | null;
+  insurer_list: QuoteInsurerRow[]; files: QuoteFileRow[]; events: QuoteEventRow[];
+};
+export type QuoteList = { items: QuoteSummary[]; stages: { key: QuoteStage; label: string }[]; branches: string[] };
+export type QuoteDraft = { to: string; subject: string; body: string; followup: boolean; in_reply_to: string | null;
+  references: string[]; missing: string[]; attachments: { id: number; name: string; size: number; label: string }[] };
+export type QuoteInput = Partial<{ branch: string; client_name: string; company_id: number | null; contact_id: number | null;
+  owner_id: number | null; due_on: string | null; current_insurer: string | null; current_premium: string | number | null;
+  notes: string; title: string; stage: QuoteStage; lost_reason: string; fields: Record<string, string | null>; insurer_ids: number[] }>;
 
 /** V3 : un employé (compte de connexion). */
 export type TeamUser = {
@@ -618,6 +657,28 @@ export const api = {
   reminderDelete: (id: number) => request(`/api/reminders/${id}`, { method: "DELETE" }),
   notifications: () => request<{ items: Notification[]; unseen: number }>("/api/notifications"),
   notificationsSeen: (keys?: string[]) => request("/api/notifications/seen", { method: "POST", json: keys ? { keys } : {} }),
+
+  quotes: (f: { company_id?: number; contact_id?: number } = {}) => request<QuoteList>(`/api/quotes${qs(f)}`),
+  quote: (id: number) => request<QuoteDetail>(`/api/quotes/${id}`),
+  quoteBranches: () => request<{ items: BranchDef[] }>("/api/quotes/branches"),
+  quotePeople: () => request<{ items: { id: number; name: string }[] }>("/api/quotes/people"),
+  quoteInsurerCompanies: () => request<{ items: { id: number; name: string; logo: string | null; contacts: number }[] }>("/api/quotes/insurer-companies"),
+  quoteCreate: (body: QuoteInput) => request<QuoteDetail>("/api/quotes", { method: "POST", json: body }),
+  quoteUpdate: (id: number, body: QuoteInput) => request<QuoteDetail>(`/api/quotes/${id}`, { method: "PATCH", json: body }),
+  quoteDelete: (id: number) => request(`/api/quotes/${id}`, { method: "DELETE" }),
+  quoteNote: (id: number, text: string) => request<QuoteDetail>(`/api/quotes/${id}/notes`, { method: "POST", json: { text } }),
+  quoteAddInsurers: (id: number, company_ids: number[]) => request<QuoteDetail>(`/api/quotes/${id}/insurers`, { method: "POST", json: { company_ids } }),
+  quoteInsurerUpdate: (id: number, iid: number, body: Partial<{ status: InsurerStatus; contact_id: number | null; offer_premium: string | number | null; notes: string }>) =>
+    request<QuoteDetail>(`/api/quotes/${id}/insurers/${iid}`, { method: "PATCH", json: body }),
+  quoteInsurerRemove: (id: number, iid: number) => request<QuoteDetail>(`/api/quotes/${id}/insurers/${iid}`, { method: "DELETE" }),
+  quoteDraft: (id: number, iid: number) => request<QuoteDraft>(`/api/quotes/${id}/insurers/${iid}/draft`),
+  quoteSend: (id: number, iid: number, body: { to: string; cc?: string; subject: string; body: string; attachment_ids: number[]; force?: boolean }) =>
+    request<QuoteDetail>(`/api/quotes/${id}/insurers/${iid}/send`, { method: "POST", json: body }),
+  quoteAddFile: (id: number, body: { attachment_id: number; kind: "client" | "offer" | "other"; label?: string; insurer_id?: number | null }) =>
+    request<QuoteDetail>(`/api/quotes/${id}/files`, { method: "POST", json: body }),
+  quoteFileFromMail: (id: number, body: { folder: string; uid: number; index: number; kind: "client" | "offer" | "other"; insurer_id?: number | null }) =>
+    request<QuoteDetail>(`/api/quotes/${id}/files/from-mail`, { method: "POST", json: body }),
+  quoteRemoveFile: (id: number, fid: number) => request<QuoteDetail>(`/api/quotes/${id}/files/${fid}`, { method: "DELETE" }),
 
   me: () => request<Me>("/api/me"),
   team: () => request<TeamUser[]>("/api/admin/users"),

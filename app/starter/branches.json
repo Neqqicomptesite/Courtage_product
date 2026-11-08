@@ -1,0 +1,82 @@
+{
+  "_doc": "Fiches de renseignements par branche (dossiers de cotation). « placeholder » = texte entre crochets dans le modèle d'email de la branche ([Activité]…), rempli automatiquement avec la valeur du champ. « docs » = documents à demander au client. Le libellé de la branche doit être identique à celui des modèles (Séquences → Souscription).",
+  "version": 1,
+  "branches": [
+    {"name": "Flotte", "fields": [
+      {"key": "activite", "label": "Activité", "placeholder": "Activité"},
+      {"key": "nb_vehicules", "label": "Nombre de véhicules", "type": "number", "placeholder": "Nombre de véhicules"},
+      {"key": "garanties", "label": "Garanties souhaitées", "placeholder": "Garanties souhaitées", "hint": "Tous risques, tiers, bris de glace…"},
+      {"key": "date_effet", "label": "Date d'effet souhaitée", "type": "date", "placeholder": "Date d'effet"}],
+     "docs": ["Liste du parc (immatriculation, marque, usage, mise en circulation, valeur)", "Relevé de sinistralité des 3 dernières années"]},
+    {"name": "Accidents du travail", "fields": [
+      {"key": "activite", "label": "Activité", "placeholder": "Activité"},
+      {"key": "effectif", "label": "Effectif", "type": "number", "placeholder": "Effectif"},
+      {"key": "masse_salariale", "label": "Masse salariale annuelle", "type": "number", "unit": "MAD", "placeholder": "Masse salariale"},
+      {"key": "date_effet", "label": "Date d'effet souhaitée", "type": "date", "placeholder": "Date d'effet"}],
+     "docs": ["Déclarations CNSS (masse salariale)", "Relevé de sinistralité des 3 dernières années"]},
+    {"name": "Prévoyance", "fields": [
+      {"key": "formule", "label": "Formule", "type": "choice", "options": ["AMC (complémentaire à l'AMO)", "DIM (dès le premier dirham)"], "placeholder": "AMC (complémentaire à l'AMO) ou DIM (dès le premier dirham)"},
+      {"key": "activite", "label": "Activité", "placeholder": "Activité"},
+      {"key": "effectif", "label": "Effectif", "type": "number", "placeholder": "Effectif"},
+      {"key": "nb_conjoints", "label": "Nombre de conjoints", "type": "number", "placeholder": "Nombre de conjoints"},
+      {"key": "nb_enfants", "label": "Nombre d'enfants", "type": "number", "placeholder": "Nombre d'enfants"},
+      {"key": "masse_salariale", "label": "Masse salariale annuelle", "type": "number", "unit": "MAD", "placeholder": "Masse salariale"},
+      {"key": "date_effet", "label": "Date d'effet souhaitée", "type": "date", "placeholder": "Date d'effet"}],
+     "docs": ["Liste du personnel (date de naissance, situation familiale, salaire)", "Tableau des garanties actuelles (si contrat en cours)"]},
+    {"name": "Retraite", "fields": [
+      {"key": "activite", "label": "Activité", "placeholder": "Activité"},
+      {"key": "effectif", "label": "Effectif concerné", "type": "number", "placeholder": "Effectif concerné"},
+      {"key": "masse_salariale", "label": "Masse salariale annuelle", "type": "number", "unit": "MAD", "placeholder": "Masse salariale"},
+      {"key": "taux", "label": "Taux de cotisation salarié / employeur", "placeholder": "Taux salarié / employeur", "hint": "Ex. 3 % / 3 %"},
+      {"key": "date_effet", "label": "Date d'effet souhaitée", "type": "date", "placeholder": "Date d'effet"}],
+     "docs": ["Liste des salariés concernés (âge, salaire)"]},
+    {"name": "RC professionnelle", "fields": [
+      {"key": "activite", "label": "Activité", "placeholder": "Activité"},
+      {"key": "ca", "label": "Chiffre d'affaires annuel", "type": "number", "unit": "MAD", "placeholder": "Chiffre d'affaires"},
+      {"key": "effectif", "label": "Effectif", "type": "number", "placeholder": "Effectif"},
+      {"key": "montant_garantie", "label": "Montant de garantie souhaité", "type": "number", "unit": "MAD", "placeholder": "Montant de garantie"},
+      {"key": "sinistralite", "label": "Sinistralité (3 dernières années)", "placeholder": "Sinistralité", "hint": "Néant, ou nombre et montant des sinistres"},
+      {"key": "date_effet", "label": "Date d'effet souhaitée", "type": "date", "placeholder": "Date d'effet"}],
+     "docs": ["Plaquette ou présentation de l'activité", "Questionnaire RC professionnelle signé"]},
+    {"name": "RC exploitation", "fields": [
+      {"key": "activite", "label": "Activité", "placeholder": "Activité"},
+      {"key": "ca", "label": "Chiffre d'affaires annuel", "type": "number", "unit": "MAD", "placeholder": "Chiffre d'affaires"},
+      {"key": "effectif", "label": "Effectif", "type": "number", "placeholder": "Effectif"},
+      {"key": "adresses", "label": "Adresse(s) des sites", "type": "textarea", "placeholder": "Adresse(s)"},
+      {"key": "montant_garantie", "label": "Montant de garantie souhaité", "type": "number", "unit": "MAD", "placeholder": "Montant de garantie"},
+      {"key": "date_effet", "label": "Date d'effet souhaitée", "type": "date", "placeholder": "Date d'effet"}],
+     "docs": ["Questionnaire RC exploitation signé"]},
+    {"name": "Multirisque", "fields": [
+      {"key": "activite", "label": "Activité", "placeholder": "Activité"},
+      {"key": "adresse", "label": "Adresse du local", "placeholder": "Adresse"},
+      {"key": "superficie", "label": "Superficie", "type": "number", "unit": "m²", "placeholder": "Superficie"},
+      {"key": "valeur_contenu", "label": "Valeur du contenu (matériel, mobilier)", "type": "number", "unit": "MAD", "placeholder": "Valeur du contenu"},
+      {"key": "valeur_stocks", "label": "Valeur des stocks", "type": "number", "unit": "MAD", "placeholder": "Valeur des stocks"},
+      {"key": "batiment", "label": "Bâtiment à assurer", "type": "choice", "options": ["Oui (propriétaire)", "Non (locataire)"], "placeholder": "Oui (propriétaire) / Non (locataire)"},
+      {"key": "date_effet", "label": "Date d'effet souhaitée", "type": "date", "placeholder": "Date d'effet"}],
+     "docs": ["Photos du local", "Inventaire du matériel (si disponible)"]},
+    {"name": "Multirisque habitation", "fields": [
+      {"key": "adresse", "label": "Adresse", "placeholder": "Adresse"},
+      {"key": "type_logement", "label": "Type de logement", "type": "choice", "options": ["Appartement", "Villa"], "placeholder": "Appartement / Villa"},
+      {"key": "superficie", "label": "Superficie", "type": "number", "unit": "m²", "placeholder": "Superficie"},
+      {"key": "statut", "label": "Statut", "type": "choice", "options": ["Propriétaire", "Locataire"], "placeholder": "Propriétaire / Locataire"},
+      {"key": "valeur_contenu", "label": "Valeur du contenu", "type": "number", "unit": "MAD", "placeholder": "Valeur du contenu"},
+      {"key": "date_effet", "label": "Date d'effet souhaitée", "type": "date", "placeholder": "Date d'effet"}],
+     "docs": []},
+    {"name": "Transport", "fields": [
+      {"key": "nature", "label": "Nature des marchandises", "placeholder": "Nature des marchandises"},
+      {"key": "mode", "label": "Mode de transport", "type": "choice", "options": ["Routier", "Maritime", "Aérien"], "placeholder": "Routier / Maritime / Aérien"},
+      {"key": "trajets", "label": "Trajets", "placeholder": "Trajets", "hint": "Ex. Casablanca → Tanger Med"},
+      {"key": "valeur", "label": "Valeur par voyage ou annuelle", "type": "number", "unit": "MAD", "placeholder": "Valeur par voyage ou annuelle"},
+      {"key": "formule", "label": "Formule", "type": "choice", "options": ["Au voyage", "Police d'abonnement"], "placeholder": "Au voyage / Police d'abonnement"},
+      {"key": "date_effet", "label": "Date d'effet souhaitée", "type": "date", "placeholder": "Date d'effet"}],
+     "docs": ["Relevé des expéditions de l'année passée (si abonnement)"]},
+    {"name": "Tous risques chantier", "fields": [
+      {"key": "nature_travaux", "label": "Nature des travaux", "placeholder": "Nature des travaux"},
+      {"key": "adresse_chantier", "label": "Adresse du chantier", "placeholder": "Adresse du chantier"},
+      {"key": "montant_marche", "label": "Montant du marché", "type": "number", "unit": "MAD", "placeholder": "Montant du marché"},
+      {"key": "duree", "label": "Durée des travaux", "placeholder": "Durée", "hint": "Ex. 18 mois"},
+      {"key": "date_demarrage", "label": "Date de démarrage", "type": "date", "placeholder": "Date de démarrage"}],
+     "docs": ["Marché ou contrat de travaux", "Planning des travaux"]}
+  ]
+}

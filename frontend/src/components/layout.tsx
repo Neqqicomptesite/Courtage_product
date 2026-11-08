@@ -3,6 +3,7 @@ import {
   BookOpen,
   Building2,
   CalendarDays,
+  FileStack,
   Inbox,
   LayoutDashboard,
   LogOut,
@@ -27,6 +28,7 @@ import { Composer } from "@/components/composer";
 import { NotificationBell } from "@/components/notifications";
 import { ReminderDialog } from "@/pages/agenda";
 import { SendSequenceDialog } from "@/components/send-sequence";
+import { NewQuoteHost } from "@/pages/quotes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -42,6 +44,7 @@ import { Brand } from "@/components/brand";
 const NAV = [
   { to: "/", label: "Tableau de bord", icon: LayoutDashboard, end: true },
   { to: "/inbox", label: "Boîte mail", icon: Inbox, badge: "to_classify" as const, also: ["/replies"] },
+  { to: "/quotes", label: "Dossiers", icon: FileStack },
   { to: "/agenda", label: "Agenda", icon: CalendarDays },
   { to: "/sequences", label: "Séquences", icon: ListOrdered },
   { to: "/campaigns", label: "Campagnes", icon: Rocket },
@@ -260,6 +263,7 @@ export function Layout() {
         <Composer />
         <ReminderDialog />
         <SendSequenceDialog />
+        <NewQuoteHost />
       </div>
     </div>
   );

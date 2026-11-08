@@ -492,3 +492,26 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
      colonne org_id sur toute nouvelle table, lectures par le filtre global uniquement, réglages
      rangés par employé ou par cabinet. Conséquence acceptée : aucun cabinet extérieur ne peut
      tester avant la dernière phase.
+285. **Dossier de cotation (phase 1, 08/11)** : tables quote_case / quote_insurer / quote_event /
+     quote_file (avec org_id, filtrées par cabinet dans scope.py ; migration 0014) et
+     reminder.quote_case_id. Étapes validées par Omar : Nouveau → Infos client à réunir →
+     Consultation → Offres reçues → Proposition envoyée → Gagné / Perdu (motif obligatoire).
+     Avance automatique vers « Consultation » au premier envoi et vers « Offres reçues » à la
+     première offre, jamais en arrière ni après « Proposition envoyée ».
+286. **Dossiers communs à l'équipe** (un collègue reprend un dossier), avec un responsable ;
+     suppression réservée au responsable ou à l'admin. Les emails partent de la boîte de
+     l'employé qui envoie ; le texte des réponses est recopié dans l'historique du dossier
+     pour que toute l'équipe le voie.
+287. **Les emails de cotation par branche (C1 à C10) servent à demander l'offre à la compagnie**
+     (réponse d'Omar). L'étape 1 du modèle de la branche est la demande, les étapes 2 et 3 les
+     relances, dans le même fil. Les [champs] du modèle sont remplis par la fiche de la branche
+     (app/starter/branches.json, champ « placeholder » = texte entre crochets) ; un champ resté
+     entre crochets bloque l'envoi. L'interlocuteur choisi d'office : service souscription, puis
+     production, puis le premier contact de la compagnie.
+288. **Relance d'une compagnie** : rappel « Relancer un devis » dans l'Agenda 4 jours ouvrés après
+     chaque envoi (réglage du cabinet quote_followup_days, choix d'Omar), clos quand la compagnie
+     répond, fait une offre ou refuse. Réponse reconnue par la synchronisation de la boîte quand
+     elle cite le Message-ID d'une demande ; ses pièces jointes peuvent être rangées comme offre.
+289. **Fiches des branches** proposées par Claude à partir des champs des modèles C1 à C10 et de ce
+     qu'Omar avait donné pour AT et Prévoyance ; documents à demander au client listés par branche.
+     À corriger par Omar.

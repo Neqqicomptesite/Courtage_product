@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  AlertTriangle, Archive, Ban, Building2, CalendarClock, CalendarPlus, CheckCheck, Clock, Forward, Phone, Inbox, Loader2, Mail, Paperclip, PenSquare, RefreshCw, Reply, Rocket, Search, Send, UserPlus, Users,
+  AlertTriangle, Archive, Ban, Building2, CalendarClock, CalendarPlus, CheckCheck, Clock, FileStack, Forward, Phone, Inbox, Loader2, Mail, Paperclip, PenSquare, RefreshCw, Reply, Rocket, Search, Send, UserPlus, Users,
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -21,6 +21,7 @@ import { ApiError, api, type AwaitingItem, type Followup, type MailItem } from "
 import { formatDayTime, fullName, relativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { openReminder } from "@/pages/agenda";
+import { openNewQuote } from "@/pages/quotes";
 import { openSendSequence } from "@/components/send-sequence";
 import { EnrollDialog } from "@/pages/contacts";
 
@@ -321,6 +322,14 @@ function Reader({ item, folder, actions }: { item: MailItem; folder: string; act
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
           {actions}
+          {item.contact?.kind !== "insurer" && (
+            <Button variant="outline" title="Créer un dossier de cotation pour cet expéditeur"
+              onClick={() => openNewQuote(item.contact
+                ? { contact: { id: item.contact.id, name: fullName(item.contact) }, company: item.contact.company_ref }
+                : { client_name: item.from_name || item.from_email })}>
+              <FileStack /> Dossier
+            </Button>
+          )}
           {!folder.toLowerCase().includes("archive") && (
             <Button variant="outline" onClick={() => void archive()} disabled={archiving} title="Ranger dans le dossier Archives (touche E)">
               {archiving ? <Loader2 className="animate-spin" /> : <Archive />} Archiver

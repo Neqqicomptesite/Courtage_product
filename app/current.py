@@ -21,6 +21,13 @@ def user_id() -> int | None:
     return _user.get()
 
 
+def org_id() -> int:
+    """Cabinet « en cours ». Un seul cabinet pour l'instant (n° 1) : toutes les nouvelles tables
+    portent déjà cette colonne pour que l'ouverture à plusieurs cabinets reste simple
+    (voir « Règles en attendant plusieurs cabinets » dans le README)."""
+    return 1
+
+
 def is_admin() -> bool:
     """Sans employé en cours : vrai en poste unique (une seule personne) ; FAUX sur le serveur
     (refus par défaut : une future adresse hors connexion ne serait pas « admin »)."""
