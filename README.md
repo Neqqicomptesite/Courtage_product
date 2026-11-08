@@ -17,16 +17,26 @@ projet séparé (dépôt `Neqqicomptesite/oddo-sequences`) et n'est pas modifié
 | Phase | Contenu | État |
 |---|---|---|
 | 0 | Dépôt séparé, nom et marque réglables, logo neutre, tests automatiques | fait |
-| 1 | Plusieurs cabinets sur une même installation (`org_id`), inscription, réglages et marque par cabinet, tests d'étanchéité entre cabinets | à faire |
-| 2 | Dossier de cotation (A1 à A3) | à faire |
-| 3 | Tableau comparatif semi-manuel (A4) | à faire |
-| 4 | Contrats et échéances (B1, B2) | à faire |
-| 5 | Tableau de bord du gérant (E1) | à faire |
-| 6 | Boîte mail partagée (C2) | à faire |
-| 7 | Connexion Gmail / Microsoft 365 (F1) | à faire |
+| 1 | Dossier de cotation | à faire |
+| 2 | Tableau comparatif semi-manuel | à faire |
+| 3 | Contrats et échéances | à faire |
+| 4 | Tableau de bord du gérant | à faire |
+| 5 | Boîte mail partagée | à faire |
+| 6 | Connexion Gmail / Microsoft 365 | à faire |
+| 7 | Plusieurs cabinets sur une même installation (`org_id`), inscription, console des cabinets, tests d'étanchéité entre cabinets | à faire, en dernier |
+
+Le fonctionnel passe d'abord ; l'ouverture à d'autres cabinets vient à la fin. Pour qu'elle reste
+simple, trois règles s'appliquent dès maintenant à tout nouveau code (voir « Règles » plus bas).
 
 D1, D2 et les fonctions d'IA sont repoussées. Chaque phase commence par une courte spécification à
 valider. Le détail des choix est dans `DECISIONS.md`.
+
+## Règles en attendant plusieurs cabinets
+
+1. Toute **nouvelle table** a une colonne `org_id` (entier, non nul, valeur 1 pour l'instant).
+2. Toute **lecture** de ces tables passe par le filtre global de `app/scope.py` : pas de SQL brut,
+   pas de `oddo_all=True` sans justification écrite à côté.
+3. Tout **nouveau réglage** est rangé par employé ou par cabinet, jamais « global » par défaut.
 
 ## Architecture (héritée de la V3)
 

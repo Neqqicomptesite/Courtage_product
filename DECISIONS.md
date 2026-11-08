@@ -486,3 +486,9 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
      à la demande d'Omar.
 283. **Tests automatiques sur GitHub** (Actions) : pytest sur SQLite et sur PostgreSQL 16,
      vérification TypeScript de l'interface, à chaque envoi sur main / production.
+284. **Ordre des phases (08/11, choix d'Omar)** : le fonctionnel d'abord (dossier de cotation,
+     comparatif, contrats et échéances, tableau de bord du gérant, boîte partagée, Gmail / M365),
+     l'ouverture à plusieurs cabinets en dernier. En contrepartie, trois règles dès maintenant :
+     colonne org_id sur toute nouvelle table, lectures par le filtre global uniquement, réglages
+     rangés par employé ou par cabinet. Conséquence acceptée : aucun cabinet extérieur ne peut
+     tester avant la dernière phase.
