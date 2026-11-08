@@ -363,30 +363,32 @@ function ContactSheet({ id, vocab, companies, companyKinds, onClosed }: { id: nu
         {safeUrl(c.website) && <Button size="sm" variant="outline" asChild><a href={safeUrl(c.website)} target="_blank" rel="noreferrer noopener"><ExternalLink /> Site</a></Button>}
       </div>
 
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border p-4 text-sm">
-        {[["Service", DEPARTMENTS.find((d) => d.value === c.department)?.label], ["Niveau", SENIORITIES.find((d) => d.value === c.seniority)?.label],
-          ["Profil", c.sequence_code], ["Lot d'envoi", lot(c.wave)], ["Fonction", c.target_segment], ["Secteur", c.sector_family],
-          ["Activité", c.sector], ["Taille", c.size_bucket], ["Qualité de l'email", c.email_reliability_detail]].map(([k, v]) => v ? (
-          <div key={k as string} className="min-w-0"><dt className="text-xs text-muted-foreground">{k}</dt><dd className="truncate">{v}</dd></div>
-        ) : null)}
-      </dl>
-
-      {/* Colonnes en plus du fichier importé : repliées par défaut, sans les codes techniques */}
-      {c.custom.length > 0 && (
-        <details className="group rounded-lg border px-3 py-2 text-sm">
-          <summary className="cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground">
-            Autres informations du fichier importé ({c.custom.length})
-          </summary>
-          <dl className="mt-2 grid gap-x-6 gap-y-2 sm:grid-cols-2">
-            {c.custom.map((f) => (
-              <div key={f.key}>
-                <dt className="text-xs text-muted-foreground">{f.label}</dt>
-                <dd className="whitespace-pre-wrap">{f.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </details>
+      {/* Service et niveau (assureurs) restent visibles ; le reste du fichier importé est replié */}
+      {(c.department || c.seniority) && (
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border p-4 text-sm">
+          {[["Service", DEPARTMENTS.find((d) => d.value === c.department)?.label], ["Niveau", SENIORITIES.find((d) => d.value === c.seniority)?.label]].map(([k, v]) => v ? (
+            <div key={k as string} className="min-w-0"><dt className="text-xs text-muted-foreground">{k}</dt><dd className="truncate">{v}</dd></div>
+          ) : null)}
+        </dl>
       )}
+      {(() => {
+        const infos = ([["Profil", c.sequence_code], ["Lot d'envoi", lot(c.wave)], ["Fonction", c.target_segment], ["Secteur", c.sector_family],
+          ["Activité", c.sector], ["Taille", c.size_bucket], ["Qualité de l'email", c.email_reliability_detail]] as [string, string | null | undefined][])
+          .filter(([, v]) => v).concat(c.custom.map((f) => [f.label, f.value] as [string, string]));
+        if (!infos.length) return null;
+        return (
+          <details className="rounded-lg border px-3 py-2 text-sm">
+            <summary className="cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground">
+              Plus d'informations ({infos.length})
+            </summary>
+            <dl className="mt-2 grid gap-x-6 gap-y-2 sm:grid-cols-2">
+              {infos.map(([k, v]) => (
+                <div key={k} className="min-w-0"><dt className="text-xs text-muted-foreground">{k}</dt><dd className="whitespace-pre-wrap break-words">{v}</dd></div>
+              ))}
+            </dl>
+          </details>
+        );
+      })()}
 
       <section className="space-y-2">
         <div className="flex items-center justify-between gap-2">

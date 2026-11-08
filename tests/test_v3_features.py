@@ -176,3 +176,13 @@ def test_starter_text_fix_applies_only_if_untouched(db):
         assert "Objets de valeur" not in c8 and "Valeur du contenu" in c8
         assert "Maître d'ouvrage" in s.scalars(select(Step).join(Sequence).where(Sequence.name.like("C10%"))).one().body_template
     assert "Maître d'ouvrage" not in json.dumps([q for q in data["sequences"] if q["code"] == "C10"], ensure_ascii=False)
+
+
+def test_upcoming_for_one_person(client, world):  # noqa: F811
+    from tests.test_m4_engine import _activate
+    cid = world["campaign_id"]
+    _activate(cid)
+    all_items = client.get(f"/api/campaigns/{cid}/upcoming").json()["items"]
+    eid = all_items[1]["enrollment_id"]
+    one = client.get(f"/api/campaigns/{cid}/upcoming?enrollment_id={eid}").json()
+    assert [it["enrollment_id"] for it in one["items"]] == [eid] and one["items"][0]["emails"]

@@ -525,7 +525,8 @@ export const api = {
   mailUnarchive: (message_id: string, folder: string, kind: "archive" | "junk" = "archive") =>
     request<{ ok: boolean }>("/api/mailbox/unarchive", { method: "POST", json: { message_id, folder, kind } }),
   mailSpam: (folder: string, uid: number) => request<{ archive_folder: string; message_id: string }>(`/api/mailbox/messages/${uid}/spam${qs({ folder })}`, { method: "POST" }),
-  campaignUpcoming: (id: number) => request<CampaignUpcoming>(`/api/campaigns/${id}/upcoming`),
+  campaignUpcoming: (id: number, enrollmentId?: number) =>
+    request<CampaignUpcoming>(`/api/campaigns/${id}/upcoming${enrollmentId ? `?enrollment_id=${enrollmentId}` : ""}`),
   mailPreview: (partUrl: string) => request<AttachmentPreview>(partUrl.replace("/part/", "/preview/")),
   mailMessage: (folder: string, uid: number) => request<MailMessage>(`/api/mailbox/messages/${uid}${qs({ folder })}`),
   mailSend: (d: MailDraft) => request<{ id: number; test_mode: boolean; to: string }>("/api/mailbox/send", { method: "POST", json: d }),

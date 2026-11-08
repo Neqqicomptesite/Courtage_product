@@ -147,7 +147,7 @@ async def activate(cid: int, body: ActivateIn):
 
 
 @router.get("/campaigns/{cid:int}/upcoming")
-def campaign_upcoming(cid: int, limit: int = 50):
+def campaign_upcoming(cid: int, limit: int = 50, enrollment_id: int | None = None):
     """V3 : les prochains emails de la campagne, exactement comme ils partiront (même rendu que
     le moteur : variante A/B tirée, textes personnalisés, objet « Re: » du fil, signature,
     pièces jointes), avec la date prévue. Les relances ne partent que sans réponse."""
@@ -160,7 +160,8 @@ def campaign_upcoming(cid: int, limit: int = 50):
         window = SendWindow.from_settings(s)
         unsubscribe = ss.unsubscribe_for(s, seq) if seq else ""
         q = (select(Enrollment, Contact).join(Contact, Contact.id == Enrollment.contact_id)
-             .where(Enrollment.campaign_id == camp.id, Enrollment.status.in_(DUE_STATUSES))
+             .where(Enrollment.campaign_id == camp.id, Enrollment.status.in_(DUE_STATUSES),
+                    *([Enrollment.id == enrollment_id] if enrollment_id else []))
              .order_by(Enrollment.next_due_at.is_(None), Enrollment.next_due_at, Enrollment.id))
         total = s.scalar(select(func.count()).select_from(q.subquery()))
         items = []

@@ -428,6 +428,29 @@ const VIEWS = [
   { key: "issues", label: "À vérifier", match: (s: string) => ["error", "needs_review"].includes(s) },
 ];
 
+/** V3 : les emails prévus pour UNE personne de la campagne (clic sur sa ligne). */
+function EnrollmentEmailsDialog({ campaignId, enrollment, onClose }: { campaignId: number; enrollment: { id: number; name: string } | null; onClose: () => void }) {
+  const { data, isLoading } = useQuery({ queryKey: ["campaign-upcoming", campaignId, enrollment?.id], queryFn: () => api.campaignUpcoming(campaignId, enrollment!.id), enabled: !!enrollment });
+  const it = data?.items[0];
+  return (
+    <Dialog open={!!enrollment} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[calc(100vh-2rem)] max-w-3xl overflow-y-auto">
+        <DialogTitle>Emails prévus pour {enrollment?.name}</DialogTitle>
+        {isLoading || !data ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Préparation…</p>
+          : !it ? <p className="text-sm text-muted-foreground">Plus aucun email prévu pour cette personne (séquence terminée, réponse reçue ou retirée).</p>
+          : <>
+              <p className="text-sm text-muted-foreground">
+                Exactement ce qui partira, à la date indiquée. Les relances ne partent que s'il n'y a pas de réponse.
+                {data.test_mode && <> <b>Mode test</b> : ils arriveront dans votre boîte.</>}
+                {data.campaign_status === "paused" && <> Campagne <b>en pause</b>.</>}
+              </p>
+              <div className="space-y-3">{it.emails.map((e) => <EmailCard key={e.position} email={e} to={it.to} name={fullName(it.contact)} from={data.from} ab={false} />)}</div>
+            </>}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /** V3 : les prochains emails de la campagne, tels qu'ils partiront. */
 function UpcomingEmails({ campaignId }: { campaignId: number }) {
   const { data, isLoading } = useQuery({ queryKey: ["campaign-upcoming", campaignId], queryFn: () => api.campaignUpcoming(campaignId) });
@@ -505,6 +528,7 @@ export function CampaignDetailPage() {
     onError: (e) => toastError(e, "Lancement impossible"),
   });
 
+  const [peek, setPeek] = useState<{ id: number; name: string } | null>(null); // V3 : emails prévus d'une personne
   if (!data) return <Skeleton className="h-96 rounded-xl" />;
   const list = view === "upcoming" ? [] : data.enrollments.filter((e) => VIEWS.find((v) => v.key === view)!.match(e.status));
 
@@ -591,7 +615,9 @@ export function CampaignDetailPage() {
                       <EnrollmentStatus status={e.status} />
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {e.next_due_at ? <>Email n°{e.step}{e.max_steps ? ` sur ${e.max_steps}` : ""} · {formatDayTime(e.next_due_at)}</> : e.error ? <span className="text-destructive">{e.error}</span> : `${Math.min(e.step - 1, data.sequence?.steps ?? e.step)} email(s) envoyé(s)`}
+                      {e.next_due_at ? <button type="button" onClick={() => setPeek({ id: e.id, name: fullName(e.contact) })} className="text-left hover:text-primary" title="Voir les emails prévus">
+                        Email n°{e.step}{e.max_steps ? ` sur ${e.max_steps}` : ""} · {formatDayTime(e.next_due_at)} <span className="ml-1 inline-flex items-center gap-0.5 text-primary"><Eye className="size-3" /> voir</span>
+                      </button> : e.error ? <span className="text-destructive">{e.error}</span> : `${Math.min(e.step - 1, data.sequence?.steps ?? e.step)} email(s) envoyé(s)`}
                     </div>
                     <RowActions e={e} onAct={(kind) => row.mutate({ kind, eid: e.id, cid: e.contact.id })} />
                   </div>
@@ -603,6 +629,7 @@ export function CampaignDetailPage() {
       )}
 
       <StartDialog open={planning} onOpenChange={setPlanning} campaignId={data.id} current={data.start_at} onDone={refresh} />
+      <EnrollmentEmailsDialog campaignId={data.id} enrollment={peek} onClose={() => setPeek(null)} />
       <ConfirmDialog open={confirmDelete} onOpenChange={setConfirmDelete} destructive title="Supprimer ce brouillon ?"
         confirmLabel="Supprimer" onConfirm={() => action.mutate("delete")} />
     </>
