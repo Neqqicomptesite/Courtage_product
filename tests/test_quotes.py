@@ -242,3 +242,36 @@ def test_unknown_branch_has_generic_template(client, world):  # noqa: F811
     assert c["field_defs"] == [] and c["stage"] == "new"
     d = client.post(f"/api/quotes/{c['id']}/draft", json={"insurer_ids": [_rows(c, "Assurance Alpha")[0]["id"]]}, headers=O).json()
     assert d["subject"] == "Demande de cotation Cyber-risques – Société Z" and d["missing"] == []
+
+
+def test_reply_to_dossier_also_stops_running_sequence(client, world):  # noqa: F811
+    """Règle d'or conservée : la personne qui répond au fil d'un dossier et qui avait aussi une
+    séquence en cours voit ses relances s'arrêter (la réponse est rattachée au dossier ET traitée)."""
+    from datetime import timedelta
+    from app.models import Campaign, Enrollment, Mailbox, Sequence
+    client_co, ins1, _ = _setup()
+    with get_session() as s:
+        nadia = s.scalars(select(Contact).where(Contact.email == "souscription@alpha-assurance.ma")).one()
+        camp = Campaign(name="G1 en cours", mailbox_id=s.scalars(select(Mailbox.id)).first(),
+                        sequence_id=s.scalars(select(Sequence.id)).first(), status="active", filters={})
+        s.add(camp)
+        s.flush()
+        enr = Enrollment(campaign_id=camp.id, contact_id=nadia.id, status="waiting", current_step=2,
+                         next_due_at=utcnow() + timedelta(days=3))
+        s.add(enr)
+        s.commit()
+        enr_id = enr.id
+    case = client.post("/api/quotes", json={"branch": "Flotte", "company_id": client_co, "insurer_ids": [ins1],
+                                            "fields": {"activite": "x", "nb_vehicules": "3", "garanties": "TR"}}, headers=O).json()
+    row = _rows(case, "Assurance Alpha")[0]
+    d = client.post(f"/api/quotes/{case['id']}/draft", json={"insurer_ids": [row["id"]]}, headers=O).json()
+    assert client.post(f"/api/quotes/{case['id']}/send", json={**d, "insurer_ids": [row["id"]]}, headers=O).status_code == 200
+    with get_session() as s:
+        out_id = s.scalars(select(QuoteEvent.message_id).where(QuoteEvent.kind == "email_out")).one()
+    world["imap"].deliver("INBOX", _reply(out_id, "souscription@alpha-assurance.ma", "Re: cotation", with_pdf=False, mid="<r-seq@alpha>"))
+    rep = imap_sync.sync()
+    assert rep.counts.get("quote_reply") == 1
+    with get_session() as s:
+        assert s.get(Enrollment, enr_id).status not in ("waiting", "scheduled")   # relances arrêtées
+    case = client.get(f"/api/quotes/{case['id']}").json()
+    assert _rows(case, "Assurance Alpha")[0]["status"] == "replied"
