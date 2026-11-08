@@ -1,10 +1,10 @@
 @echo off
-REM ODDO Sequences - lanceur Windows.
+REM Cotalis - lanceur Windows (poste unique, pour essayer l'appli sur un PC).
 REM Premier lancement : cree l'environnement Python et installe les dependances.
 REM Lancements suivants : reinstalle seulement si requirements.txt a change.
 setlocal
 cd /d "%~dp0"
-title ODDO Sequences - ne pas fermer cette fenetre
+title Cotalis - ne pas fermer cette fenetre
 
 REM Bascule V2.6 : le mode test n'est plus verrouille. Il reste ACTIVE tant que vous ne le
 REM desactivez pas vous-meme dans Reglages > Mode test.
