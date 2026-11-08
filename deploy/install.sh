@@ -37,13 +37,13 @@ install -d -o oddo -g oddo -m 750 "$DATA" /var/backups/oddo
 chown root:oddo "$ENVF"; chmod 640 "$ENVF"
 
 # 4. Adresse publique : nom fourni (ODDO_HOST) ou, à défaut, <ip>.sslip.io (certificat gratuit)
-if [ -z "${ODDO_HOST:-}" ]; then
-  IP=$(curl -fsS http://169.254.169.254/hetzner/v1/metadata/public-ipv4 || curl -fsS https://api.ipify.org)
-  ODDO_HOST="${IP//./-}.sslip.io"
-fi
+IP=$(curl -fsS http://169.254.169.254/hetzner/v1/metadata/public-ipv4 || curl -fsS https://api.ipify.org)
+SSLIP="${IP//./-}.sslip.io"
+ODDO_HOST="${ODDO_HOST:-$SSLIP}"
+HOSTS="$ODDO_HOST"; [ "$ODDO_HOST" != "$SSLIP" ] && HOSTS="$ODDO_HOST,$SSLIP"
 cat > /etc/oddo/host.env <<HOST
 ODDO_HOST=$ODDO_HOST
-ODDO_PUBLIC_HOSTS=$ODDO_HOST
+ODDO_PUBLIC_HOSTS=$HOSTS
 ODDO_PUBLIC_URL=https://$ODDO_HOST
 HOST
 chown root:oddo /etc/oddo/host.env; chmod 640 /etc/oddo/host.env
@@ -73,6 +73,8 @@ $ODDO_HOST {
 	header Strict-Transport-Security "max-age=31536000"
 }
 CADDY
+# vraie adresse (deploy/set-domain.sh) : l'ancienne adresse sslip.io y renvoie
+if [ "$ODDO_HOST" != "$SSLIP" ]; then printf '%s {\n\tredir https://%s{uri} permanent\n}\n' "$SSLIP" "$ODDO_HOST" >> /etc/caddy/Caddyfile; fi
 systemctl daemon-reload
 systemctl enable --now oddo.service oddo-update.timer oddo-backup.timer
 systemctl restart caddy
