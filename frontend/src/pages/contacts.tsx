@@ -371,18 +371,21 @@ function ContactSheet({ id, vocab, companies, companyKinds, onClosed }: { id: nu
         ) : null)}
       </dl>
 
+      {/* Colonnes en plus du fichier importé : repliées par défaut, sans les codes techniques */}
       {c.custom.length > 0 && (
-        <section className="space-y-2">
-          <h3 className="text-sm font-medium">Champs personnalisés</h3>
-          <div className="space-y-2">
+        <details className="group rounded-lg border px-3 py-2 text-sm">
+          <summary className="cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground">
+            Autres informations du fichier importé ({c.custom.length})
+          </summary>
+          <dl className="mt-2 grid gap-x-6 gap-y-2 sm:grid-cols-2">
             {c.custom.map((f) => (
-              <div key={f.key} className="rounded-lg bg-muted/40 p-3 text-sm">
-                <p className="text-xs text-muted-foreground">{f.label} <code className="ml-1 opacity-70">{`{{ custom.${f.key} }}`}</code></p>
-                <p className="mt-0.5 whitespace-pre-wrap">{f.value}</p>
+              <div key={f.key}>
+                <dt className="text-xs text-muted-foreground">{f.label}</dt>
+                <dd className="whitespace-pre-wrap">{f.value}</dd>
               </div>
             ))}
-          </div>
-        </section>
+          </dl>
+        </details>
       )}
 
       <section className="space-y-2">
