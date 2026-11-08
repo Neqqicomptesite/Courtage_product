@@ -469,3 +469,20 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
      Word .docx via mammoth, Excel .xlsx, CSV, texte ; cadre sans script) ; onglet « Prochains
      envois » d'une campagne (rendu identique au moteur) ; 10 demandes de cotation par branche
      (Souscription → sous-onglets ; colonne sequence.branch, migration 0013 ; données de départ v2).
+
+## Produit pour d'autres cabinets – dépôt séparé (novembre 2026)
+
+280. **Dépôt séparé** `Neqqicomptesite/Courtage_product`, parti de l'historique d'ODDO Séquences
+     V3.1.0 (commit d4bc0eb). ODDO Séquences reste un projet à part, inchangé ; on pourra
+     réutiliser plus tard ce produit pour ODDO, mais rien n'est partagé automatiquement.
+281. **Nom de travail « Cotalis »** (cotation + courtage), choisi parce qu'aucun produit de courtage
+     de ce nom n'est apparu dans une recherche rapide ; recherche non exhaustive, marque à vérifier
+     (OMPIC) avant lancement. Les noms en « Courti… » sont déjà pris (Courtigo, Courtisia…).
+     Le nom vient d'une seule valeur, APP_NAME, remplaçable par la variable PRODUCT_NAME, et le
+     navigateur le reçoit par /api/auth/config : renommer ne demande aucune modification de code.
+282. **Marque visuelle neutre** : logo ODDO retiré (fichiers supprimés) ; symbole dessiné en SVG dans
+     le code (components/brand.tsx), favicon SVG + PNG ; palette indigo / sarcelle au lieu du bleu
+     et du vert ODDO. Les données d'ODDO (assureurs, séquences types) restent pour l'instant,
+     à la demande d'Omar.
+283. **Tests automatiques sur GitHub** (Actions) : pytest sur SQLite et sur PostgreSQL 16,
+     vérification TypeScript de l'interface, à chaque envoi sur main / production.

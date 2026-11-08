@@ -15,6 +15,7 @@ from datetime import date, datetime, time, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app import APP_NAME
 from app import BASE_URL, credentials, engine, settings_store
 from app.db import get_session
 from app.mail import compose, transport
@@ -72,7 +73,7 @@ def collect(s: Session, now: datetime) -> DigestContent:
 
 def render_text(c: DigestContent, now: datetime) -> tuple[str, str]:
     day = to_local(now)
-    lines = [f"Récapitulatif ODDO Séquences du {day:%d/%m/%Y}", ""]
+    lines = [f"Récapitulatif {APP_NAME} du {day:%d/%m/%Y}", ""]
     if c.replies:
         lines.append(f"NOUVELLES RÉPONSES ({len(c.replies)})")
         for m, ct in c.replies:
@@ -95,7 +96,7 @@ def render_text(c: DigestContent, now: datetime) -> tuple[str, str]:
               "", f"Classer les réponses : {BASE_URL}/v2/replies",
               "(lien utilisable sur le PC où tourne l'application)"]
     n = len(c.replies)
-    subject = f"[ODDO Séquences] Récap du {day:%d/%m} : {n} réponse{'s' if n > 1 else ''}"
+    subject = f"[{APP_NAME}] Récap du {day:%d/%m} : {n} réponse{'s' if n > 1 else ''}"
     return subject, "\n".join(lines)
 
 

@@ -1,6 +1,7 @@
 """Moteur de gabarits Jinja2 partagé par toutes les pages."""
 from fastapi.templating import Jinja2Templates
 
+from app import APP_NAME
 from app import settings_store
 from app.db import get_session
 from app.paths import TEMPLATES_DIR
@@ -9,6 +10,7 @@ from app.timeutil import fmt_local, fmt_local_long
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 templates.env.filters["local"] = fmt_local
+templates.env.globals["app_name"] = APP_NAME
 templates.env.filters["local_long"] = fmt_local_long
 templates.env.filters["slug"] = slug  # « À vérifier » -> « a_verifier » (classes CSS)
 

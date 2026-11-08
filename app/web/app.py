@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from app import APP_NAME
 from app import HOST, PORT, scheduler, starter_data, vocab
 from app.db import get_session, init_engine
 from app.logging_setup import setup_logging
@@ -55,7 +56,7 @@ def create_app(testing: bool = False) -> FastAPI:
         yield
         scheduler.stop()
 
-    app = FastAPI(title="ODDO Séquences", lifespan=lifespan, docs_url=None, redoc_url=None)
+    app = FastAPI(title=APP_NAME, lifespan=lifespan, docs_url=None, redoc_url=None)
     allowed = {f"{HOST}:{PORT}", f"localhost:{PORT}"}
     if testing:
         allowed.add("testserver")  # nom d'hôte utilisé par le client de test FastAPI

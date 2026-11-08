@@ -6,7 +6,7 @@ set -euo pipefail
 exec > >(tee -a /var/log/oddo-install.log) 2>&1
 echo "=== install $(date -Is) ==="
 
-REPO="Neqqicomptesite/oddo-sequences"
+REPO="Neqqicomptesite/Courtage_product"
 BRANCH=production
 APP=/opt/oddo
 DATA=/var/lib/oddo

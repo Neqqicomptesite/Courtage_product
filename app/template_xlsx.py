@@ -13,6 +13,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
+from app import APP_NAME
 from app import vocab
 from app.companies_service import KIND_LABELS
 from app.contacts_service import DEPARTMENT_LABELS, SENIORITY_LABELS
@@ -109,7 +110,7 @@ def build() -> bytes:
 
     # --- mode d'emploi
     lines = [
-        ("Modèle d'import – ODDO Séquences", True),
+        (f"Modèle d'import – {APP_NAME}", True),
         ("", False),
         ("1. Remplissez une ligne par personne dans l'onglet « Contacts ». Seule la colonne Email est obligatoire.", False),
         ("2. Choisissez la cible et la famille de secteur dans les listes : le code séquence (gris) se remplit tout seul.", False),

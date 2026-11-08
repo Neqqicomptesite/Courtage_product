@@ -144,7 +144,7 @@ const SERVER_RULES: Record<string, Rule> = {
 const RULES_PC: Rule[] = [
   { icon: FlaskConical, title: "Toujours commencer en mode test", text: "Badge orange en haut : chaque email part vers vous. On passe en réel seulement après avoir relu un essai." },
   { icon: MonitorCheck, title: "La fenêtre noire reste ouverte", text: "C'est le moteur d'envoi : réduisez-la, ne la fermez pas. PC éteint ou en veille : rien ne part, l'envoi reprend au redémarrage." },
-  { icon: Clock, title: "Un rythme raisonnable", text: "Envois les jours ouvrés, aux heures de bureau, 25 par jour au plus. Nous partageons tous le domaine oddo.ma : trop d'envois ou de rebonds pénalisent tout le monde." },
+  { icon: Clock, title: "Un rythme raisonnable", text: "Envois les jours ouvrés, aux heures de bureau, 25 par jour au plus. Toute l'équipe partage le domaine email du cabinet : trop d'envois ou de rebonds pénalisent tout le monde." },
   { icon: Users, title: "Se répartir les prospects", text: "Chacun a sa propre application : elle ne voit pas les envois des collègues. Deux personnes ne doivent pas prospecter la même entreprise." },
   { icon: MessageSquareReply, title: "Une réponse arrête les relances", text: "Dès qu'une personne répond, les relances de cette conversation s'arrêtent d'elles-mêmes. Pensez à lui répondre vous-même !" },
   { icon: FolderLock, title: "Ne jamais supprimer le dossier « data »", text: "Il contient vos contacts et votre historique. Une sauvegarde est faite à chaque démarrage." },

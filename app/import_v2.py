@@ -78,7 +78,7 @@ def _extract(data: bytes, dest: Path) -> Path:
         finally:
             con.close()
     except sqlite3.Error as exc:
-        raise ImportError_("oddo.db n'est pas une base ODDO Séquences lisible.") from exc
+        raise ImportError_("oddo.db n'est pas une base lisible (sauvegarde de la version poste unique).") from exc
     if not ok:
         raise ImportError_("oddo.db est endommagée (contrôle d'intégrité en échec).")
     return db

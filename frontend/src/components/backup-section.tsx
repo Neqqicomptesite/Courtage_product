@@ -49,9 +49,9 @@ export function BackupSection() {
         </div>
 
         <Field label="Copier aussi chaque sauvegarde dans ce dossier"
-          hint="Conseillé : un dossier synchronisé (Google Drive pour ordinateur, OneDrive…), pour ne rien perdre si ce PC tombe en panne. Collez le chemin complet, par exemple G:\Mon Drive\ODDO-sauvegardes. Laisser vide pour désactiver.">
+          hint="Conseillé : un dossier synchronisé (Google Drive pour ordinateur, OneDrive…), pour ne rien perdre si ce PC tombe en panne. Collez le chemin complet, par exemple G:\Mon Drive\Sauvegardes. Laisser vide pour désactiver.">
           <div className="flex gap-2">
-            <Input value={dir} onChange={(e) => setDir(e.target.value)} placeholder="G:\Mon Drive\ODDO-sauvegardes" />
+            <Input value={dir} onChange={(e) => setDir(e.target.value)} placeholder="G:\Mon Drive\Sauvegardes" />
             <Button variant="outline" onClick={() => save.mutate()} disabled={save.isPending || dir === (data?.copy_dir ?? "")}>Enregistrer</Button>
           </div>
         </Field>

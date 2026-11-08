@@ -179,7 +179,7 @@ def test_digest_sent_once_after_configured_time(dataset):
     assert m.rcpt_tos == [USER]
     parsed = message_from_bytes(m.data)
     subject = str(make_header(decode_header(parsed["Subject"])))
-    assert subject == "[ODDO Séquences] Récap du 04/11 : 2 réponses"
+    assert subject == "[Cotalis] Récap du 04/11 : 2 réponses"
     body = parsed.get_payload(decode=True).decode("utf-8")
     assert "Prénom0 Test – Entreprise 0 (FIN-IND)" in body
     assert "Rebond : c3@entreprise3.ma" in body and "Désinscription (STOP) : c4@entreprise4.ma" in body

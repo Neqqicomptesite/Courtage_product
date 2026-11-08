@@ -265,7 +265,7 @@ const SECTIONS: Section[] = [
       <H2>Votre compte</H2>
       <Points items={[
         <>Vous recevez une <B>invitation par email</B> de l'administrateur : le lien vous fait choisir votre mot de passe (10 caractères minimum).</>,
-        <>Ensuite, vous vous connectez avec votre <B>email @oddo.ma</B> et ce mot de passe. Oublié ? « Mot de passe oublié ? » sur l'écran de connexion.</>,
+        <>Ensuite, vous vous connectez avec votre <B>email professionnel</B> et ce mot de passe. Oublié ? « Mot de passe oublié ? » sur l'écran de connexion.</>,
         <>Première chose à faire : <B>Réglages → Boîte mail</B> (port d'envoi 587, sécurité STARTTLS), puis « Tester la connexion ». Votre mode test est activé par défaut.</>,
         <>Votre compte est personnel : ne le partagez pas. Menu rond en haut à droite → <B>Se déconnecter</B> sur un ordinateur partagé.</>,
       ]} />
@@ -282,7 +282,7 @@ const SECTIONS: Section[] = [
         <>Les <B>compagnies d'assurance</B> (gestionnaires, souscripteurs) sont communes : plusieurs collègues peuvent leur écrire.</>,
         <>Un modèle commun ne vous convient pas ? <B>Dupliquez-le</B> : la copie est à vous, modifiable, invisible des autres.</>,
         <>Effacer un contact suivi par un collègue, supprimer une compagnie ou retirer une exclusion : réservé à l'administrateur.</>,
-        <>Le domaine oddo.ma est partagé : respectez les plafonds d'envoi et le mode test tant que vous débutez.</>,
+        <>Le domaine email du cabinet est partagé par toute l'équipe : respectez les plafonds d'envoi et le mode test tant que vous débutez.</>,
       ]} />
       <H2>Administrateur</H2>
       <P>Menu <B>Équipe</B> : inviter un collègue, renvoyer son lien, changer son rôle, désactiver un compte (ses campagnes s'arrêtent, ses données restent).</P>
@@ -292,7 +292,7 @@ const SECTIONS: Section[] = [
     body: () => SERVER_MODE ? <>
       <Table head={["Réglage", "À savoir"]} rows={[
         ["Boîte mail", "Les serveurs indiqués dans le cPanel (envoi : port 587, sécurité STARTTLS), votre mot de passe (rangé chiffré sur le serveur), « Tester la connexion », votre signature."],
-        ["Rythme d'envoi", "Jours et heures d'envoi (heure du Maroc), maximum par jour et par heure, pause entre deux emails, jours fériés (aucun envoi). Le domaine oddo.ma est partagé : restez raisonnable."],
+        ["Rythme d'envoi", "Jours et heures d'envoi (heure du Maroc), maximum par jour et par heure, pause entre deux emails, jours fériés (aucun envoi). Le domaine email du cabinet est partagé par toute l'équipe : restez raisonnable."],
         ["Mode test", "Propre à chacun. Activé, tout part vers vous. Le désactiver demande de taper REEL. On peut le réactiver à tout moment."],
         ["Sauvegardes", "Automatiques, chaque nuit et avant chaque mise à jour, gardées 30 jours, avec une copie chiffrée hors du serveur. Rien à faire de votre côté."],
         ["Mises à jour", "Automatiques, la nuit (entre 20 h et 7 h), pour ne jamais couper un envoi. Vos données ne bougent pas."],
@@ -300,7 +300,7 @@ const SECTIONS: Section[] = [
     </> : <>
       <Table head={["Réglage", "À savoir"]} rows={[
         ["Boîte mail", "Les serveurs indiqués dans le cPanel, votre mot de passe (rangé dans le coffre-fort de Windows, jamais dans un fichier), « Tester la connexion », votre signature."],
-        ["Rythme d'envoi", "Jours et heures d'envoi (heure du Maroc), maximum par jour et par heure, pause entre deux emails, jours fériés (aucun envoi). Le domaine oddo.ma est partagé : restez raisonnable."],
+        ["Rythme d'envoi", "Jours et heures d'envoi (heure du Maroc), maximum par jour et par heure, pause entre deux emails, jours fériés (aucun envoi). Le domaine email du cabinet est partagé par toute l'équipe : restez raisonnable."],
         ["Mode test", "Activé, tout part vers vous. Le désactiver demande de taper REEL. On peut le réactiver à tout moment."],
         ["Sauvegardes", "À chaque démarrage et chaque jour : les 10 dernières et une par jour sur 30 jours. Conseillé : un second dossier synchronisé (Google Drive, OneDrive) pour ne rien perdre si le PC tombe en panne."],
         ["Mise à jour", "L'appli vérifie deux fois par jour ; « Vérifier maintenant » pour le faire tout de suite. Vos données ne bougent jamais."],
@@ -406,7 +406,7 @@ const USE_CASES: UseCase[] = [
         text: <>Les réponses (1), les intéressés, les rebonds. <B>Mettre en pause</B> (2) arrête les envois le temps qu'il faut.</> },
     ],
     after: [
-      { title: "Les emails partent un par un", text: <>Un email à la fois, aux heures de bureau, 25 par jour au plus : une liste de 30 personnes à 3 emails prend donc plusieurs jours. C'est voulu : cela ressemble à des emails écrits à la main et protège la réputation d'oddo.ma.</> },
+      { title: "Les emails partent un par un", text: <>Un email à la fois, aux heures de bureau, 25 par jour au plus : une liste de 30 personnes à 3 emails prend donc plusieurs jours. C'est voulu : cela ressemble à des emails écrits à la main et protège la réputation du domaine du cabinet.</> },
       { title: "Un prospect répond", text: <>Ses relances s'arrêtent, il apparaît dans Réponses aux campagnes et dans la cloche. La suite : <CaseLink to="reponse">Un prospect répond</CaseLink>.</> },
     ],
     tips: [

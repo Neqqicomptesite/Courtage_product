@@ -24,7 +24,7 @@ import urllib.request
 import zipfile
 from pathlib import Path, PurePosixPath
 
-from app import VERSION, settings_store
+from app import APP_NAME, VERSION, settings_store
 from app.paths import PROJECT_DIR, data_dir
 from app.timeutil import utcnow
 
@@ -79,7 +79,7 @@ def fetch(url: str, dest: Path) -> Path:
             while chunk := r.read(256 * 1024):
                 size += len(chunk)
                 if size > MAX_BYTES:
-                    raise UpdateError("Fichier trop gros pour être un kit ODDO Séquences.")
+                    raise UpdateError(f"Fichier trop gros pour être un kit {APP_NAME}.")
                 out.write(chunk)
     except UpdateError:
         tmp.unlink(missing_ok=True)
@@ -100,7 +100,7 @@ def inspect(path: Path) -> tuple[str, str]:
     with zipfile.ZipFile(path) as z:
         inits = sorted((n for n in z.namelist() if n.endswith("app/__init__.py")), key=len)
         if not inits:
-            raise UpdateError("Ce fichier n'est pas un kit ODDO Séquences.")
+            raise UpdateError(f"Ce fichier n'est pas un kit {APP_NAME}.")
         prefix = inits[0][: -len("app/__init__.py")]
         m = VERSION_RE.search(z.read(inits[0]).decode("utf-8", "replace"))
         if not m:

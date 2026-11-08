@@ -37,6 +37,7 @@ import { signOut } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { useMe } from "@/pages/login";
 import { cn } from "@/lib/utils";
+import { Brand } from "@/components/brand";
 
 const NAV = [
   { to: "/", label: "Tableau de bord", icon: LayoutDashboard, end: true },
@@ -126,15 +127,6 @@ function SyncIndicator({ status, sync }: { status: Status | undefined; sync: Ret
   );
 }
 
-function Logo({ className }: { className?: string }) {
-  return (
-    <>
-      <img src="/static/v2/logo-oddo.png" alt="ODDO Assurances" className={cn("dark:hidden", className)} />
-      <img src="/static/v2/logo-oddo-dark.png" alt="ODDO Assurances" className={cn("hidden dark:block", className)} />
-    </>
-  );
-}
-
 function Sidebar({ status, onNavigate }: { status: Status | undefined; onNavigate?: () => void }) {
   const location = useLocation();
   const me = useMe();
@@ -144,8 +136,7 @@ function Sidebar({ status, onNavigate }: { status: Status | undefined; onNavigat
   return (
     <div className="flex h-full flex-col">
       <div className="px-5 pb-6 pt-6">
-        <Logo className="h-11 w-auto" />
-        <p className="mt-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Séquences</p>
+        <Brand />
       </div>
       <nav className="flex-1 space-y-0.5 px-3">
         {nav.map((n) => {
@@ -231,7 +222,7 @@ export function Layout() {
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Ouvrir le menu">
             <Menu />
           </Button>
-          <div className="lg:hidden"><Logo className="h-7 w-auto" /></div>
+          <div className="lg:hidden"><Brand tagline={false} /></div>
           <button onClick={() => window.dispatchEvent(new Event("open-command"))}
             className="hidden h-8 w-64 items-center gap-2 rounded-md border bg-card px-3 text-sm text-muted-foreground shadow-sm transition-colors hover:text-foreground md:flex">
             <Search className="size-3.5" />

@@ -105,7 +105,7 @@ function MailboxForm({ s }: { s: Settings }) {
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Nom affiché" error={err("display_name")} hint="Ce que voit le destinataire."><Input value={v.display_name} onChange={(e) => set("display_name", e.target.value)} placeholder="Prénom Nom – ODDO Assurance" /></Field>
+          <Field label="Nom affiché" error={err("display_name")} hint="Ce que voit le destinataire."><Input value={v.display_name} onChange={(e) => set("display_name", e.target.value)} placeholder="Prénom Nom – Cabinet" /></Field>
           <Field label="Adresse email" error={err("email")}><Input type="email" value={v.email} onChange={(e) => set("email", e.target.value)} /></Field>
           <Field label="Identifiant" error={err("username")} hint="Souvent l'adresse complète."><Input value={v.username} onChange={(e) => set("username", e.target.value)} /></Field>
           <Field label="Mot de passe" error={err("password")} hint={s.has_password ? "Laissez vide pour garder celui enregistré." : undefined}>
@@ -115,7 +115,7 @@ function MailboxForm({ s }: { s: Settings }) {
 
         <div className="grid gap-4 rounded-xl border p-4 sm:grid-cols-2">
           <p className="text-sm font-medium sm:col-span-2">Envoi (SMTP)</p>
-          <Field label="Serveur" error={err("smtp_host")}><Input value={v.smtp_host} onChange={(e) => set("smtp_host", e.target.value)} placeholder="mail.oddo.ma" /></Field>
+          <Field label="Serveur" error={err("smtp_host")}><Input value={v.smtp_host} onChange={(e) => set("smtp_host", e.target.value)} placeholder="mail.cabinet.ma" /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Port" error={err("smtp_port")}><Input type="number" value={v.smtp_port} onChange={(e) => set("smtp_port", Number(e.target.value))} /></Field>
             <Field label="Sécurité">
@@ -128,7 +128,7 @@ function MailboxForm({ s }: { s: Settings }) {
             </Field>
           </div>
           <p className="text-sm font-medium sm:col-span-2">Lecture (IMAP)</p>
-          <Field label="Serveur" error={err("imap_host")}><Input value={v.imap_host} onChange={(e) => set("imap_host", e.target.value)} placeholder="mail.oddo.ma" /></Field>
+          <Field label="Serveur" error={err("imap_host")}><Input value={v.imap_host} onChange={(e) => set("imap_host", e.target.value)} placeholder="mail.cabinet.ma" /></Field>
           <Field label="Port" error={err("imap_port")}><Input type="number" value={v.imap_port} onChange={(e) => set("imap_port", Number(e.target.value))} /></Field>
         </div>
 
@@ -213,7 +213,7 @@ function SendingForm({ s }: { s: Settings }) {
     <Card>
       <CardHeader>
         <CardTitle>Rythme d'envoi</CardTitle>
-        <CardDescription>Un email à la fois, aux heures de bureau, pour ressembler à un envoi fait à la main et protéger la réputation de oddo.ma.</CardDescription>
+        <CardDescription>Un email à la fois, aux heures de bureau, pour ressembler à un envoi fait à la main et protéger la réputation du domaine du cabinet.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {fieldError(save.error, "mailbox") && <p className="text-sm text-destructive">{fieldError(save.error, "mailbox")}</p>}

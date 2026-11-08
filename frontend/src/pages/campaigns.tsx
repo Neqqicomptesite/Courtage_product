@@ -398,7 +398,7 @@ export function ActivationSummary({ report, sequenceId, overlap, onOverlap }: { 
       )}
       {report.reliability_warn && (
         <p className="flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/5 p-4 text-sm"><AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
-          {Math.round(report.reliability_ratio * 100)} % des contacts ont un email dont la qualité n'est pas « Bonne ». Beaucoup de rebonds peuvent nuire à la réputation de oddo.ma.</p>
+          {Math.round(report.reliability_ratio * 100)} % des contacts ont un email dont la qualité n'est pas « Bonne ». Beaucoup de rebonds peuvent nuire à la réputation du domaine du cabinet.</p>
       )}
       {report.link_warnings.map((w) => <p key={w} className="rounded-xl border border-warning/40 bg-warning/5 p-4 text-sm">{w}</p>)}
       {report.overlapping.length > 0 && (

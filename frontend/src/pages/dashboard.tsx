@@ -29,6 +29,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, type Dashboard, type Status } from "@/lib/api";
 import { formatDayLabel, formatDayTime, formatTime, fullName, localDay, pct, relativeTime } from "@/lib/format";
+import { PRODUCT_NAME } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { GuideBanner } from "@/pages/guide";
 
@@ -241,14 +242,14 @@ function TodayTile() {
   );
 }
 
-/** Les rebonds abîment la réputation de oddo.ma : on ne les montre que lorsqu'il y en a. */
+/** Les rebonds abîment la réputation du domaine du cabinet : on ne les montre que lorsqu'il y en a. */
 function BounceAlert({ data }: { data: Dashboard }) {
   const n = data.indicators.bounced;
   if (!n) return null;
   return (
     <Link to="/contacts?status=bounced" className="flex items-center gap-3 rounded-xl border border-warning/40 bg-warning/5 p-4 text-sm transition-colors hover:bg-warning/10">
       <MailX className="size-4 shrink-0 text-warning" />
-      <span className="flex-1"><b>{n} adresse{n > 1 ? "s ont" : " a"} rebondi.</b> <span className="text-muted-foreground">Trop de rebonds nuisent à la réputation de oddo.ma : commencez les campagnes par les emails de qualité « Bonne ».</span></span>
+      <span className="flex-1"><b>{n} adresse{n > 1 ? "s ont" : " a"} rebondi.</b> <span className="text-muted-foreground">Trop de rebonds nuisent à la réputation du domaine du cabinet : commencez les campagnes par les emails de qualité « Bonne ».</span></span>
       <ArrowRight className="size-4 text-muted-foreground" />
     </Link>
   );
@@ -524,7 +525,7 @@ function Onboarding({ configured }: { configured: boolean }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Bienvenue dans ODDO Séquences</CardTitle>
+        <CardTitle className="text-base">Bienvenue dans {PRODUCT_NAME}</CardTitle>
         <CardDescription>Trois étapes avant votre première campagne.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 md:grid-cols-3">

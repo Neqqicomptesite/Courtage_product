@@ -11,7 +11,7 @@ const RANGES = [14, 30, 90] as const;
 const short = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", timeZone: "UTC" });
 const long = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
 
-/** Envois et réponses par jour. Les couleurs viennent du thème (bleu ODDO, vert ODDO). */
+/** Envois et réponses par jour. Les couleurs viennent du thème (couleur principale et accent de marque). */
 export function ActivityChart({ className }: { className?: string }) {
   const [days, setDays] = useState<(typeof RANGES)[number]>(30);
   const { data } = useQuery({ queryKey: ["activity", days], queryFn: () => api.activity(days), refetchInterval: 60_000 });

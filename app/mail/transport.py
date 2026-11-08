@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 
+from app import APP_NAME
 from app.mail import imap_utf7
 
 TIMEOUT_S = 30
@@ -222,11 +223,11 @@ def build_self_test_message(cfg: ServerConfig) -> EmailMessage:
     msg = EmailMessage()
     msg["From"] = formataddr((cfg.display_name, cfg.email))
     msg["To"] = cfg.email
-    msg["Subject"] = "Test de connexion – ODDO Séquences"
+    msg["Subject"] = f"Test de connexion – {APP_NAME}"
     msg["Date"] = formatdate(localtime=False)
     msg["Message-ID"] = make_msgid(domain=cfg.domain)
     msg.set_content(
-        "Ceci est un email de test envoyé par ODDO Séquences.\n"
+        f"Ceci est un email de test envoyé par {APP_NAME}.\n"
         "S'il est arrivé dans votre boîte de réception, l'envoi SMTP fonctionne.\n"
     )
     return msg

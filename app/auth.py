@@ -16,6 +16,7 @@ from functools import lru_cache
 import jwt
 from sqlalchemy import func, select
 
+from app import APP_NAME
 from app.db import get_session
 from app.models import AppUser
 from app.timeutil import utcnow
@@ -100,7 +101,7 @@ def resolve_user(claims: dict) -> tuple[int, str, str]:
     sub = str(claims.get("sub") or "")
     email = str(claims.get("email") or "").strip().lower()
     if claims.get("is_anonymous"):
-        raise AuthError("Ce compte n'a pas accès à ODDO Séquences.", 403)
+        raise AuthError(f"Ce compte n'a pas accès à {APP_NAME}.", 403)
     with get_session() as s, s.begin():
         u = s.scalars(select(AppUser).where(AppUser.auth_id == sub)).first() if sub else None
         if u is None and email:
@@ -112,7 +113,7 @@ def resolve_user(claims: dict) -> tuple[int, str, str]:
                     raise AuthError("Adresse email non confirmée : utilisez le lien de votre invitation.", 403)
                 u.auth_id = sub
         if u is None:
-            raise AuthError("Ce compte n'a pas accès à ODDO Séquences. Demandez une invitation.", 403)
+            raise AuthError(f"Ce compte n'a pas accès à {APP_NAME}. Demandez une invitation.", 403)
         if not u.active:
             raise AuthError("Compte désactivé. Contactez l'administrateur.", 403)
         now = utcnow()

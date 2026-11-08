@@ -36,7 +36,7 @@ export function TeamPage() {
   });
 
   if (me?.role !== "admin") {
-    return <EmptyState icon={ShieldCheck} title="Réservé à l'administrateur" text="Demandez à l'administrateur d'ODDO Séquences pour inviter un collègue." />;
+    return <EmptyState icon={ShieldCheck} title="Réservé à l'administrateur" text="Demandez à l'administrateur du cabinet pour inviter un collègue." />;
   }
 
   return (
@@ -44,7 +44,7 @@ export function TeamPage() {
       <PageHeader title="Équipe" description="Chaque collègue a son compte, sa boîte mail et ses campagnes. Les compagnies d'assurance et les contacts sont communs ; un prospect est suivi par un seul employé." />
       <Card className="mb-5 p-4">
         <form className="grid gap-2 sm:grid-cols-[2fr_2fr_1fr_auto]" onSubmit={(e) => { e.preventDefault(); invite.mutate(); }}>
-          <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="prenom.nom@oddo.ma" aria-label="Email" />
+          <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="prenom.nom@cabinet.ma" aria-label="Email" />
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Prénom Nom" aria-label="Nom" />
           <NativeSelect value={role} onChange={(e) => setRole(e.target.value as "user" | "admin")} aria-label="Rôle">
             <option value="user">Employé</option>

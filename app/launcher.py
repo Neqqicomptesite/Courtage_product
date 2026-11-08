@@ -14,7 +14,7 @@ import webbrowser
 
 import uvicorn
 
-from app import BASE_URL, HOST, PORT
+from app import APP_NAME, BASE_URL, HOST, PORT
 from app.backup import backup_now
 from app.logging_setup import setup_logging
 from app.migrate import upgrade_to_head
@@ -66,7 +66,7 @@ def main() -> int:
 
     lock = InstanceLock(data_dir() / "app.lock")
     if not lock.acquire():
-        print("ODDO Séquences est déjà ouvert : ouverture du navigateur.")
+        print(f"{APP_NAME} est déjà ouvert : ouverture du navigateur.")
         webbrowser.open(BASE_URL)
         return 0
 
@@ -83,14 +83,14 @@ def main() -> int:
         busy = probe.connect_ex((HOST, PORT)) == 0
     if busy:
         # Une autre copie (l'ancienne version, ou un autre dossier) occupe déjà l'adresse.
-        msg = (f"L'adresse {BASE_URL} est déjà utilisée par une autre copie d'ODDO Séquences "
+        msg = (f"L'adresse {BASE_URL} est déjà utilisée par une autre copie de {APP_NAME} "
                "(l'ancienne version ?). Fermez sa fenêtre noire, puis relancez start.bat.")
         log.error(msg)
         print("\n  " + msg + "\n")
         lock.release()
         return 1
 
-    print("\n  ODDO Séquences tourne sur", BASE_URL)
+    print(f"\n  {APP_NAME} tourne sur", BASE_URL)
     print("  Gardez cette fenêtre ouverte : la fermer arrête les envois.\n")
     if "--no-browser" not in sys.argv:
         _open_browser_later()

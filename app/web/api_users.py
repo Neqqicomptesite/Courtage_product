@@ -8,6 +8,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
+from app import APP_NAME
 from app import auth
 from app.current import is_admin, user_id
 from app.db import get_session
@@ -27,7 +28,8 @@ def _user_json(u: AppUser, mb: Mailbox | None = None, n_contacts: int = 0) -> di
 def auth_config():
     """Ce dont le navigateur a besoin pour afficher l'écran de connexion (rien de secret)."""
     c = auth.config()
-    return {"server_mode": is_server_mode(), "supabase_url": c.url, "publishable_key": c.publishable_key}
+    return {"server_mode": is_server_mode(), "supabase_url": c.url, "publishable_key": c.publishable_key,
+            "product_name": APP_NAME}
 
 
 @router.get("/health")
