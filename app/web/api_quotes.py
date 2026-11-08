@@ -1,4 +1,4 @@
-"""Cotalis, phase 1 : API des dossiers de cotation (voir app/quotes.py)."""
+"""API des dossiers de cotation (voir app/quotes.py)."""
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
@@ -75,7 +75,7 @@ def create_case(body: dict):
         except quotes.QuoteError as exc:
             raise _err(exc) from None
         if body.get("insurer_ids"):
-            quotes.add_insurers(s, case, body["insurer_ids"])
+            quotes.add_insurers(s, case, body["insurer_ids"], body.get("insurer_branches"))
         s.commit()
         return quotes.detail_json(s, case)
 
@@ -126,7 +126,7 @@ def add_note(cid: int, body: dict):
 def add_insurers(cid: int, body: dict):
     with get_session() as s:
         case = _case(s, cid)
-        quotes.add_insurers(s, case, [int(x) for x in body.get("company_ids") or []])
+        quotes.add_insurers(s, case, [int(x) for x in body.get("company_ids") or []], body.get("branches"))
         s.commit()
         return quotes.detail_json(s, case)
 
@@ -156,21 +156,37 @@ def remove_insurer(cid: int, iid: int):
         return quotes.detail_json(s, case)
 
 
-@router.get("/{cid:int}/insurers/{iid:int}/draft")
-def insurer_draft(cid: int, iid: int):
+def _ids(raw) -> list[int]:
+    if isinstance(raw, str):
+        raw = raw.split(",")
+    try:
+        return [int(x) for x in raw or [] if str(x).strip()]
+    except ValueError:
+        raise HTTPException(422, {"errors": {"insurer_ids": "Liste invalide."}}) from None
+
+
+@router.post("/{cid:int}/draft")
+def draft(cid: int, body: dict):
+    """Email à relire pour une compagnie : les lignes (branches) choisies, et éventuellement les
+    destinataires choisis (sinon ceux de la dernière fois, ou le service souscription)."""
     with get_session() as s:
         case = _case(s, cid)
-        return quotes.draft(s, case, _insurer(s, case, iid))
+        try:
+            rows = quotes.rows_for(s, case, _ids(body.get("insurer_ids")))
+        except quotes.QuoteError as exc:
+            raise _err(exc) from None
+        to = body.get("to")
+        return quotes.draft(s, case, rows, [str(e) for e in to] if isinstance(to, list) else None)
 
 
-@router.post("/{cid:int}/insurers/{iid:int}/send")
-def insurer_send(cid: int, iid: int, body: dict):
+@router.post("/{cid:int}/send")
+def send(cid: int, body: dict):
     from app import manual_mail
     with get_session() as s:
         case = _case(s, cid)
-        qi = _insurer(s, case, iid)
         try:
-            quotes.send(s, case, qi, body)
+            rows = quotes.rows_for(s, case, _ids(body.get("insurer_ids")))
+            quotes.send(s, case, rows, body)
         except quotes.QuoteError as exc:
             s.rollback()
             raise _err(exc) from None
@@ -179,6 +195,30 @@ def insurer_send(cid: int, iid: int, body: dict):
             if exc.confirm:
                 raise HTTPException(409, {"message": exc.confirm, "confirm": True}) from None
             raise HTTPException(422, {"errors": exc.errors}) from None
+        return quotes.detail_json(s, case)
+
+
+@router.post("/{cid:int}/send-all")
+def send_all(cid: int, body: dict | None = None):
+    """Envoie d'un coup toutes les demandes « À envoyer » (un email commun par compagnie)."""
+    with get_session() as s:
+        case = _case(s, cid)
+        ids = (body or {}).get("company_ids")
+        report = quotes.send_all(s, case, [int(x) for x in ids] if ids else None)
+        s.commit()
+        return {"report": report, "quote": quotes.detail_json(s, case)}
+
+
+@router.post("/{cid:int}/reminders")
+def add_reminder(cid: int, body: dict):
+    with get_session() as s:
+        case = _case(s, cid)
+        try:
+            quotes.add_reminder(s, case, body)
+        except quotes.QuoteError as exc:
+            s.rollback()
+            raise _err(exc) from None
+        s.commit()
         return quotes.detail_json(s, case)
 
 

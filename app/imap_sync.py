@@ -252,7 +252,7 @@ def process_raw(s: Session, mb: Mailbox, raw: bytes, folder: str | None, uid: in
         report.add("already_seen")
         return None
 
-    # Cotalis : réponse d'une compagnie à une demande de cotation (fil d'un dossier)
+    # Dossiers de cotation : réponse d'une compagnie à une demande de cotation (fil d'un dossier)
     from app import quotes
     if quotes.on_inbound(s, mb.id, a, raw, folder, uid):
         report.add("quote_reply")

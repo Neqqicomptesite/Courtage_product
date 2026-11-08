@@ -1,5 +1,9 @@
-"""Cotalis, phase 1 : dossiers de cotation (quote_case, quote_insurer, quote_event, quote_file)
+"""Dossiers de cotation (quote_case, quote_insurer, quote_event, quote_file)
 et lien rappel → dossier (reminder.quote_case_id).
+
+Une seule migration pour toute la phase (aucune base de production ne l'avait encore
+reçue quand les retours d'Omar du 08/11 y ont été ajoutés : plusieurs branches par dossier,
+étape « Offres partielles », statut « À renégocier », taux, documents « Conditions actuelles »).
 
 SQLite ET PostgreSQL ; chaque élément est sauté s'il existe déjà (base PostgreSQL neuve créée
 par create_all puis marquée « head »).
@@ -38,6 +42,7 @@ def upgrade() -> None:
             sa.Column("ref", sa.String(20), nullable=False, index=True),
             sa.Column("title", sa.String(200), nullable=False),
             sa.Column("branch", sa.String(40), nullable=False),
+            sa.Column("branches", sa.JSON),
             sa.Column("stage", sa.String(12), nullable=False, server_default="new", index=True),
             sa.Column("lost_reason", sa.String(255)),
             sa.Column("company_id", sa.Integer, sa.ForeignKey("company.id", ondelete="SET NULL"), index=True),
@@ -47,12 +52,13 @@ def upgrade() -> None:
             sa.Column("due_on", sa.Date, index=True),
             sa.Column("current_insurer", sa.String(120)),
             sa.Column("current_premium", sa.Integer),
+            sa.Column("current_rate", sa.String(40)),
             sa.Column("fields", sa.JSON),
             sa.Column("notes", sa.Text, nullable=False, server_default=""),
             sa.Column("created_at", UTCDateTime, nullable=False),
             sa.Column("updated_at", UTCDateTime, nullable=False),
             sa.Column("closed_at", UTCDateTime),
-            _in("stage", ("new", "info", "consulting", "offers", "proposed", "won", "lost")),
+            _in("stage", ("new", "info", "consulting", "partial", "offers", "proposed", "won", "lost")),
         )
     if "quote_insurer" not in tables:
         op.create_table(
@@ -61,8 +67,10 @@ def upgrade() -> None:
             org(),
             sa.Column("case_id", sa.Integer, sa.ForeignKey("quote_case.id", ondelete="CASCADE"), nullable=False, index=True),
             sa.Column("company_id", sa.Integer, sa.ForeignKey("company.id", ondelete="CASCADE"), nullable=False),
+            sa.Column("branch", sa.String(40), nullable=False),
             sa.Column("contact_id", sa.Integer, sa.ForeignKey("contact.id", ondelete="SET NULL")),
-            sa.Column("status", sa.String(10), nullable=False, server_default="to_send"),
+            sa.Column("recipients", sa.JSON),
+            sa.Column("status", sa.String(12), nullable=False, server_default="to_send"),
             sa.Column("sent_at", UTCDateTime),
             sa.Column("sent_by", sa.Integer, sa.ForeignKey("app_user.id", ondelete="SET NULL")),
             sa.Column("reminders_sent", sa.Integer, nullable=False, server_default="0"),
@@ -70,10 +78,11 @@ def upgrade() -> None:
             sa.Column("first_subject", sa.Text),
             sa.Column("replied_at", UTCDateTime),
             sa.Column("offer_premium", sa.Integer),
+            sa.Column("offer_rate", sa.String(40)),
             sa.Column("notes", sa.Text, nullable=False, server_default=""),
             sa.Column("updated_at", UTCDateTime, nullable=False),
-            sa.UniqueConstraint("case_id", "company_id"),
-            _in("status", ("to_send", "sent", "reminded", "replied", "offer", "declined")),
+            sa.UniqueConstraint("case_id", "company_id", "branch", name="uq_quote_insurer"),
+            _in("status", ("to_send", "sent", "reminded", "replied", "offer", "renegotiate", "declined")),
         )
     if "quote_event" not in tables:
         op.create_table(
@@ -102,7 +111,7 @@ def upgrade() -> None:
             sa.Column("label", sa.String(120), nullable=False, server_default=""),
             sa.Column("user_id", sa.Integer),
             sa.Column("created_at", UTCDateTime, nullable=False),
-            _in("kind", ("client", "offer", "other")),
+            _in("kind", ("client", "current", "offer", "other")),
         )
     cols = {c["name"] for c in insp.get_columns("reminder")}
     if "quote_case_id" not in cols:

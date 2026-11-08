@@ -1,4 +1,4 @@
-// Cotalis, phase 1 : dossiers de cotation. Vue en colonnes (une par étape, glisser-déposer) ou en
+// Dossiers de cotation. Vue en colonnes (une par étape, glisser-déposer) ou en
 // liste, création d'un dossier (depuis ce bouton, une fiche entreprise / contact ou un email reçu).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CalendarClock, Columns3, FileStack, List, Plus, Search } from "lucide-react";
@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
-import { EmptyState, Field, PageHeader, fieldError, toastError, useDebounced } from "@/components/common";
+import { EmptyState, Field, FieldGroup, PageHeader, fieldError, toastError, useDebounced } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -21,7 +21,8 @@ export const STAGES: { key: QuoteStage; label: string; short: string }[] = [
   { key: "new", label: "Nouveau", short: "Nouveau" },
   { key: "info", label: "Infos client à réunir", short: "Infos client" },
   { key: "consulting", label: "Consultation des compagnies", short: "Consultation" },
-  { key: "offers", label: "Offres reçues", short: "Offres reçues" },
+  { key: "partial", label: "Offres partielles", short: "Offres partielles" },
+  { key: "offers", label: "Toutes les offres reçues", short: "Toutes reçues" },
   { key: "proposed", label: "Proposition envoyée", short: "Proposition" },
   { key: "won", label: "Gagné", short: "Gagné" },
   { key: "lost", label: "Perdu", short: "Perdu" },
@@ -29,7 +30,7 @@ export const STAGES: { key: QuoteStage; label: string; short: string }[] = [
 export const stageLabel = (k: QuoteStage) => STAGES.find((s) => s.key === k)?.label ?? k;
 export const STAGE_TONE: Record<QuoteStage, string> = {
   new: "bg-secondary text-secondary-foreground", info: "bg-warning/15 text-warning", consulting: "bg-accent text-accent-foreground",
-  offers: "bg-brand/10 text-brand", proposed: "bg-primary/10 text-primary", won: "bg-success/10 text-success", lost: "bg-destructive/10 text-destructive",
+  partial: "bg-brand/10 text-brand", offers: "bg-brand/15 text-brand", proposed: "bg-primary/10 text-primary", won: "bg-success/10 text-success", lost: "bg-destructive/10 text-destructive",
 };
 
 export const mad = (n: number | null | undefined) => (n == null ? "—" : `${n.toLocaleString("fr-FR")} MAD`);
@@ -38,7 +39,7 @@ export const shortDate = (iso: string | null) => (iso ? new Date(iso + (iso.leng
 /** Rappelle la fenêtre « Nouveau dossier » depuis n'importe quel écran (fiche, email…). */
 export type NewQuoteRequest = { company?: { id: number; name: string } | null; contact?: { id: number; name: string } | null; client_name?: string };
 export function openNewQuote(req: NewQuoteRequest = {}) {
-  window.dispatchEvent(new CustomEvent<NewQuoteRequest>("cotalis-new-quote", { detail: req }));
+  window.dispatchEvent(new CustomEvent<NewQuoteRequest>("app-new-quote", { detail: req }));
 }
 
 export function QuotesPage() {
@@ -71,8 +72,8 @@ export function QuotesPage() {
 
   const items = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return (data?.items ?? []).filter((c) => (!branch || c.branch === branch) && (!owner || String(c.owner_id) === owner)
-      && (!needle || `${c.ref} ${c.client_name} ${c.title} ${c.branch}`.toLowerCase().includes(needle)));
+    return (data?.items ?? []).filter((c) => (!branch || c.branches.includes(branch)) && (!owner || String(c.owner_id) === owner)
+      && (!needle || `${c.ref} ${c.client_name} ${c.title} ${c.branch_label}`.toLowerCase().includes(needle)));
   }, [data, q, branch, owner]);
   const open = items.filter((c) => !["won", "lost"].includes(c.stage));
   const late = open.filter((c) => c.late).length;
@@ -136,14 +137,14 @@ function Board({ items, showClosed, setShowClosed, onDrop }: {
   return (
     <>
       <div className="-mx-4 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6">
-        <div className={cn("grid grid-flow-col gap-3", showClosed ? "auto-cols-[minmax(13rem,1fr)]" : "auto-cols-[minmax(12.5rem,1fr)]")}>
+        <div className={cn("grid grid-flow-col gap-3", showClosed ? "auto-cols-[minmax(12rem,1fr)]" : "auto-cols-[minmax(10.5rem,1fr)]")}>
           {cols.map((s) => {
             const here = items.filter((c) => c.stage === s.key);
             return (
               <div key={s.key} onDragOver={(e) => { e.preventDefault(); setOver(s.key); }} onDragLeave={() => setOver(null)} onDrop={(e) => drop(e, s.key)}
                 className={cn("flex min-w-0 flex-col rounded-xl border bg-muted/40 transition-colors", over === s.key && "border-primary bg-accent/60")}>
                 <div className="flex items-center justify-between px-3 py-2.5">
-                  <span className="text-sm font-medium">{s.key === "consulting" ? "Consultation" : s.label}</span>
+                  <span className="text-sm font-medium leading-tight">{s.short}</span>
                   <span className="rounded-full bg-background px-2 text-xs tabular text-muted-foreground">{here.length}</span>
                 </div>
                 <div className="flex min-h-24 flex-1 flex-col gap-2 px-2 pb-2">
@@ -179,7 +180,7 @@ function QuoteCard({ c }: { c: QuoteSummary }) {
         <p className="min-w-0 font-medium leading-snug">{c.client_name}</p>
         <span className="shrink-0 text-[11px] tabular text-muted-foreground">{c.ref.replace(/^COT-\d{4}-/, "#")}</span>
       </div>
-      <p className="mt-0.5 text-xs text-muted-foreground">{c.branch}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{c.branch_label}</p>
       <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
         <InsurerProgress c={c} />
         {c.missing > 0 && <span className="inline-flex items-center gap-1 text-warning"><AlertTriangle className="size-3" />{c.missing} info{c.missing > 1 ? "s" : ""}</span>}
@@ -212,7 +213,7 @@ function QuoteTable({ items }: { items: QuoteSummary[] }) {
           {items.map((c) => (
             <tr key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/quotes/${c.id}`)}>
               <td className="px-4 py-2.5"><p className="font-medium">{c.client_name}</p><p className="text-xs text-muted-foreground tabular">{c.ref}</p></td>
-              <td className="px-3 py-2.5">{c.branch}</td>
+              <td className="px-3 py-2.5">{c.branch_label}</td>
               <td className="px-3 py-2.5"><span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", STAGE_TONE[c.stage])}>{stageLabel(c.stage)}</span></td>
               <td className="px-3 py-2.5 text-xs"><InsurerProgress c={c} /></td>
               <td className="px-3 py-2.5 tabular">{mad(c.best_offer)}</td>
@@ -256,7 +257,7 @@ export function NewQuoteHost() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [branch, setBranch] = useState("");
+  const [picked, setPicked] = useState<string[]>([]);
   const [company, setCompany] = useState<{ id: number; name: string } | null>(null);
   const [contact, setContact] = useState<{ id: number; name: string } | null>(null);
   const [clientName, setClientName] = useState("");
@@ -269,16 +270,16 @@ export function NewQuoteHost() {
     const on = (e: Event) => {
       const r = (e as CustomEvent<NewQuoteRequest>).detail ?? {};
       setCompany(r.company ?? null); setContact(r.contact ?? null); setClientName(r.client_name ?? "");
-      setBranch(""); setDue(""); setSearch(""); setNeedle(""); setOpen(true);
+      setPicked([]); setDue(""); setSearch(""); setNeedle(""); setOpen(true);
     };
-    window.addEventListener("cotalis-new-quote", on);
-    return () => window.removeEventListener("cotalis-new-quote", on);
+    window.addEventListener("app-new-quote", on);
+    return () => window.removeEventListener("app-new-quote", on);
   }, []);
 
   const { data: branches } = useQuery({ queryKey: ["quote-branches"], queryFn: api.quoteBranches, enabled: open });
   const { data: found } = useQuery({ queryKey: ["companies", needle, "pick"], queryFn: () => api.companies({ q: needle }), enabled: open && needle.length >= 2 });
   const create = useMutation({
-    mutationFn: () => api.quoteCreate({ branch, company_id: company?.id ?? null, contact_id: contact?.id ?? null,
+    mutationFn: () => api.quoteCreate({ branches: picked, company_id: company?.id ?? null, contact_id: contact?.id ?? null,
       client_name: company || contact ? undefined : clientName.trim(), due_on: due || null }),
     onSuccess: (c) => {
       qc.invalidateQueries({ queryKey: ["quotes"] });
@@ -298,7 +299,7 @@ export function NewQuoteHost() {
           <DialogDescription>Le client, la branche et la date à laquelle il attend sa proposition. Le reste se complète dans le dossier.</DialogDescription>
         </DialogHeader>
         <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); create.mutate(); }}>
-          <Field label="Client" error={fieldError(create.error, "client_name")}>
+          <FieldGroup label="Client" error={fieldError(create.error, "client_name")}>
             {company || contact ? (
               <div className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm">
                 <span><b className="font-medium">{company?.name ?? contact?.name}</b>{company && contact && <span className="text-muted-foreground"> · {contact.name}</span>}</span>
@@ -321,20 +322,22 @@ export function NewQuoteHost() {
                 {search.trim() && <p className="text-xs text-muted-foreground">Pas dans la liste ? Le dossier sera créé au nom « {search.trim()} ».</p>}
               </div>
             )}
-          </Field>
-          <Field label="Branche" error={fieldError(create.error, "branch")}>
+          </FieldGroup>
+          <FieldGroup label="Branche(s)" hint="Plusieurs branches possibles : la fiche regroupe leurs informations, chaque compagnie est consultée par branche." error={fieldError(create.error, "branch")}>
             <div className="flex flex-wrap gap-1.5">
-              {(branches?.items ?? []).map((b) => (
-                <Button key={b.name} type="button" size="sm" variant={branch === b.name ? "default" : "outline"} onClick={() => setBranch(b.name)}>{b.name}</Button>
-              ))}
+              {(branches?.items ?? []).map((b) => {
+                const on = picked.includes(b.name);
+                return <Button key={b.name} type="button" size="sm" variant={on ? "default" : "outline"}
+                  onClick={() => setPicked((p) => (on ? p.filter((x) => x !== b.name) : [...p, b.name]))}>{b.name}</Button>;
+              })}
             </div>
-          </Field>
+          </FieldGroup>
           <Field label="Proposition attendue par le client le" hint="Facultatif. Le dossier passe en rouge si la date est dépassée.">
             <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="w-48" />
           </Field>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>Annuler</Button>
-            <Button type="submit" disabled={!branch || !clientChosen || create.isPending}>Créer le dossier</Button>
+            <Button type="submit" disabled={!picked.length || !clientChosen || create.isPending}>Créer le dossier</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -363,7 +366,7 @@ export function QuotesPanel({ company, contact }: { company?: { id: number; name
             {items.slice(0, 6).map((c) => (
               <li key={c.id}>
                 <Link to={`/quotes/${c.id}`} className="flex items-center justify-between gap-2 text-sm hover:text-primary">
-                  <span className="min-w-0 truncate">{c.branch} <span className="text-xs text-muted-foreground tabular">{c.ref}</span></span>
+                  <span className="min-w-0 truncate">{c.branch_label} <span className="text-xs text-muted-foreground tabular">{c.ref}</span></span>
                   <StageBadge stage={c.stage} />
                 </Link>
               </li>

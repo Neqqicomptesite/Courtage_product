@@ -136,7 +136,7 @@ def _reminder_json(s, r: Reminder) -> dict:
             "notes": r.notes or "", "due_on": r.due_on.isoformat(), "due_time": r.due_time,
             "done": r.done_at is not None, "done_at": iso(r.done_at), "created_at": iso(r.created_at),
             "contact": contact_ref(contact), "company": _company_ref(company),
-            "quote_case_id": r.quote_case_id}  # Cotalis : rappel lié à un dossier de cotation
+            "quote_case_id": r.quote_case_id}  # Dossiers de cotation : rappel lié à un dossier de cotation
 
 
 def _parse(body: dict, partial: bool = False) -> dict:
@@ -166,7 +166,7 @@ def _parse(body: dict, partial: bool = False) -> dict:
             except ValueError:
                 errors["due_time"] = "Heure invalide (HH:MM)."
         out["due_time"] = t
-    for f in ("contact_id", "company_id"):
+    for f in ("contact_id", "company_id", "quote_case_id"):  # Dossiers de cotation : rappel lié à un dossier
         if f in body:
             out[f] = int(body[f]) if body.get(f) else None
     if errors:
@@ -274,7 +274,8 @@ def build_notifications(s, now: datetime | None = None) -> list[dict]:
                     "detail": (f"{KIND_LABELS[r.kind]} · " if r.kind != "other" else "")
                               + ("Aujourd'hui" if not late else f"En retard de {late} jour(s)")
                               + (f" à {r.due_time}" if r.due_time and not late else "") + who,
-                    "href": f"/agenda?d={r.due_on.isoformat()}&r={r.id}", "at": r.due_on.isoformat(),
+                    "href": f"/quotes/{r.quote_case_id}" if r.quote_case_id else f"/agenda?d={r.due_on.isoformat()}&r={r.id}",
+                    "at": r.due_on.isoformat(),
                     "reminder_id": r.id})
 
     for m, c in replies_service.due_callbacks(s, today):

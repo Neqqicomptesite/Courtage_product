@@ -515,3 +515,16 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
 289. **Fiches des branches** proposées par Claude à partir des champs des modèles C1 à C10 et de ce
      qu'Omar avait donné pour AT et Prévoyance ; documents à demander au client listés par branche.
      À corriger par Omar.
+290. **Retours d'Omar sur les dossiers (08/11)** : un dossier peut couvrir plusieurs branches
+     (fiche commune, champs partagés saisis une fois) ; une consultation par compagnie ET par
+     branche ; email commun aux branches ou un email par branche ; plusieurs destinataires dans
+     un même email, choisis parmi les interlocuteurs de la compagnie (souscription d'abord) ;
+     « Envoyer à toutes » (un email commun par compagnie, rien ne part s'il reste un [champ]) ;
+     étape « Offres partielles » avant « Toutes les offres reçues » (calculée sur toutes les
+     compagnies du dossier) ; statut « À renégocier » avec email de renégociation dans le fil ;
+     date d'effet facultative (ligne retirée de l'email si vide) ; taux actuel et taux proposé ;
+     documents en trois onglets (pièces du client, conditions actuelles, offres) ; rappels liés
+     au dossier (agenda + cloche, lien vers le dossier). Migration 0014 modifiée sur place :
+     elle n'avait été appliquée sur aucun serveur.
+291. **Groupe de boutons dans un formulaire** : FieldGroup (sans <label> englobant), sinon un
+     clic n'importe où dans le bloc actionnait le premier bouton ou décochait la première case.

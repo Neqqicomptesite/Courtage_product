@@ -171,3 +171,15 @@ export function Field({ label, hint, error, children, className }: { label: Reac
     </label>
   );
 }
+
+/** Comme Field, sans <label> englobant : pour un groupe de boutons ou de cases à cocher (un <label>
+ *  ferait réagir le premier bouton à un clic n'importe où dans le bloc). */
+export function FieldGroup({ label, hint, error, children, className }: { label: ReactNode; hint?: ReactNode; error?: string; children: ReactNode; className?: string }) {
+  return (
+    <div role="group" className={cn("space-y-1.5", className)}>
+      <span className="block text-sm font-medium">{label}</span>
+      {children}
+      {error ? <span className="block text-xs text-destructive">{error}</span> : hint ? <span className="block text-xs text-muted-foreground">{hint}</span> : null}
+    </div>
+  );
+}

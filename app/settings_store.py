@@ -42,7 +42,7 @@ def _defaults() -> dict[str, Any]:
         "digest_recipient": "",  # vide = adresse de la boîte mail
         "auto_reply_continues": True,
         "followup_days": 3,  # V2.7 : « sans réponse depuis N jours ouvrés » (tableau de bord, boîte mail)
-        "quote_followup_days": 4,  # Cotalis : relancer une compagnie consultée après N jours ouvrés
+        "quote_followup_days": 4,  # Dossiers de cotation : relancer une compagnie consultée après N jours ouvrés
         "notifications_seen": [],  # V2.8 : clés des notifications déjà vues (pastille de la cloche)
         "guide_checked": [],
         "guide_done": [],  # V2.22 : étapes de « Bien démarrer » déjà atteintes une fois (restent cochées)
@@ -73,7 +73,7 @@ def test_mode_locked() -> bool:
 GLOBAL_KEYS = frozenset({
     "holidays", "starter_insurers_version", "starter_sequences_version", "seed_done",
     "backup_copy_dir", "update_url", "update_status", "custom_field_labels", "engine_last_tick",
-    "quote_followup_days",  # Cotalis : réglage du cabinet (pas d'un employé)
+    "quote_followup_days",  # Dossiers de cotation : réglage du cabinet (pas d'un employé)
 })
 
 

@@ -8,7 +8,7 @@ les tâches qui doivent tout voir (anti-doublon entre collègues, administrateur
 
 Pour lire sans filtre : .execution_options(oddo_all=True) sur la requête.
 
-Cotalis : les dossiers de cotation (quote_*) sont communs à l'équipe mais propres au cabinet :
+Dossiers de cotation : les dossiers de cotation (quote_*) sont communs à l'équipe mais propres au cabinet :
 ils sont toujours filtrés par org_id (un seul cabinet pour l'instant).
 """
 from __future__ import annotations
@@ -41,7 +41,7 @@ def forget_cache() -> None:
 def _apply(state: ORMExecuteState) -> None:
     if not state.is_select or state.execution_options.get("oddo_all"):
         return
-    # Cotalis : tables du cabinet (org_id). Toujours filtrées, employé en cours ou non.
+    # Dossiers de cotation : tables du cabinet (org_id). Toujours filtrées, employé en cours ou non.
     from app.models import QuoteCase, QuoteEvent, QuoteFile, QuoteInsurer
     org = org_id()
     state.statement = state.statement.options(*(
