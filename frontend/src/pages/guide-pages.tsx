@@ -142,7 +142,7 @@ const SECTIONS: Section[] = [
       ]} />
       <H2>Lire et traiter un email</H2>
       <Shot img="matinee-2.png" alt="Un email ouvert : Répondre, Archiver, Rappel, Envoyer une séquence"
-        caption={<>Répondre (1), Archiver (2), Rappel (3), Envoyer une séquence (4). Transférer est à côté d'Archiver.</>} />
+        caption={<>Répondre (1), Archiver (2), Rappel (3), Envoyer une séquence (4). Transférer est à côté d'Archiver ; « Répondre à tous » (Maj + R) apparaît quand l'email a d'autres destinataires.</>} />
       <Points items={[
         <>Les emails s'affichent comme dans Outlook, images comprises. Les images venant d'Internet restent bloquées jusqu'à votre clic : c'est une protection contre le suivi d'ouverture.</>,
         <>Les <B>pièces jointes</B> s'ouvrent d'un clic (PDF, images) ou se téléchargent (Word, Excel).</>,

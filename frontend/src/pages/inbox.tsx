@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  AlertTriangle, Archive, Ban, Building2, CalendarClock, CalendarPlus, CheckCheck, Clock, FileStack, Forward, Phone, Inbox, Loader2, Mail, Paperclip, PenSquare, RefreshCw, Reply, Rocket, Search, Send, UserPlus, Users,
+  AlertTriangle, Archive, Ban, Building2, CalendarClock, CalendarPlus, CheckCheck, Clock, FileStack, Forward, Phone, Inbox, Loader2, Mail, Paperclip, PenSquare, RefreshCw, Reply, ReplyAll, Rocket, Search, Send, UserPlus, Users,
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -116,6 +116,7 @@ export function InboxPage() {
       const i = items.findIndex((m) => m.uid === selected);
       if (e.key === "ArrowDown" || e.key === "j") { e.preventDefault(); const n = items[Math.min(items.length - 1, i + 1)]; if (n) { setSelected(n.uid); document.getElementById(`mail-${n.uid}`)?.scrollIntoView({ block: "nearest" }); } }
       else if (e.key === "ArrowUp" || e.key === "k") { e.preventDefault(); const n = items[Math.max(0, i - 1)]; if (n) { setSelected(n.uid); document.getElementById(`mail-${n.uid}`)?.scrollIntoView({ block: "nearest" }); } }
+      else if (e.key === "R" && e.shiftKey) { e.preventDefault(); window.dispatchEvent(new Event("oddo-inbox-reply-all")); }
       else if (e.key === "r" || e.key === "R") { e.preventDefault(); window.dispatchEvent(new Event("oddo-inbox-reply")); }
       else if (e.key === "f" || e.key === "F") { e.preventDefault(); window.dispatchEvent(new Event("oddo-inbox-forward")); }
       else if (e.key === "e" || e.key === "E") { e.preventDefault(); window.dispatchEvent(new Event("oddo-inbox-archive")); }
@@ -237,6 +238,16 @@ function Reader({ item, folder, actions }: { item: MailItem; folder: string; act
     references: [...m.references.filter((r) => r !== m.message_id), ...(m.message_id ? [m.message_id] : [])],
     quote: { from: m.from_name || m.from_email, date: m.date, text: m.text },
   });
+  // « Répondre à tous » : l'expéditeur en destinataire, les autres destinataires et copies en Cc
+  // (sans votre propre adresse).
+  const { data: status } = useQuery({ queryKey: ["status"], queryFn: api.status, staleTime: 60_000 });
+  const me = (status?.mailbox.email ?? "").toLowerCase();
+  const others = m ? [...new Set([...m.to, ...m.cc].map((a) => a.toLowerCase()))].filter((a) => a && a !== me && a !== m.from_email.toLowerCase()) : [];
+  const replyAll = () => m && openComposer({
+    to: m.from_email, cc: others.join(", "), subject: replySubject(m.subject), inReplyTo: m.message_id,
+    references: [...m.references.filter((r) => r !== m.message_id), ...(m.message_id ? [m.message_id] : [])],
+    quote: { from: m.from_name || m.from_email, date: m.date, text: m.text },
+  });
   // V2.19 : transférer, comme dans Outlook : « TR: objet », message d'origine sous le curseur,
   // pièces jointes (et photos du corps) reprises.
   const [forwarding, setForwarding] = useState(false);
@@ -304,12 +315,14 @@ function Reader({ item, folder, actions }: { item: MailItem; folder: string; act
     const onArchive = () => void archive();
     window.addEventListener("oddo-inbox-archive", onArchive);
     const onReply = () => reply();
+    const onReplyAll = () => (others.length ? replyAll() : reply());
+    window.addEventListener("oddo-inbox-reply-all", onReplyAll);
     const onSeq = () => { if (person) openSendSequence({ contacts: [person] }); else void sendToUnknown(); };
     const onForward = () => void forward();
     window.addEventListener("oddo-inbox-forward", onForward);
     window.addEventListener("oddo-inbox-reply", onReply);
     window.addEventListener("oddo-inbox-sequence", onSeq);
-    return () => { window.removeEventListener("oddo-inbox-reply", onReply); window.removeEventListener("oddo-inbox-sequence", onSeq); window.removeEventListener("oddo-inbox-forward", onForward); window.removeEventListener("oddo-inbox-archive", onArchive); };
+    return () => { window.removeEventListener("oddo-inbox-reply-all", onReplyAll); window.removeEventListener("oddo-inbox-reply", onReply); window.removeEventListener("oddo-inbox-sequence", onSeq); window.removeEventListener("oddo-inbox-forward", onForward); window.removeEventListener("oddo-inbox-archive", onArchive); };
   });
 
   return (
@@ -343,7 +356,10 @@ function Reader({ item, folder, actions }: { item: MailItem; folder: string; act
           <Button variant="outline" onClick={() => void forward()} disabled={!m || forwarding} title="Transférer à quelqu'un, avec les pièces jointes (touche F)">
             {forwarding ? <Loader2 className="animate-spin" /> : <Forward />} Transférer
           </Button>
-          <Button onClick={reply} disabled={!m}><Reply /> Répondre</Button>
+          {others.length > 0 && (
+            <Button variant="outline" onClick={replyAll} title={`Répondre aussi à : ${others.join(", ")} (Maj + R)`}><ReplyAll /> Répondre à tous</Button>
+          )}
+          <Button onClick={reply} disabled={!m} title="Répondre à l'expéditeur (touche R)"><Reply /> Répondre</Button>
         </div>
       </div>
 
