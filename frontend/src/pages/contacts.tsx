@@ -511,12 +511,12 @@ function RecentMails({ email }: { email: string }) {
       {isLoading ? <Skeleton className="h-20 rounded-lg" /> : error ? (
         <p className="text-xs text-muted-foreground">Boîte mail injoignable pour l'instant.</p>
       ) : !data?.items.length ? (
-        <p className="text-xs text-muted-foreground">Aucun email échangé ces 3 derniers mois.</p>
+        <p className="text-xs text-muted-foreground">Aucun email échangé ces 12 derniers mois.</p>
       ) : (
         <ul className="divide-y overflow-hidden rounded-lg border">
           {data.items.map((m) => (
             <li key={`${m.folder}-${m.uid}`}>
-              <Link to={`/inbox?folder=${encodeURIComponent(m.folder)}&days=90&uid=${m.uid}`} state={{ back: location.pathname + location.search }}
+              <Link to={`/inbox?folder=${encodeURIComponent(m.folder)}&days=365&q=${encodeURIComponent(email)}&uid=${m.uid}`} state={{ back: location.pathname + location.search }}
                 className="flex items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-accent/40">
                 {m.direction === "in" ? <ArrowDownLeft className="size-4 shrink-0 text-brand" /> : <ArrowUpRight className="size-4 shrink-0 text-primary" />}
                 <span className="min-w-0 flex-1 truncate">{m.subject || "(sans objet)"}</span>

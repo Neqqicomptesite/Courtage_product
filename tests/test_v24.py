@@ -140,3 +140,22 @@ def test_unconfigured_mailbox(client, db):
 ])
 def test_business_folder_names(raw, label):  # V2.7
     assert mailbox_browser.folder_label(raw, raw)["label"] == label
+
+
+def test_server_search_over_a_year_and_contact_history(client, box):
+    """V3.4.4 : jusqu'à 12 mois ; la recherche est faite par le serveur mail (au-delà des 200 plus
+    récents), et la fiche d'un contact retrouve ses emails sur un an. Rien n'est stocké chez nous."""
+    imap = box["imap"]
+    imap.deliver("INBOX", _eml("Ancien client <vieux@archive.ma>", "Renouvellement flotte", msgid="<a1@archive.ma>"),
+                 utcnow().date() - timedelta(days=300))
+    assert "vieux@archive.ma" not in {m["from_email"] for m in client.get("/api/mailbox/messages?days=90").json()["items"]}
+    r = client.get("/api/mailbox/messages?days=365&q=flotte").json()
+    assert r["searched"] and [m["from_email"] for m in r["items"]] == ["vieux@archive.ma"]
+    r = client.get("/api/mailbox/messages?days=365&q=archive renouvellement").json()  # tous les mots
+    assert [m["subject"] for m in r["items"]] == ["Renouvellement flotte"]
+    assert client.get("/api/mailbox/messages?days=365&q=devis flotte").json()["items"] == []
+    assert client.get("/api/mailbox/messages?days=365&q=éé").json()["unsearchable"] is True
+    assert client.get("/api/mailbox/messages?days=900").json()["days"] == 365
+    w = client.get("/api/mailbox/with?email=vieux@archive.ma").json()
+    assert [m["subject"] for m in w["items"]] == ["Renouvellement flotte"] and w["days"] == 365
+    assert client.get("/api/mailbox/with?email=ali@inconnu.ma").json()["items"][0]["subject"] == "Demande de devis"

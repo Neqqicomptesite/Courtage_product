@@ -50,9 +50,15 @@ def folders():
 
 
 @router.get("/messages")
-def messages(folder: str = "INBOX", days: int = 30, refresh: bool = False):
+def messages(folder: str = "INBOX", days: int = 30, refresh: bool = False, q: str = ""):
+    """V3.4.4 : jusqu'à 365 jours. Avec `q`, le serveur mail cherche sur toute la période (au-delà
+    des 200 emails les plus récents affichés sinon). Rien n'est stocké chez nous."""
+    crit = mbx.search_criteria(q[:120])
+    if q.strip() and not crit:
+        return {"folder": folder, "days": days, "searched": True, "items": [], "found": 0, "truncated": False,
+                "fetched_at": None, "unsearchable": True}
     try:
-        data = mbx.list_messages(folder, max(1, min(days, 365)), refresh)
+        data = mbx.list_messages(folder, max(1, min(days, 365)), refresh, criteria=crit)
     except mbx.MailboxUnavailable as exc:
         raise _unavailable(exc) from None
     people = _people({m["from_email"] for m in data["items"]} | {a for m in data["items"] for a in m["to"]})
@@ -218,8 +224,9 @@ def awaiting_restore(body: dict):
 
 
 @router.get("/with")
-def mails_with(email: str, days: int = 90):
-    """V2.14 : les derniers emails échangés avec une personne (reçus et envoyés), pour sa fiche."""
+def mails_with(email: str, days: int = 365):
+    """V2.14 : les derniers emails échangés avec une personne (reçus et envoyés), pour sa fiche.
+    V3.4.4 : cherchés par le serveur mail sur un an (avant : parmi les 200 plus récents de 90 jours)."""
     email = email.strip().lower()
     with get_session() as s:
         from app.mailbox_service import get_primary
@@ -228,7 +235,7 @@ def mails_with(email: str, days: int = 90):
     out = []
     try:
         for folder in ["INBOX", *([sent_folder] if sent_folder else [])]:
-            for m in mbx.list_messages(folder, max(7, min(days, 365)))["items"]:
+            for m in mbx.list_messages(folder, max(7, min(days, 365)), criteria=mbx.search_criteria(person=email))["items"]:
                 if m["from_email"] == email or email in m["to"]:
                     out.append({"folder": folder, "uid": m["uid"], "subject": m["subject"], "date": m["date"],
                                 "direction": "in" if m["from_email"] == email else "out",

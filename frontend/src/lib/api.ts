@@ -132,7 +132,7 @@ export type MailItem = {
 };
 export type AwaitingItem = MailItem & { folder: string; business_days: number };
 export type Awaiting = { days: number; items: AwaitingItem[]; window_days: number; fetched_at: string; sent_folder: string | null };
-export type MailList = { folder: string; days: number; items: MailItem[]; found: number; truncated: boolean; fetched_at: string };
+export type MailList = { folder: string; days: number; items: MailItem[]; found: number; truncated: boolean; fetched_at: string | null; searched?: boolean; unsearchable?: boolean };
 export type MailMessage = Omit<MailItem, "seen" | "has_attachments" | "size"> & {
   folder: string; cc: string[]; references: string[]; kind: string; text: string; full: string;
   attachments: MailAttachment[];
@@ -638,7 +638,7 @@ export const api = {
   enroll: (campaignId: number, contactId: number, overlap = false) =>
     request<{ id: number; variant: string | null; paused: boolean }>(`/api/campaigns/${campaignId}/enroll`, { method: "POST", json: { contact_id: contactId, overlap } }),
   mailFolders: () => request<MailFolders>("/api/mailbox/folders"),
-  mailList: (folder: string, days: number, refresh = false) => request<MailList>(`/api/mailbox/messages${qs({ folder, days, refresh: refresh || undefined })}`),
+  mailList: (folder: string, days: number, refresh = false, q?: string) => request<MailList>(`/api/mailbox/messages${qs({ folder, days, refresh: refresh || undefined, q: q || undefined })}`),
   mailForward: (folder: string, uid: number) => request<{ attachments: Attachment[]; skipped: string[] }>(`/api/mailbox/messages/${uid}/forward${qs({ folder })}`, { method: "POST" }),
   mailArchive: (folder: string, uid: number) => request<{ archive_folder: string; message_id: string }>(`/api/mailbox/messages/${uid}/archive${qs({ folder })}`, { method: "POST" }),
   mailUnarchive: (message_id: string, folder: string, kind: "archive" | "junk" = "archive") =>

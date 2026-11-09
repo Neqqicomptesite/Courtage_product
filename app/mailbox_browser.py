@@ -128,10 +128,28 @@ _HEADER_FIELDS = ("FROM TO CC SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES CON
                   "LIST-UNSUBSCRIBE LIST-ID PRECEDENCE AUTO-SUBMITTED")
 
 
+def search_criteria(q: str = "", person: str = "") -> list[str]:
+    """V3.4.4 : recherche faite PAR LE SERVEUR MAIL (rien n'est copié chez nous).
+    `q` : chaque mot doit se trouver dans l'expéditeur, un destinataire ou l'objet. Les mots avec
+    accents sont laissés au filtre de l'écran (le protocole IMAP ne les accepte pas tels quels).
+    `person` : emails reçus de cette adresse ou envoyés à elle (À ou Cc)."""
+    out: list[str] = []
+    for w in q.split()[:5]:
+        if len(w) >= 2 and w.isascii():
+            v = _quote(w)
+            out += ["OR", "FROM", v, "OR", "TO", v, "SUBJECT", v]
+    if person and person.isascii():
+        v = _quote(person)
+        out += ["OR", "FROM", v, "OR", "TO", v, "CC", v]
+    return out
+
+
 def list_messages(folder: str = "INBOX", days: int = 30, refresh: bool = False, now: datetime | None = None,
-                  imap_factory=None) -> dict:
-    """Les emails des `days` derniers jours du dossier, les plus récents d'abord (200 au plus)."""
-    key = (_who(), folder, days)  # V3 : un cache par employé (sinon B verrait la liste de A)
+                  imap_factory=None, criteria: list[str] | None = None) -> dict:
+    """Les emails des `days` derniers jours du dossier, les plus récents d'abord (200 au plus).
+    `criteria` (voir search_criteria) : seulement ceux qui correspondent, cherchés par le serveur mail."""
+    criteria = list(criteria or [])
+    key = (_who(), folder, days, tuple(criteria))  # V3 : un cache par employé (sinon B verrait la liste de A)
     with _lock:
         hit = _cache.get(key)
         if hit and not refresh and time.monotonic() - hit[0] < CACHE_TTL_S:
@@ -142,7 +160,7 @@ def list_messages(folder: str = "INBOX", days: int = 30, refresh: bool = False, 
     try:
         try:
             _select_readonly(conn, folder)
-            uids = _search_uids(conn, ["SINCE", imap_date((now - timedelta(days=days)).date())])
+            uids = _search_uids(conn, ["SINCE", imap_date((now - timedelta(days=days)).date()), *criteria])
         except imaplib.IMAP4.error as exc:
             raise MailboxUnavailable(f"Dossier « {folder} » illisible : {exc}") from None
         found = len(uids)
@@ -183,7 +201,7 @@ def list_messages(folder: str = "INBOX", days: int = 30, refresh: bool = False, 
     finally:
         _close(conn)
     items.sort(key=lambda x: x["date"] or "", reverse=True)
-    result = {"folder": folder, "days": days, "items": items, "found": found, "truncated": found > len(items),
+    result = {"folder": folder, "days": days, "searched": bool(criteria), "items": items, "found": found, "truncated": found > len(items),
               "fetched_at": now.isoformat()}
     with _lock:
         _cache[key] = (time.monotonic(), result)

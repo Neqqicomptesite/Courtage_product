@@ -245,8 +245,27 @@ class FakeImapServer:
             return out
         if crit[0] == "SINCE":
             since = datetime.strptime(criteria[1], "%d-%b-%Y").date()
-            return [u for u, _, _ in folder.messages if folder.dates.get(u, date.min) >= since]
+            found = [(u, data) for u, _, data in folder.messages if folder.dates.get(u, date.min) >= since]
+            rest = criteria[2:]
+            while rest:  # V3.4.4 : critères suivants (OR / FROM / TO / CC / SUBJECT), tous à respecter
+                test, rest = self._criterion(rest)
+                found = [(u, d) for u, d in found if test(d)]
+            return [u for u, _ in found]
         return []
+
+    def _criterion(self, toks):
+        """Un critère IMAP en notation préfixée ; renvoie (test(données) -> bool, reste)."""
+        head = toks[0].upper()
+        if head == "OR":
+            a, rest = self._criterion(toks[1:])
+            b, rest = self._criterion(rest)
+            return (lambda d: a(d) or b(d)), rest
+        field, value = head.lower(), _unquote(toks[1]).lower()
+
+        def test(data):
+            heads = data.split(b"\r\n\r\n", 1)[0].decode("utf-8", "replace").lower().replace("\r\n", "\n")
+            return any(line.startswith(field + ":") and value in line for line in heads.split("\n"))
+        return test, toks[2:]
 
     def _append(self, tag, args, rfile, send):
         folder_name = _unquote(args[0])

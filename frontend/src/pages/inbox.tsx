@@ -60,7 +60,10 @@ export function InboxPage() {
   const [params, setParams] = useSearchParams();
   const folder = params.get("folder") ?? "INBOX";
   const days = Number(params.get("days") ?? 30);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(() => params.get("q") ?? "");
+  // V3.4.4 : au-delà des 200 emails les plus récents, la recherche est faite par le serveur mail
+  const [dq, setDq] = useState(q);
+  useEffect(() => { const t = setTimeout(() => setDq(q), 500); return () => clearTimeout(t); }, [q]);
   // ?uid=… : arrivée depuis la fiche d'un contact (« Derniers emails ») -> cet email est ouvert
   const [selected, setSelected] = useState<number | null>(params.get("uid") ? Number(params.get("uid")) : null);
   const [refreshing, setRefreshing] = useState(false);
@@ -72,20 +75,28 @@ export function InboxPage() {
   const { data: folders } = useQuery({ queryKey: ["mail", "folders"], queryFn: api.mailFolders, staleTime: 5 * 60_000, retry: false });
   const list = useQuery({ queryKey: ["mail", "list", folder, days], queryFn: () => api.mailList(folder, days), retry: false, refetchInterval: 120_000 });
   const isSent = !!folders?.sent && folder === folders.sent;
+  const serverQ = dq.trim().length >= 3 ? dq.trim() : "";
+  const search = useQuery({ queryKey: ["mail", "search", folder, days, serverQ], queryFn: () => api.mailList(folder, days, false, serverQ),
+    enabled: !!serverQ && !!list.data?.truncated, retry: false, staleTime: 60_000 });
+  const searching = !!serverQ && !!list.data?.truncated;
 
   const [hidden, setHidden] = useState<Set<number>>(new Set());  // V2.20 : emails archivés à l'instant
   const items = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-    return (list.data?.items ?? []).filter((m) => {
+    const base = list.data?.items ?? [];
+    const extra = searching ? (search.data?.items ?? []).filter((m) => !base.some((b) => b.uid === m.uid)) : [];
+    const all = extra.length ? [...base, ...extra].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")) : base;
+    return all.filter((m) => {
       if (hidden.has(m.uid)) return false;
       if (onlyContacts && !m.contact) return false;
       const hay = `${m.from_name} ${m.from_email} ${m.to.join(" ")} ${m.subject} ${m.contact?.company ?? ""}`.toLowerCase();
       return words.every((w) => hay.includes(w));
     });
-  }, [list.data, q, onlyContacts, hidden]);
+  }, [list.data, search.data, searching, q, onlyContacts, hidden]);
   useEffect(() => {
+    if (searching && search.isLoading) return; // l'email demandé (?uid=…) peut arriver avec la recherche
     if (items.length && !items.some((m) => m.uid === selected)) setSelected(items[0].uid);
-  }, [items, selected]);
+  }, [items, selected, searching, search.isLoading]);
   useEffect(() => {
     const u = params.get("uid");
     if (u && items.some((m) => m.uid === Number(u))) document.getElementById(`mail-${u}`)?.scrollIntoView({ block: "center" });
@@ -144,6 +155,7 @@ export function InboxPage() {
         </NativeSelect>
         <NativeSelect className="sm:w-40" value={String(days)} onChange={(e) => set("days", e.target.value)}>
           <option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option>
+          <option value="180">6 derniers mois</option><option value="365">12 derniers mois</option>
         </NativeSelect>
         <Button variant={onlyContacts ? "default" : "outline"} onClick={toggleOnly} title="Masquer les newsletters, reçus et notifications : seulement les personnes de vos contacts">
           <Users /> Mes contacts
@@ -169,7 +181,11 @@ export function InboxPage() {
               {items.map((m) => <Row key={m.uid} m={m} active={m.uid === selected} sent={isSent} onClick={() => setSelected(m.uid)} />)}
             </div>
             <p className="border-t px-4 py-2 text-[11px] text-muted-foreground">
-              {onlyContacts ? `${items.length} de vos contacts sur ${list.data.found}` : `${list.data.found} email${list.data.found > 1 ? "s" : ""}`}{list.data.truncated && ` · les ${list.data.items.length} plus récents affichés`} · lu {relativeTime(list.data.fetched_at)}
+              {onlyContacts ? `${items.length} de vos contacts sur ${list.data.found}` : `${list.data.found} email${list.data.found > 1 ? "s" : ""}`}{list.data.truncated && !searching && ` · les ${list.data.items.length} plus récents affichés${q.trim() ? " (tapez 3 lettres pour chercher dans toute la période)" : ""}`}
+              {searching && (search.isLoading ? <> · <Loader2 className="inline size-3 animate-spin" /> recherche sur le serveur…</>
+                : search.data?.unsearchable ? " · mot avec accents : recherche limitée aux plus récents"
+                : search.data ? ` · recherche sur ${days} jours : ${search.data.found} résultat${search.data.found > 1 ? "s" : ""}${search.data.truncated ? ` (${search.data.items.length} plus récents)` : ""}` : "")}
+              {list.data.fetched_at && <> · lu {relativeTime(list.data.fetched_at)}</>}
               <span className="ml-1 hidden lg:inline" title="Raccourcis clavier"> · ↑↓ naviguer · R répondre · F transférer · E archiver · S séquence</span>
             </p>
           </div>
