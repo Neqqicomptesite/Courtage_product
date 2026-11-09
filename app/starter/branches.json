@@ -1,6 +1,6 @@
 {
  "_doc": "Fiches de renseignements par branche (dossiers de cotation). « placeholder » = texte entre crochets dans le modèle d'email de la branche ([Activité]…), rempli automatiquement avec la valeur du champ. « docs » = documents à demander au client. Le libellé de la branche doit être identique à celui des modèles (Séquences → Souscription). « optional » : champ facultatif ; vide, la ligne qui le contient est retirée de l'email.",
- "version": 1,
+ "version": 2,
  "branches": [
   {
    "name": "Flotte",
@@ -22,6 +22,13 @@
      "type": "date",
      "placeholder": "Date d'effet",
      "optional": true
+    },
+    {
+     "key": "preavis_jours",
+     "label": "Préavis de résiliation (jours)",
+     "type": "number",
+     "optional": true,
+     "hint": "Vide : 60 jours. Sert aux rappels avant l'échéance du contrat."
     }
    ],
    "docs": [
@@ -56,6 +63,13 @@
      "type": "date",
      "placeholder": "Date d'effet",
      "optional": true
+    },
+    {
+     "key": "preavis_jours",
+     "label": "Préavis de résiliation (jours)",
+     "type": "number",
+     "optional": true,
+     "hint": "Vide : 60 jours. Sert aux rappels avant l'échéance du contrat."
     }
    ],
    "docs": [
@@ -112,6 +126,13 @@
      "type": "date",
      "placeholder": "Date d'effet",
      "optional": true
+    },
+    {
+     "key": "preavis_jours",
+     "label": "Préavis de résiliation (jours)",
+     "type": "number",
+     "optional": true,
+     "hint": "Vide : 60 jours. Sert aux rappels avant l'échéance du contrat."
     }
    ],
    "docs": [
@@ -152,6 +173,13 @@
      "type": "date",
      "placeholder": "Date d'effet",
      "optional": true
+    },
+    {
+     "key": "preavis_jours",
+     "label": "Préavis de résiliation (jours)",
+     "type": "number",
+     "optional": true,
+     "hint": "Vide : 60 jours. Sert aux rappels avant l'échéance du contrat."
     }
    ],
    "docs": [
@@ -198,6 +226,13 @@
      "type": "date",
      "placeholder": "Date d'effet",
      "optional": true
+    },
+    {
+     "key": "preavis_jours",
+     "label": "Préavis de résiliation (jours)",
+     "type": "number",
+     "optional": true,
+     "hint": "Vide : 60 jours. Sert aux rappels avant l'échéance du contrat."
     }
    ],
    "docs": [
@@ -245,6 +280,13 @@
      "type": "date",
      "placeholder": "Date d'effet",
      "optional": true
+    },
+    {
+     "key": "preavis_jours",
+     "label": "Préavis de résiliation (jours)",
+     "type": "number",
+     "optional": true,
+     "hint": "Vide : 60 jours. Sert aux rappels avant l'échéance du contrat."
     }
    ],
    "docs": [
@@ -301,6 +343,13 @@
      "type": "date",
      "placeholder": "Date d'effet",
      "optional": true
+    },
+    {
+     "key": "preavis_jours",
+     "label": "Préavis de résiliation (jours)",
+     "type": "number",
+     "optional": true,
+     "hint": "Vide : 60 jours. Sert aux rappels avant l'échéance du contrat."
     }
    ],
    "docs": [
@@ -356,6 +405,13 @@
      "type": "date",
      "placeholder": "Date d'effet",
      "optional": true
+    },
+    {
+     "key": "preavis_jours",
+     "label": "Préavis de résiliation (jours)",
+     "type": "number",
+     "optional": true,
+     "hint": "Vide : 60 jours. Sert aux rappels avant l'échéance du contrat."
     }
    ],
    "docs": []
@@ -408,6 +464,13 @@
      "type": "date",
      "placeholder": "Date d'effet",
      "optional": true
+    },
+    {
+     "key": "preavis_jours",
+     "label": "Préavis de résiliation (jours)",
+     "type": "number",
+     "optional": true,
+     "hint": "Vide : 60 jours. Sert aux rappels avant l'échéance du contrat."
     }
    ],
    "docs": [
@@ -445,6 +508,13 @@
      "label": "Date de démarrage",
      "type": "date",
      "placeholder": "Date de démarrage"
+    },
+    {
+     "key": "preavis_jours",
+     "label": "Préavis de résiliation (jours)",
+     "type": "number",
+     "optional": true,
+     "hint": "Vide : 60 jours. Sert aux rappels avant l'échéance du contrat."
     }
    ],
    "docs": [

@@ -4,7 +4,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle, ArrowDownLeft, Clock, ArrowLeft, ArrowUpRight, Bell, Building2, CalendarPlus, Check, CheckCircle2, Circle, ExternalLink,
-  FileText, Inbox, MailPlus, MessageSquarePlus, MoreHorizontal, Paperclip, Plus, RotateCw, Send, SendHorizontal, StickyNote, Trash2,
+  FileCheck2, FileText, Inbox, MailPlus, MessageSquarePlus, MoreHorizontal, Paperclip, Plus, RotateCw, Send, SendHorizontal, StickyNote, Trash2,
   Trophy, Upload, X, XCircle,
 } from "lucide-react";
 import type React from "react";
@@ -31,6 +31,7 @@ import { formatDayTime, relativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/pages/companies";
 import { LostDialog, mad, shortDate, STAGES, StageBadge } from "@/pages/quotes";
+import { WonDialog } from "@/pages/contracts";
 
 const INSURER: Record<InsurerStatus, { label: string; variant: "secondary" | "info" | "warning" | "success" | "destructive" | "outline" }> = {
   to_send: { label: "À envoyer", variant: "outline" }, sent: { label: "Envoyé", variant: "info" },
@@ -49,11 +50,12 @@ export function QuoteDetailPage() {
   const update = useMutation({ mutationFn: (b: Parameters<typeof api.quoteUpdate>[1]) => api.quoteUpdate(id, b), onSuccess: set, onError: (e) => toastError(e) });
   const del = useMutation({ mutationFn: () => api.quoteDelete(id), onSuccess: () => { qc.invalidateQueries({ queryKey: ["quotes"] }); navigate("/quotes"); }, onError: (e) => toastError(e) });
   const [lost, setLost] = useState(false);
+  const [won, setWon] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [emailsFor, setEmailsFor] = useState<number | null>(null);
 
   if (!data) return <Skeleton className="h-[32rem] rounded-xl" />;
-  const goStage = (s: QuoteStage) => (s === "lost" ? setLost(true) : update.mutate({ stage: s }));
+  const goStage = (s: QuoteStage) => (s === "lost" ? setLost(true) : s === "won" ? setWon(true) : update.mutate({ stage: s }));
 
   return (
     <>
@@ -67,7 +69,7 @@ export function QuoteDetailPage() {
         actions={<>
           {data.stage !== "won" && data.stage !== "lost" ? <>
             <Button variant="outline" onClick={() => setLost(true)}><XCircle /> Perdu</Button>
-            <Button onClick={() => update.mutate({ stage: "won" })}><Trophy /> Gagné</Button>
+            <Button onClick={() => setWon(true)}><Trophy /> Gagné</Button>
           </> : <Button variant="outline" onClick={() => update.mutate({ stage: "proposed" })}><RotateCw /> Rouvrir</Button>}
           <DropdownMenu>
             <DropdownMenuTrigger asChild><Button variant="outline" size="icon" aria-label="Plus d'actions"><MoreHorizontal /></Button></DropdownMenuTrigger>
@@ -86,6 +88,7 @@ export function QuoteDetailPage() {
           <HistoryCard q={data} onChange={set} onEmails={setEmailsFor} />
         </div>
         <div className="min-w-0 space-y-6">
+          <ContractsLinkCard q={data} />
           <InfoCard q={data} save={(b) => update.mutate(b)} />
           <RemindersCard q={data} onChange={set} />
           <FilesCard q={data} onChange={set} />
@@ -94,6 +97,10 @@ export function QuoteDetailPage() {
       </div>
 
       <CompanyEmailsDialog q={data} companyId={emailsFor} onClose={() => setEmailsFor(null)} onChange={set} />
+      <WonDialog quoteId={won ? data.id : null} clientName={data.client_name} onClose={() => setWon(false)}
+        onDone={(r) => { setWon(false); set(r.quote); qc.invalidateQueries({ queryKey: ["contracts"] });
+          toast.success(r.contracts.length ? "Dossier gagné, contrat enregistré" : "Dossier gagné",
+            r.contracts.length ? { description: "Les rappels de préavis sont dans l'Agenda.", action: { label: "Voir", onClick: () => navigate(`/contracts/${r.contracts[0].id}`) } } : undefined); }} />
       <LostDialog quote={lost ? data : null} onClose={() => setLost(false)} onConfirm={(r) => { setLost(false); update.mutate({ stage: "lost", lost_reason: r }); }} />
       <ConfirmDialog open={deleting} onOpenChange={setDeleting} title="Supprimer ce dossier ?" destructive confirmLabel="Supprimer"
         description="Le dossier, son historique et ses rappels sont supprimés. Les emails déjà envoyés restent dans votre boîte."
@@ -1028,5 +1035,25 @@ function MailItem({ title, tone, subject, body, meta, extra, action }: {
       {extra && <div className="pl-6">{extra}</div>}
       {action && <div className="mt-2 pl-6">{action}</div>}
     </div>
+  );
+}
+
+/** Contrats nés du dossier (gagné), ou contrat que ce dossier renouvelle. */
+function ContractsLinkCard({ q }: { q: QuoteDetail }) {
+  if (!q.contracts.length && !q.renewal_of) return null;
+  return (
+    <Card className="p-4">
+      <p className="mb-2 flex items-center gap-2 font-medium"><FileCheck2 className="size-4 text-muted-foreground" />{q.contracts.length ? "Contrat" + (q.contracts.length > 1 ? "s" : "") : "Renouvellement"}</p>
+      {q.renewal_of && (
+        <Link to={`/contracts/${q.renewal_of.id}`} className="block text-sm hover:text-primary">
+          Renouvelle le contrat {q.renewal_of.branch} chez <b>{q.renewal_of.insurer_name}</b> · échéance {shortDate(q.renewal_of.end_date)}
+        </Link>
+      )}
+      <ul className="space-y-1 text-sm">
+        {q.contracts.map((c) => (
+          <li key={c.id}><Link to={`/contracts/${c.id}`} className="hover:text-primary">{c.branch} chez <b>{c.insurer_name}</b>{c.policy_number ? ` · police ${c.policy_number}` : ""} · échéance {shortDate(c.end_date)}</Link></li>
+        ))}
+      </ul>
+    </Card>
   );
 }

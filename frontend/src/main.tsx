@@ -21,6 +21,7 @@ import { ImportPage } from "@/pages/import";
 import { AwaitingPage, FollowupsPage, InboxPage } from "@/pages/inbox";
 import { QuoteDetailPage } from "@/pages/quote-detail";
 import { QuotesPage } from "@/pages/quotes";
+import { ContractDetailPage, ContractsPage } from "@/pages/contracts";
 import { RepliesPage } from "@/pages/replies";
 import { SequenceEditorPage } from "@/pages/sequence-editor";
 import { SequencesPage } from "@/pages/sequences";
@@ -61,6 +62,8 @@ const router = createBrowserRouter(
         { path: "agenda", element: <AgendaPage /> },
         { path: "quotes", element: <QuotesPage /> },
         { path: "quotes/:id", element: <QuoteDetailPage /> },
+        { path: "contracts", element: <ContractsPage /> },
+        { path: "contracts/:id", element: <ContractDetailPage /> },
         { path: "settings", element: <SettingsPage /> },
         { path: "equipe", element: <TeamPage /> },
         {

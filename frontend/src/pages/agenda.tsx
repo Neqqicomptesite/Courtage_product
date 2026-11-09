@@ -257,6 +257,7 @@ export function ReminderRow({ r, compact, onToggled }: { r: ReminderItem; compac
           {r.company && <Link to={`/companies/${r.company.id}`} className="hover:text-foreground hover:underline">{r.company.name}</Link>}
           {r.source === "callback" && <Link to="/replies?f=later" className="text-primary hover:underline">depuis sa réponse</Link>}
           {r.quote_case_id && <Link to={`/quotes/${r.quote_case_id}`} className="font-medium text-primary hover:underline">Ouvrir le dossier</Link>}
+          {r.contract_id && <Link to={`/contracts/${r.contract_id}`} className="font-medium text-primary hover:underline">Ouvrir le contrat</Link>}
         </p>
         {r.notes && <p className="mt-0.5 whitespace-pre-line text-xs text-muted-foreground">{r.notes}</p>}
       </div>

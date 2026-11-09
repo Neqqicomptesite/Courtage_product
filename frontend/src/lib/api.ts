@@ -353,7 +353,7 @@ export type ReminderKind = "call" | "email" | "quote" | "meeting" | "renewal" | 
 export type ReminderItem = {
   id: number; source: "reminder" | "callback"; kind: ReminderKind; kind_label: string; title: string; notes: string;
   due_on: string; due_time: string | null; done: boolean; done_at: string | null; created_at: string | null;
-  contact: ContactRef | null; company: { id: number; name: string; kind: Kind } | null; quote_case_id?: number | null;
+  contact: ContactRef | null; company: { id: number; name: string; kind: Kind } | null; quote_case_id?: number | null; contract_id?: number | null;
 };
 export type ReminderList = { items: ReminderItem[]; kinds: Option[]; today: string };
 export type ReminderInput = {
@@ -466,7 +466,33 @@ export type QuoteEventRow = {
   id: number; kind: "created" | "stage" | "note" | "fields" | "email_out" | "email_in" | "file" | "insurer" | "edit";
   text: string; insurer_id: number | null; company_id: number | null; user_name: string | null; ts: string;
 };
+export type ContractLink = { id: number; branch: string; insurer_name: string; end_date: string; status: ContractStatus; policy_number?: string };
+export type ContractStatus = "active" | "renewing" | "ended";
+export type ContractUrgency = "ok" | "soon" | "urgent" | "past_notice" | "expired" | "ended";
+export type Contract = {
+  id: number; client_name: string; company_id: number | null; contact: { id: number; name: string } | null;
+  insurer_id: number | null; insurer_name: string; branch: string; policy_number: string;
+  premium: number | null; rate: string | null; commission_rate: number | null; commission: number | null;
+  start_date: string | null; end_date: string; notice_days: number; deadline: string; days_to_deadline: number; days_to_end: number;
+  tacit: boolean; status: ContractStatus; status_label: string; end_reason: string | null; urgency: ContractUrgency;
+  owner: { id: number; name: string } | null; quote_case: { id: number; ref: string } | null;
+  renewal_case: { id: number; ref: string; stage: QuoteStage } | null; previous_id: number | null; notes: string;
+  history: { ts: string; text: string }[];
+};
+export type ContractSummary = { active: number; renewing: number; ended: number; premium: number; commission: number;
+  past_notice: number; due_30: number; due_60: number; due_90: number; upcoming: number };
+export type ContractList = { filter: string; filters: { key: string; label: string }[]; summary: ContractSummary; items: Contract[];
+  branches: string[]; notice_days: number };
+export type ContractInput = Partial<{ client_name: string; company_id: number | null; contact_id: number | null; insurer_id: number | null;
+  insurer_name: string; branch: string; policy_number: string; premium: string | number | null; rate: string | null;
+  commission_rate: string | number | null; start_date: string | null; end_date: string | null; notice_days: string | number | null;
+  tacit: boolean; owner_id: number | null; notes: string }>;
+export type ContractDraftItem = { branch: string; choices: { company_id: number; name: string; premium: number | null; rate: string | null; status: string }[];
+  insurer_id: number | null; premium: number | null; rate: string | null; policy_number: string; commission_rate: number | null;
+  start_date: string | null; end_date: string | null; notice_days: number };
+export type ContractDraft = { items: ContractDraftItem[]; renewal_of: Contract | null };
 export type QuoteDetail = QuoteSummary & {
+  contracts: ContractLink[]; renewal_of: ContractLink | null;
   fields: Record<string, string>; notes: string; current_insurer: string | null; current_rate: string | null; closed_at: string | null;
   field_defs: BranchField[]; docs: string[]; missing_labels: string[]; all_branches: string[];
   company: { id: number; name: string } | null; contact: QuotePerson | null;
@@ -692,6 +718,19 @@ export const api = {
   quoteInsurerCompanies: () => request<{ items: { id: number; name: string; logo: string | null; contacts: number }[] }>("/api/quotes/insurer-companies"),
   quoteCreate: (body: QuoteInput) => request<QuoteDetail>("/api/quotes", { method: "POST", json: body }),
   quoteUpdate: (id: number, body: QuoteInput) => request<QuoteDetail>(`/api/quotes/${id}`, { method: "PATCH", json: body }),
+  // Contrats et échéances
+  contracts: (p: { f?: string; q?: string; branch?: string; owner?: string; company_id?: number } = {}) =>
+    request<ContractList>(`/api/contracts${qs(p)}`),
+  contract: (id: number) => request<Contract>(`/api/contracts/${id}`),
+  contractCreate: (body: ContractInput) => request<Contract>("/api/contracts", { method: "POST", json: body }),
+  contractUpdate: (id: number, body: ContractInput) => request<Contract>(`/api/contracts/${id}`, { method: "PATCH", json: body }),
+  contractDelete: (id: number) => request<{ ok: boolean }>(`/api/contracts/${id}`, { method: "DELETE" }),
+  contractRenew: (id: number, body: ContractInput) => request<Contract>(`/api/contracts/${id}/renew`, { method: "POST", json: body }),
+  contractStartRenewal: (id: number) => request<{ quote_id: number; contract: Contract }>(`/api/contracts/${id}/start-renewal`, { method: "POST" }),
+  contractEnd: (id: number, reason: string) => request<Contract>(`/api/contracts/${id}/end`, { method: "POST", json: { reason } }),
+  quoteContractDraft: (id: number) => request<ContractDraft>(`/api/quotes/${id}/contract-draft`),
+  quoteWin: (id: number, items: Partial<ContractDraftItem>[]) =>
+    request<{ contracts: Contract[]; quote: QuoteDetail }>(`/api/quotes/${id}/win`, { method: "POST", json: { items } }),
   quoteDelete: (id: number) => request(`/api/quotes/${id}`, { method: "DELETE" }),
   quoteNote: (id: number, text: string) => request<QuoteDetail>(`/api/quotes/${id}/notes`, { method: "POST", json: { text } }),
   quoteAddInsurers: (id: number, company_ids: number[], branches?: string[]) =>

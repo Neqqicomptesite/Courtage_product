@@ -16,6 +16,7 @@ import { NativeSelect } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, type QuoteStage, type QuoteSummary } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { WonDialog } from "@/pages/contracts";
 
 export const STAGES: { key: QuoteStage; label: string; short: string }[] = [
   { key: "new", label: "Nouveau", short: "Nouveau" },
@@ -54,6 +55,7 @@ export function QuotesPage() {
   const { data } = useQuery({ queryKey: ["quotes"], queryFn: () => api.quotes() });
   const { data: people } = useQuery({ queryKey: ["quote-people"], queryFn: api.quotePeople });
   const [lostFor, setLostFor] = useState<QuoteSummary | null>(null);
+  const [wonFor, setWonFor] = useState<QuoteSummary | null>(null);
 
   const move = useMutation({
     mutationFn: ({ id, stage, lost_reason }: { id: number; stage: QuoteStage; lost_reason?: string }) => api.quoteUpdate(id, { stage, lost_reason }),
@@ -67,6 +69,7 @@ export function QuotesPage() {
   const onDrop = (c: QuoteSummary, stage: QuoteStage) => {
     if (c.stage === stage) return;
     if (stage === "lost") setLostFor(c);
+    else if (stage === "won") setWonFor(c);  // contrat à enregistrer (voir pages/contracts.tsx)
     else move.mutate({ id: c.id, stage });
   };
 
@@ -115,6 +118,9 @@ export function QuotesPage() {
         <QuoteTable items={items} />
       )}
 
+      <WonDialog quoteId={wonFor?.id ?? null} clientName={wonFor?.client_name ?? ""} onClose={() => setWonFor(null)}
+        onDone={(r) => { setWonFor(null); qc.invalidateQueries({ queryKey: ["quotes"] }); qc.invalidateQueries({ queryKey: ["contracts"] });
+          toast.success(r.contracts.length ? "Dossier gagné, contrat enregistré" : "Dossier gagné"); }} />
       <LostDialog quote={lostFor} onClose={() => setLostFor(null)}
         onConfirm={(reason) => { if (lostFor) move.mutate({ id: lostFor.id, stage: "lost", lost_reason: reason }); setLostFor(null); }} />
     </>

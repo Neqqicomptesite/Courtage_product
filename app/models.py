@@ -10,7 +10,7 @@ jalons suivants : cela évite de casser la base à chaque jalon.
 from datetime import date, datetime
 
 from sqlalchemy import (
-    JSON, Boolean, CheckConstraint, Date, ForeignKey, Index, Integer, String, Text, UniqueConstraint,
+    JSON, Boolean, CheckConstraint, Date, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, validates
 
@@ -399,6 +399,8 @@ class Reminder(Base):
     user_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id", ondelete="CASCADE"), index=True)  # V3
     # Dossiers de cotation : rappel lié à un dossier de cotation (relance d'une compagnie)
     quote_case_id: Mapped[int | None] = mapped_column(ForeignKey("quote_case.id", ondelete="CASCADE"), index=True)
+    # Contrats : rappel de préavis avant l'échéance d'un contrat (créé par app/contracts.py)
+    contract_id: Mapped[int | None] = mapped_column(ForeignKey("contract.id", ondelete="CASCADE"), index=True)
     done_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
@@ -506,3 +508,44 @@ class QuoteFile(Base):
     label: Mapped[str] = mapped_column(String(120), default="", server_default="")  # « Liste du parc »…
     user_id: Mapped[int | None] = mapped_column(Integer, default=lambda: _current_user())
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+# ---------------------------------------------------------------------------------------------
+# Contrats et échéances. Un contrat = une police chez une compagnie, pour un client et une branche.
+# Commun à l'équipe du cabinet (org_id), avec un gestionnaire. Le renouvellement se fait sur la même
+# ligne (dates avancées d'un an, période précédente gardée dans `history`) ; un changement de
+# compagnie termine le contrat et en crée un nouveau (`previous_id`).
+
+CONTRACT_STATUSES = ("active", "renewing", "ended")
+
+
+class Contract(Base):
+    __tablename__ = "contract"
+    __table_args__ = (_in("status", CONTRACT_STATUSES),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    org_id: Mapped[int] = mapped_column(Integer, default=_current_org, server_default="1", index=True)
+    client_name: Mapped[str] = mapped_column(String(255), default="")
+    company_id: Mapped[int | None] = mapped_column(ForeignKey("company.id", ondelete="SET NULL"), index=True)
+    contact_id: Mapped[int | None] = mapped_column(ForeignKey("contact.id", ondelete="SET NULL"), index=True)
+    insurer_id: Mapped[int | None] = mapped_column(ForeignKey("company.id", ondelete="SET NULL"), index=True)
+    insurer_name: Mapped[str] = mapped_column(String(120), default="", server_default="")  # si compagnie hors base
+    branch: Mapped[str] = mapped_column(String(40))
+    policy_number: Mapped[str] = mapped_column(String(60), default="", server_default="")
+    premium: Mapped[int | None] = mapped_column(Integer)                  # MAD par an
+    rate: Mapped[str | None] = mapped_column(String(40))                  # taux (AT, prévoyance…)
+    commission_rate: Mapped[float | None] = mapped_column(Float)          # % de la prime
+    start_date: Mapped[date | None] = mapped_column(Date)                 # effet de la période en cours
+    end_date: Mapped[date] = mapped_column(Date, index=True)              # échéance
+    notice_days: Mapped[int] = mapped_column(Integer, default=60, server_default="60")  # préavis de résiliation
+    tacit: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")       # tacite reconduction
+    status: Mapped[str] = mapped_column(String(10), default="active", server_default="active", index=True)
+    end_reason: Mapped[str | None] = mapped_column(String(255))
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id", ondelete="SET NULL"), index=True)
+    quote_case_id: Mapped[int | None] = mapped_column(ForeignKey("quote_case.id", ondelete="SET NULL"), index=True)
+    renewal_case_id: Mapped[int | None] = mapped_column(ForeignKey("quote_case.id", ondelete="SET NULL"), index=True)
+    previous_id: Mapped[int | None] = mapped_column(ForeignKey("contract.id", ondelete="SET NULL"))
+    notes: Mapped[str] = mapped_column(Text, default="", server_default="")
+    history: Mapped[list] = mapped_column(JSON, default=list)             # [{ts, text}] : périodes, changements
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)

@@ -547,3 +547,23 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
 295. **Test d'endurance** (test_v220_soak) : les inscriptions sont datées du début de la
      simulation. Avec l'horloge réelle, le jour où la simulation traverse la date du jour, une
      réponse simulée paraissait antérieure à l'inscription (artefact de test, pas un défaut).
+296. **Comparatif des offres mis de côté (09/11, choix d'Omar)** : le cabinet envoie au client l'offre
+     retenue, pas un tableau ; ouvrir les PDF suffit à l'employé. À reprendre si des cabinets le
+     demandent, avec un test d'extraction automatique sur de vraies offres.
+297. **Contrats et échéances (phase 2, 09/11)** : table contract (org_id, filtrée par cabinet ;
+     migration 0017) et reminder.contract_id. Un dossier gagné propose d'enregistrer un contrat par
+     branche (compagnie retenue = la moins chère des offres, modifiable ; « gagné sans contrat »
+     possible). Préavis de résiliation : 60 jours par défaut (réglage du cabinet
+     contract_notice_days), ou la valeur saisie dans le dossier (champ facultatif « Préavis de
+     résiliation », ajouté aux fiches des branches). Date limite = échéance − préavis ; deux rappels
+     « Renouvellement » dans l'Agenda du gestionnaire, 2 semaines puis 1 semaine avant (choix
+     d'Omar ; posés aujourd'hui si la date est déjà passée à la saisie, aucun si le préavis est
+     dépassé), recalculés à chaque changement de date, de préavis ou de gestionnaire.
+     Renouvellement : « Lancer le renouvellement » ouvre un dossier pré-rempli (compagnie actuelle
+     consultée d'office, prime et taux actuels, date d'effet = échéance + 1 jour) ; gagné avec la
+     même compagnie, le contrat passe à la période suivante sur la même ligne (période précédente
+     gardée dans l'historique) ; avec une autre compagnie, il est terminé « Remplacé » et un nouveau
+     contrat le suit (previous_id) ; perdu, il se termine. « Renouvelé à l'identique » sans dossier.
+     Tacite reconduction : un contrat échu sans action est reconduit d'un an (tâche toutes les 6 h).
+     Commission saisie en % de la prime, montant calculé. Import du portefeuille (logiciel DIAMM
+     du cabinet) : plus tard, quand Omar aura un export d'exemple.

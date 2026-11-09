@@ -304,6 +304,9 @@ def set_stage(s: Session, case: QuoteCase, stage: str, lost_reason: str | None =
     if stage in ("won", "lost"):
         _close_reminders(s, case)
         _stop_followups(s.scalars(select(QuoteInsurer).where(QuoteInsurer.case_id == case.id)))
+    if stage == "lost" and before != "lost":
+        from app import contracts  # dossier de renouvellement perdu : le contrat se termine
+        contracts.on_case_lost(s, case)
     event(s, case, "stage", f"{STAGE_LABELS[before]} → {STAGE_LABELS[stage]}"
           + (f" ({case.lost_reason})" if stage == "lost" else ""), data={"from": before, "to": stage})
 
@@ -922,7 +925,15 @@ def detail_json(s: Session, case: QuoteCase) -> dict:
     mb = get_primary(s)
     my_box = mb.id if mb else None
     docs = list(dict.fromkeys(d for b in names for d in branch_def(b)["docs"]))
+    from app.models import Contract  # contrats nés de ce dossier, ou contrat que ce dossier renouvelle
+    linked = [{"id": c.id, "branch": c.branch, "insurer_name": c.insurer_name, "end_date": c.end_date.isoformat(),
+               "status": c.status, "policy_number": c.policy_number}
+              for c in s.scalars(select(Contract).where(Contract.quote_case_id == case.id).order_by(Contract.id))]
+    ren = s.scalars(select(Contract).where(Contract.renewal_case_id == case.id)).first()
     return {**summary_json(case, insurers, users),
+            "contracts": linked,
+            "renewal_of": {"id": ren.id, "branch": ren.branch, "insurer_name": ren.insurer_name,
+                           "end_date": ren.end_date.isoformat(), "status": ren.status} if ren else None,
             "fields": case.fields or {}, "notes": case.notes, "current_insurer": case.current_insurer,
             "current_rate": case.current_rate,
             "closed_at": case.closed_at.isoformat() if case.closed_at else None,
