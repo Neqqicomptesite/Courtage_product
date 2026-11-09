@@ -97,6 +97,17 @@ def me():
         return {**_user_json(u, mb), "server_mode": True}
 
 
+@router.get("/admin/adoption")
+def team_adoption():
+    """V3.3.5 : prise en main de chaque employé (administrateur)."""
+    _require_admin()
+    from app import adoption
+    with get_session() as s:
+        items = adoption.team(s)
+        return {"items": items, "steps": [{"key": k, "label": label, "setup": (k, label) in adoption.SETUP}
+                                          for k, label in adoption.STEPS]}
+
+
 def _require_admin() -> None:
     if not is_admin():
         raise HTTPException(403, "Réservé à l'administrateur.")

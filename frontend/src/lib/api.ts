@@ -487,6 +487,15 @@ export type TeamUser = {
   id: number; email: string; full_name: string; role: "admin" | "user"; active: boolean; linked: boolean;
   last_seen_at: string | null; mailbox: string | null; contacts: number;
 };
+export type Adoption = {
+  steps: { key: string; label: string; setup: boolean }[];
+  items: {
+    id: number; name: string; email: string; last_seen_at: string | null;
+    level: "invited" | "idle" | "setup" | "testing" | "quiet" | "active"; level_label: string;
+    steps: Record<string, boolean>; done: number; total: number; test_mode: boolean;
+    activity: { sent_real_7d: number; sent_test_7d: number; replies_7d: number; to_classify: number; active_campaigns: number; open_quotes: number };
+  }[];
+};
 export type Me = (TeamUser & { server_mode: true }) | { id: null; role: "admin"; server_mode: false };
 
 async function request<T>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
@@ -710,6 +719,7 @@ export const api = {
 
   me: () => request<Me>("/api/me"),
   team: () => request<TeamUser[]>("/api/admin/users"),
+  teamAdoption: () => request<Adoption>("/api/admin/adoption"),
   teamInvite: (body: { email: string; full_name: string; role: "admin" | "user" }) =>
     request<TeamUser & { invite_error: string | null }>("/api/admin/users", { method: "POST", json: body }),
   teamUpdate: (id: number, body: { full_name?: string; role?: "admin" | "user"; active?: boolean }) =>

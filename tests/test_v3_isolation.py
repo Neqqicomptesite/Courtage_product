@@ -389,3 +389,30 @@ def test_new_sequence_is_personal_and_admin_can_share(server, omar_data):  # noq
         s.query(Campaign).filter_by(id=omar_data["camp"]).delete()
     r = server.delete(f"/api/sequences/{seq_o}", headers=o)
     assert r.status_code == 400 and "collègue" in r.json()["detail"]
+
+
+def test_team_adoption_for_admin(server, omar_data):  # noqa: F811
+    """V3.3.5 : l'administrateur voit où en est chaque employé (étapes + activité de la semaine),
+    chacun lu en son nom ; un employé n'y a pas accès."""
+    from sqlalchemy import select
+
+    from app import settings_store
+    h, o = H("hamza@oddo.ma"), H("omar@oddo.ma")
+    assert server.get("/api/admin/adoption", headers=h).status_code == 403
+    with get_session() as s, s.begin():
+        s.get(Message, omar_data["msg"]).classification = "interested"
+        s.get(Campaign, omar_data["camp"]).activated_at = utcnow()
+        test_out = s.scalars(select(Message).where(Message.direction == "out")).first()
+        s.add(Message(contact_id=omar_data["contact"], mailbox_id=test_out.mailbox_id, direction="out", test_mode=True,
+                      subject="Essai", body_text="x", sent_at=utcnow(), message_id="<t1@oddo.ma>"))
+        with as_user(omar_data["omar"], "admin"):
+            settings_store.set_(s, "test_mode", False)
+    r = server.get("/api/admin/adoption", headers=o).json()
+    assert len(r["steps"]) == 9 and sum(st["setup"] for st in r["steps"]) == 5
+    team = {u["email"]: u for u in r["items"]}
+    om, ha = team["omar@oddo.ma"], team["hamza@oddo.ma"]
+    assert om["steps"]["test"] and om["steps"]["real"] and om["steps"]["real_send"]
+    assert om["steps"]["campaign"] and om["steps"]["classified"] and not om["steps"]["quote"]
+    assert om["test_mode"] is False and om["activity"]["sent_real_7d"] == 1 and om["activity"]["sent_test_7d"] == 1
+    assert ha["test_mode"] is True and not ha["steps"]["test"] and ha["activity"]["sent_real_7d"] == 0
+    assert ha["done"] < om["done"] and ha["level"] in ("invited", "idle", "setup", "testing")
