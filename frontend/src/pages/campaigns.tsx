@@ -490,6 +490,49 @@ function UpcomingEmails({ campaignId }: { campaignId: number }) {
   );
 }
 
+/** V3.3.6 : les emails déjà partis (clic sur « Emails envoyés »), un clic ouvre l'aperçu. */
+function SentEmails({ campaignId }: { campaignId: number }) {
+  const { data, isLoading } = useQuery({ queryKey: ["campaign-sent", campaignId], queryFn: () => api.campaignSent(campaignId), refetchInterval: 30_000 });
+  const [open, setOpen] = useState<number | null>(null);
+  if (isLoading || !data) return <p className="flex items-center gap-2 p-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Chargement…</p>;
+  if (!data.items.length) return <p className="p-8 text-center text-sm text-muted-foreground">Aucun email envoyé pour l'instant.</p>;
+  return (
+    <div>
+      <p className="px-4 pt-3 text-sm text-muted-foreground">
+        {data.total} email{data.total > 1 ? "s" : ""} envoyé{data.total > 1 ? "s" : ""}, du plus récent au plus ancien{data.total > data.items.length ? ` (les ${data.items.length} derniers)` : ""}. Cliquez pour voir l'email.
+      </p>
+      <div className="divide-y">
+        {data.items.map((m) => {
+          const isOpen = open === m.id;
+          const name = m.contact ? fullName(m.contact) : m.to;
+          return (
+            <div key={m.id}>
+              <button type="button" onClick={() => setOpen(isOpen ? null : m.id)} aria-expanded={isOpen}
+                className={cn("grid w-full items-center gap-x-3 gap-y-0.5 px-4 py-2.5 text-left text-sm hover:bg-muted/40 sm:grid-cols-[minmax(0,13rem)_4.5rem_minmax(0,1fr)_auto]", isOpen && "bg-muted/40")}>
+                <span className="min-w-0 truncate font-medium">{name}</span>
+                <span className="text-xs text-muted-foreground">{m.position ? `Email ${m.position}` : "Email"}</span>
+                <span className="min-w-0 truncate text-muted-foreground">{m.subject}</span>
+                <span className="flex items-center gap-2 text-xs text-muted-foreground tabular">
+                  {m.test_mode && <Badge variant="warning">Test</Badge>}
+                  {m.replied && <Badge variant="success">A répondu</Badge>}
+                  {formatDayTime(m.sent_at)}
+                </span>
+              </button>
+              {isOpen && (
+                <div className="border-t bg-muted/20 p-3">
+                  <EmailCard email={{ position: m.position ?? 1, subject: m.subject, body: m.body, planned_at: null, same_thread: false, problems: [], warnings: [], attachments: [] }}
+                    to={m.to} name={name} from={data.from} ab={false} sentAt={m.sent_at} />
+                  {m.test_mode && <p className="mt-2 text-xs text-muted-foreground">Envoyé en mode test : il est arrivé dans votre boîte, pas chez le contact.</p>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function CampaignDetailPage() {
   const id = Number(useParams().id);
   const qc = useQueryClient();
@@ -530,7 +573,7 @@ export function CampaignDetailPage() {
 
   const [peek, setPeek] = useState<{ id: number; name: string } | null>(null); // V3 : emails prévus d'une personne
   if (!data) return <Skeleton className="h-96 rounded-xl" />;
-  const list = view === "upcoming" ? [] : data.enrollments.filter((e) => VIEWS.find((v) => v.key === view)!.match(e.status));
+  const list = view === "upcoming" || view === "sent" ? [] : data.enrollments.filter((e) => VIEWS.find((v) => v.key === view)!.match(e.status));
 
   return (
     <>
@@ -579,13 +622,14 @@ export function CampaignDetailPage() {
         )
       ) : (
         <div className="space-y-6">
-          <MiniKpis i={data.indicators} counts={data.counts} />
+          <MiniKpis i={data.indicators} counts={data.counts}
+            onSent={() => { setView("sent"); requestAnimationFrame(() => document.getElementById("campaign-people")?.scrollIntoView({ behavior: "smooth", block: "start" })); }} />
           <div className="grid gap-6 lg:grid-cols-2">
             <StepFunnel i={data.indicators} />
             <Outcomes i={data.indicators} running={(data.counts.scheduled ?? 0) + (data.counts.waiting ?? 0) + (data.counts.sending ?? 0)} />
           </div>
           {(data.segments.length > 1 || data.ab.rows.length > 0) && <Breakdown data={data} />}
-          <Card>
+          <Card id="campaign-people" className="scroll-mt-4">
             <div className="flex flex-wrap items-center gap-1 border-b p-2">
               {VIEWS.map((v) => {
                 const n = data.enrollments.filter((e) => v.match(e.status)).length;
@@ -597,12 +641,16 @@ export function CampaignDetailPage() {
                 );
               })}
               <span className="flex-1" />
+              <button onClick={() => setView("sent")}
+                className={cn("flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors", view === "sent" ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:text-foreground")}>
+                <Send className="size-3.5" /> Envoyés <span className="text-xs tabular opacity-70">{data.indicators.sent_total}</span>
+              </button>
               <button onClick={() => setView("upcoming")}
                 className={cn("flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors", view === "upcoming" ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:text-foreground")}>
                 <Eye className="size-3.5" /> Prochains envois
               </button>
             </div>
-            {view === "upcoming" ? <UpcomingEmails campaignId={data.id} /> : list.length === 0 ? <p className="p-8 text-center text-sm text-muted-foreground">Aucun contact dans cette vue.</p> : (
+            {view === "sent" ? <SentEmails campaignId={data.id} /> : view === "upcoming" ? <UpcomingEmails campaignId={data.id} /> : list.length === 0 ? <p className="p-8 text-center text-sm text-muted-foreground">Aucun contact dans cette vue.</p> : (
               <div className="divide-y">
                 {list.map((e) => (
                   <div key={e.id} className="grid items-center gap-3 px-4 py-3 text-sm sm:grid-cols-[minmax(0,1.4fr)_13rem_minmax(0,1fr)_2.5rem]">
@@ -655,12 +703,12 @@ function RowActions({ e, onAct }: { e: CampaignDetail["enrollments"][number]; on
   );
 }
 
-function MiniKpis({ i, counts }: { i: Indicators; counts: Record<string, number> }) {
+function MiniKpis({ i, counts, onSent }: { i: Indicators; counts: Record<string, number>; onSent: () => void }) {
   const running = (counts.scheduled ?? 0) + (counts.waiting ?? 0) + (counts.sending ?? 0);
   const items = [
     { label: "Contacts", value: i.enrolled },
     { label: "En cours", value: running },
-    { label: "Emails envoyés", value: i.sent_total },
+    { label: "Emails envoyés", value: i.sent_total, onClick: i.sent_total > 0 ? onSent : undefined },
     { label: "Réponses", value: i.replies, sub: pct(i.reply_rate), accent: true },
     { label: "Intéressés", value: i.interested },
     { label: "Rebonds · STOP", value: i.bounced + i.unsubscribed },
@@ -668,8 +716,12 @@ function MiniKpis({ i, counts }: { i: Indicators; counts: Record<string, number>
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
       {items.map((t) => (
-        <Card key={t.label} className={cn("p-3.5", t.accent && "border-brand/30 bg-brand/[0.04]")}>
-          <p className="text-xs text-muted-foreground">{t.label}</p>
+        <Card key={t.label} className={cn("p-3.5", t.accent && "border-brand/30 bg-brand/[0.04]",
+          t.onClick && "cursor-pointer transition-colors hover:border-primary/40 hover:bg-accent/40")}
+          onClick={t.onClick} role={t.onClick ? "button" : undefined} tabIndex={t.onClick ? 0 : undefined}
+          onKeyDown={t.onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); t.onClick!(); } } : undefined}
+          title={t.onClick ? "Voir les emails envoyés" : undefined}>
+          <p className="flex items-center justify-between text-xs text-muted-foreground">{t.label}{t.onClick && <Eye className="size-3.5" />}</p>
           <p className={cn("mt-1 text-xl font-semibold tabular", t.accent && "text-brand")}>{t.value}{t.sub && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{t.sub}</span>}</p>
         </Card>
       ))}

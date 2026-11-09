@@ -225,3 +225,25 @@ def test_one_email_template_is_offered_in_modeles(client, db):
     assert len(d["steps"]) == 1
     assert client.post("/api/sequences", json={"name": "X", "steps": 0}, headers=ORIGIN).status_code == 422
     assert len(client.get(f"/api/sequences/{client.post('/api/sequences', json={'name': 'Y'}, headers=ORIGIN).json()['id']}").json()["steps"]) == 3
+
+
+def test_campaign_sent_emails_list(client, world):  # noqa: F811
+    """V3.3.6 : « Emails envoyés » d'une campagne : la liste des emails partis, avec leur texte."""
+    g, _, seq = _setup()
+    from app import engine
+    from app.scheduling import SendWindow
+    client.post(f"/api/sequences/{seq['G1']}/send", json={"contact_ids": [g], "overrides": OV}, headers=ORIGIN)
+    with get_session() as s:
+        window = SendWindow.from_settings(s)
+        now = window.next_open(max(e.next_due_at for e in s.scalars(select(Enrollment))) + timedelta(minutes=1))
+    engine.tick(now=now, sync=False)
+    with get_session() as s:
+        enr = s.scalars(select(Enrollment).where(Enrollment.contact_id == g)).one()
+        sent = s.scalars(select(Message).where(Message.enrollment_id == enr.id, Message.direction == "out")).all()
+        cid, n = enr.campaign_id, len([m for m in sent if m.sent_at])
+    r = client.get(f"/api/campaigns/{cid}/sent").json()
+    assert n >= 1 and r["total"] == n and len(r["items"]) == n
+    it = r["items"][0]
+    assert it["subject"].startswith("Demande d'avenant") and "police 40.1" in it["body"]
+    assert it["position"] == 1 and it["contact"]["id"] == g and it["replied"] is False and it["sent_at"]
+    assert client.get("/api/campaigns/999999/sent").status_code == 404

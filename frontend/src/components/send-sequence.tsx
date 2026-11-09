@@ -568,7 +568,9 @@ function ReviewView({ seqId, body }: { seqId: number; body: SendPayload }) {
   );
 }
 
-export function EmailCard({ email, to, name, from, ab }: { email: ReviewEmail; to: string; name: string; from: { name: string; email: string } | null; ab: boolean }) {
+export function EmailCard({ email, to, name, from, ab, sentAt }: {
+  email: ReviewEmail; to: string; name: string; from: { name: string; email: string } | null; ab: boolean; sentAt?: string;
+}) {
   return (
     <article className="overflow-hidden rounded-xl border bg-card shadow-sm" aria-label={`Aperçu : ${email.subject}`}>
       <header className="space-y-1 border-b bg-muted/30 px-4 py-3 text-sm">
@@ -576,6 +578,7 @@ export function EmailCard({ email, to, name, from, ab }: { email: ReviewEmail; t
         <dl className="grid grid-cols-[3rem_1fr] gap-x-2 gap-y-0.5 text-xs">
           <dt className="text-muted-foreground">De</dt><dd className="truncate">{from ? `${from.name} <${from.email}>` : "votre boîte mail"}</dd>
           <dt className="text-muted-foreground">À</dt><dd className="truncate">{name} &lt;{to}&gt;</dd>
+          {sentAt && <><dt className="text-muted-foreground">Envoyé</dt><dd>{formatDayTime(sentAt)}</dd></>}
           {email.planned_at && <><dt className="text-muted-foreground">Prévu</dt><dd>{formatDayTime(email.planned_at)}{email.position > 1 ? " · seulement s'il n'y a pas de réponse" : ""}</dd></>}
         </dl>
         {email.same_thread && email.position > 1 && <p className="text-xs text-muted-foreground">Dans la même conversation que le 1er email (« Re: »).</p>}

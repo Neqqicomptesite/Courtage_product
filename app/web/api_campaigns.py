@@ -146,6 +146,29 @@ async def activate(cid: int, body: ActivateIn):
     return await run_in_threadpool(do)
 
 
+@router.get("/campaigns/{cid:int}/sent")
+def campaign_sent(cid: int, limit: int = 200):
+    """V3.3.6 : les emails déjà partis de la campagne, du plus récent au plus ancien, tels qu'envoyés."""
+    from app import settings_store
+    from app.models import Message
+    with get_session() as s:
+        camp = _camp(s, cid)
+        mb = get_primary(s)
+        base = (select(Message, Contact).join(Enrollment, Enrollment.id == Message.enrollment_id)
+                .outerjoin(Contact, Contact.id == Message.contact_id)
+                .where(Enrollment.campaign_id == camp.id, Message.direction == "out", Message.sent_at.is_not(None)))
+        total = s.scalar(select(func.count()).select_from(base.subquery()))
+        replied = set(s.scalars(select(Message.enrollment_id).join(Enrollment, Enrollment.id == Message.enrollment_id)
+                                .where(Enrollment.campaign_id == camp.id, Message.direction == "in",
+                                       Message.kind.in_(("reply", "unsubscribe")))))
+        items = [{"id": m.id, "contact": contact_ref(c) if c else None, "to": m.to_email or (c.email if c else ""),
+                  "subject": m.subject, "body": m.body_text, "sent_at": iso(m.sent_at), "position": m.step_position,
+                  "test_mode": m.test_mode, "replied": m.enrollment_id in replied}
+                 for m, c in s.execute(base.order_by(Message.sent_at.desc(), Message.id.desc()).limit(max(1, min(limit, 500))))]
+        return {"total": total, "items": items, "test_mode": bool(settings_store.get(s, "test_mode")),
+                "from": {"name": mb.display_name, "email": mb.email} if mb else None}
+
+
 @router.get("/campaigns/{cid:int}/upcoming")
 def campaign_upcoming(cid: int, limit: int = 50, enrollment_id: int | None = None):
     """V3 : les prochains emails de la campagne, exactement comme ils partiront (même rendu que

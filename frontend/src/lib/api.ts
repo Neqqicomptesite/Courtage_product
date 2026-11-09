@@ -106,6 +106,8 @@ export type SequenceReview = { sequence: { id: number; name: string }; steps: nu
 /** V3 : prochains envois d'une campagne, rendus comme par le moteur. */
 export type CampaignUpcoming = { total: number; test_mode: boolean; campaign_status: string; from: { name: string; email: string } | null;
   items: { enrollment_id: number; contact: ContactRef; to: string; status: string; variant: string | null; emails: ReviewEmail[] }[] };
+export type CampaignSent = { total: number; test_mode: boolean; from: { name: string; email: string } | null;
+  items: { id: number; contact: ContactRef | null; to: string; subject: string; body: string; sent_at: string; position: number | null; test_mode: boolean; replied: boolean }[] };
 export type SequenceCategory = "prospection" | "gestion" | "souscription";
 export type Kind = "prospect" | "client" | "insurer" | "partner";
 export type CompanySummary = {
@@ -614,6 +616,7 @@ export const api = {
   mailUnarchive: (message_id: string, folder: string, kind: "archive" | "junk" = "archive") =>
     request<{ ok: boolean }>("/api/mailbox/unarchive", { method: "POST", json: { message_id, folder, kind } }),
   mailSpam: (folder: string, uid: number) => request<{ archive_folder: string; message_id: string }>(`/api/mailbox/messages/${uid}/spam${qs({ folder })}`, { method: "POST" }),
+  campaignSent: (id: number) => request<CampaignSent>(`/api/campaigns/${id}/sent`),
   campaignUpcoming: (id: number, enrollmentId?: number) =>
     request<CampaignUpcoming>(`/api/campaigns/${id}/upcoming${enrollmentId ? `?enrollment_id=${enrollmentId}` : ""}`),
   mailPreview: (partUrl: string) => request<AttachmentPreview>(partUrl.replace("/part/", "/preview/")),
