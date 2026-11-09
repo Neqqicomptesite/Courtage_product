@@ -1,8 +1,8 @@
 // Contrats et échéances : portefeuille, préavis, renouvellements (voir app/contracts.py).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlarmClock, ArrowLeft, BellRing, CalendarCheck2, CalendarClock, FileCheck2, FileStack, History, MoreHorizontal,
-  Plus, RefreshCw, RotateCw, Search, Trash2, Wallet, XCircle,
+  AlarmClock, ArrowLeft, BellRing, Building2, CalendarCheck2, CalendarClock, Download, FileCheck2, FileStack, Hash, History,
+  MoreHorizontal, Plus, RefreshCw, RotateCw, Search, SlidersHorizontal, Trash2, Wallet, XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -19,7 +19,7 @@ import { NativeSelect } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { api, type Contract, type ContractDraftItem, type ContractInput, type ContractUrgency } from "@/lib/api";
+import { api, downloadFile, type ApiError, type Contract, type ContractDraftItem, type ContractInput, type ContractUrgency } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { mad, shortDate } from "@/pages/quotes";
 
@@ -50,26 +50,40 @@ export function UrgencyBadge({ c }: { c: Contract }) {
 
 /* ------------------------------------------------------------------ liste */
 
+const FILTER_KEYS = ["q", "policy", "insurer", "branch", "owner", "end_from", "end_to", "sort"] as const;
+type FilterKey = (typeof FILTER_KEYS)[number];
+
 export function ContractsPage() {
   const [params, setParams] = useSearchParams();
-  const f = params.get("f") ?? "upcoming";
-  const branch = params.get("branche") ?? "";
-  const [q, setQ] = useState("");
-  const [needle, setNeedle] = useState("");
-  const debounced = useDebounced((v: string) => setNeedle(v.trim()), 250);
-  const [creating, setCreating] = useState(false);
-  const { data } = useQuery({ queryKey: ["contracts", f, branch, needle], queryFn: () => api.contracts({ f, branch, q: needle }), placeholderData: (p) => p });
+  const f = params.get("f") ?? "active";
+  const val = (k: FilterKey) => params.get(k) ?? "";
+  const [q, setQ] = useState(val("q"));
+  const [policy, setPolicy] = useState(val("policy"));
   const set = (k: string, v: string) => setParams((p) => { const n = new URLSearchParams(p); if (v) n.set(k, v); else n.delete(k); return n; }, { replace: true });
+  const debouncedQ = useDebounced((v: string) => set("q", v.trim()), 250);
+  const debouncedP = useDebounced((v: string) => set("policy", v.trim()), 250);
+  const [creating, setCreating] = useState(false);
+  const [more, setMore] = useState(() => ["insurer", "owner", "end_from", "end_to"].some((k) => params.get(k)));
+  const filters = { f, ...Object.fromEntries(FILTER_KEYS.map((k) => [k, val(k)])) };
+  const { data } = useQuery({ queryKey: ["contracts", filters], queryFn: () => api.contracts(filters), placeholderData: (p) => p });
+  const { data: insurers } = useQuery({ queryKey: ["quote-insurers"], queryFn: api.quoteInsurerCompanies });
+  const { data: people } = useQuery({ queryKey: ["quote-people"], queryFn: api.quotePeople });
   const sm = data?.summary;
+  const active = FILTER_KEYS.filter((k) => k !== "sort" && params.get(k)).length;
+  const reset = () => { setQ(""); setPolicy(""); setParams(f === "active" ? {} : { f }, { replace: true }); };
+  const exportXlsx = () => downloadFile(api.contractsExportUrl(filters), `contrats-${new Date().toISOString().slice(0, 10)}.xlsx`).catch((e) => toastError(e));
 
   return (
     <>
-      <PageHeader title="Contrats" description="Le portefeuille du cabinet : échéances, préavis et renouvellements. Les rappels arrivent 2 semaines puis 1 semaine avant chaque date limite de préavis."
-        actions={<Button onClick={() => setCreating(true)}><Plus /> Nouveau contrat</Button>} />
+      <PageHeader title="Contrats" description="Le portefeuille du cabinet : clients, compagnies, polices, échéances et préavis. Les rappels arrivent 2 semaines puis 1 semaine avant chaque date limite de préavis."
+        actions={<>
+          <Button variant="outline" onClick={exportXlsx} disabled={!data?.items.length}><Download /> Excel</Button>
+          <Button onClick={() => setCreating(true)}><Plus /> Nouveau contrat</Button>
+        </>} />
 
       {sm && (
         <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Tile icon={FileCheck2} label="Contrats en cours" value={String(sm.active)} sub={sm.premium ? `${mad(sm.premium)} de primes` : undefined} />
+          <Tile icon={FileCheck2} label="Contrats en cours" value={String(sm.active)} sub={sm.premium ? `${mad(sm.premium)} de primes nettes` : undefined} onClick={() => set("f", "")} />
           <Tile icon={Wallet} label="Commissions annuelles" value={sm.commission ? mad(sm.commission) : "—"} sub="Sur les contrats en cours" />
           <Tile icon={AlarmClock} label="Préavis dans 30 jours" value={String(sm.due_30)} sub={`${sm.due_90} dans les 90 jours`} tone={sm.due_30 ? "warning" : undefined}
             onClick={() => set("f", "upcoming")} />
@@ -78,26 +92,64 @@ export function ContractsPage() {
         </div>
       )}
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="flex gap-1.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible">
+      <Card className="mb-4 space-y-3 p-3">
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-visible">
           {data?.filters.map((x) => (
-            <button key={x.key} onClick={() => set("f", x.key === "upcoming" ? "" : x.key)}
+            <button key={x.key} onClick={() => set("f", x.key === "active" ? "" : x.key)}
               className={cn("shrink-0 rounded-full border px-3 py-1 text-sm transition-colors", f === x.key ? "border-primary bg-primary text-primary-foreground" : "hover:bg-accent")}>
               {x.label}
             </button>
           ))}
         </div>
-        <div className="flex w-full gap-2 sm:ml-auto sm:w-auto">
-          <div className="relative flex-1 sm:w-56">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <div className="relative">
             <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-            <Input value={q} onChange={(e) => { setQ(e.target.value); debounced(e.target.value); }} placeholder="Client, police, compagnie…" className="pl-8" aria-label="Rechercher un contrat" />
+            <Input value={q} onChange={(e) => { setQ(e.target.value); debouncedQ(e.target.value); }} placeholder="Client, compagnie, branche… (plusieurs mots possibles)" className="pl-8" aria-label="Rechercher un contrat" />
           </div>
-          <NativeSelect className="w-auto" value={branch} onChange={(e) => set("branche", e.target.value)} aria-label="Branche">
+          <div className="relative">
+            <Hash className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+            <Input value={policy} onChange={(e) => { setPolicy(e.target.value); debouncedP(e.target.value); }} placeholder="N° de police" className="pl-8 tabular" aria-label="Numéro de police" />
+          </div>
+          <NativeSelect value={val("branch")} onChange={(e) => set("branch", e.target.value)} aria-label="Branche">
             <option value="">Toutes les branches</option>
             {(data?.branches ?? []).map((b) => <option key={b} value={b}>{b}</option>)}
           </NativeSelect>
+          <Button variant={more ? "secondary" : "outline"} onClick={() => setMore(!more)}><SlidersHorizontal /> Plus de filtres{active > 0 && <span className="ml-1 rounded-full bg-primary px-1.5 text-[11px] text-primary-foreground">{active}</span>}</Button>
         </div>
-      </div>
+        {more && (
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <Field label="Compagnie">
+              <NativeSelect value={val("insurer")} onChange={(e) => set("insurer", e.target.value)}>
+                <option value="">Toutes</option>
+                {insurers?.items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </NativeSelect>
+            </Field>
+            <Field label="Gestionnaire">
+              <NativeSelect value={val("owner")} onChange={(e) => set("owner", e.target.value)}>
+                <option value="">Tous</option>
+                <option value="me">Moi</option>
+                {(people?.items ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </NativeSelect>
+            </Field>
+            <Field label="Échéance à partir du"><Input type="date" value={val("end_from")} onChange={(e) => set("end_from", e.target.value)} /></Field>
+            <Field label="Échéance jusqu'au"><Input type="date" value={val("end_to")} onChange={(e) => set("end_to", e.target.value)} /></Field>
+            <Field label="Trier par">
+              <NativeSelect value={val("sort") || "deadline"} onChange={(e) => set("sort", e.target.value === "deadline" ? "" : e.target.value)}>
+                {data?.sorts.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+              </NativeSelect>
+            </Field>
+          </div>
+        )}
+        {data && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-2.5 text-xs text-muted-foreground">
+            <span><b className="text-foreground tabular">{data.totals.count}</b> contrat{data.totals.count > 1 ? "s" : ""}</span>
+            {data.totals.premium > 0 && <span>Primes nettes <b className="text-foreground tabular">{mad(data.totals.premium)}</b></span>}
+            {data.totals.ttc > 0 && <span>TTC <b className="text-foreground tabular">{mad(data.totals.ttc)}</b></span>}
+            {data.totals.commission > 0 && <span>Commissions <b className="text-foreground tabular">{mad(data.totals.commission)}</b></span>}
+            {active > 0 && <button className="ml-auto text-primary hover:underline" onClick={reset}>Effacer les filtres</button>}
+          </div>
+        )}
+      </Card>
 
       {!data ? <Skeleton className="h-80 rounded-xl" /> : data.items.length === 0 ? (
         sm && sm.active + sm.ended === 0 ? (
@@ -105,14 +157,14 @@ export function ContractsPage() {
             text="Un contrat se crée quand un dossier de cotation est gagné. Vous pouvez aussi saisir vos contrats en cours, un par un."
             action={<Button onClick={() => setCreating(true)}><Plus /> Ajouter un contrat</Button>} />
         ) : (
-          <EmptyState icon={CalendarCheck2} title={f === "upcoming" ? "Rien à renouveler dans les 90 jours" : "Aucun contrat ici"}
-            text={f === "upcoming" ? "Les contrats apparaissent ici quand leur date limite de préavis approche." : undefined} />
+          <EmptyState icon={CalendarCheck2} title={active ? "Aucun contrat ne correspond" : f === "upcoming" ? "Rien à renouveler dans les 90 jours" : "Aucun contrat ici"}
+            text={active ? "Essayez d'enlever un filtre." : f === "upcoming" ? "Les contrats apparaissent ici quand leur date limite de préavis approche." : undefined} />
         )
       ) : (
         <ContractTable items={data.items} />
       )}
 
-      <ContractDialog open={creating} onClose={() => setCreating(false)} branches={data?.branches ?? []} noticeDays={data?.notice_days ?? 60} />
+      <ContractDialog open={creating} onClose={() => setCreating(false)} noticeDays={data?.notice_days ?? 60} />
     </>
   );
 }
@@ -129,49 +181,51 @@ function Tile({ icon: Icon, label, value, sub, tone, onClick }: {
   );
 }
 
-function ContractTable({ items }: { items: Contract[] }) {
+function StatusCell({ c }: { c: Contract }) {
+  return c.status === "renewing" ? <Badge variant="info">Renouvellement en cours</Badge> : <UrgencyBadge c={c} />;
+}
+
+function ContractTable({ items, compact = false }: { items: Contract[]; compact?: boolean }) {
   const navigate = useNavigate();
   return (
     <>
-      <Card className="hidden overflow-x-auto md:block">
+      {!compact && <Card className="hidden overflow-x-auto md:block">
         <table className="w-full text-sm">
           <thead className="border-b text-left text-xs text-muted-foreground">
             <tr>
-              <th className="px-4 py-2.5 font-medium">Client</th><th className="px-3 py-2.5 font-medium">Branche</th>
-              <th className="px-3 py-2.5 font-medium">Compagnie</th><th className="px-3 py-2.5 text-right font-medium">Prime</th>
-              <th className="px-3 py-2.5 font-medium">Échéance</th><th className="px-3 py-2.5 font-medium">Date limite de préavis</th>
-              <th className="px-3 py-2.5 font-medium">Gestionnaire</th>
+              {!compact && <th className="px-4 py-2.5 font-medium">Client</th>}
+              <th className={cn("py-2.5 font-medium", compact ? "px-4" : "px-3")}>Branche</th>
+              <th className="px-3 py-2.5 font-medium">Compagnie</th><th className="px-3 py-2.5 font-medium">N° de police</th>
+              <th className="px-3 py-2.5 text-right font-medium">Prime nette</th>
+              <th className="px-3 py-2.5 font-medium">Échéance</th><th className="px-3 py-2.5 font-medium">Préavis</th>
+              {!compact && <th className="px-3 py-2.5 font-medium">Gestionnaire</th>}
             </tr>
           </thead>
           <tbody className="divide-y">
             {items.map((c) => (
               <tr key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/contracts/${c.id}`)}>
-                <td className="px-4 py-2.5">
-                  <p className="font-medium">{c.client_name}</p>
-                  <p className="text-xs text-muted-foreground tabular">{c.policy_number || "Police non renseignée"}</p>
-                </td>
-                <td className="px-3 py-2.5">{c.branch}</td>
+                {!compact && <td className="px-4 py-2.5 font-medium">{c.client_name}</td>}
+                <td className={cn("py-2.5", compact ? "px-4" : "px-3")}>{c.branch}</td>
                 <td className="px-3 py-2.5">{c.insurer_name}</td>
-                <td className="px-3 py-2.5 text-right tabular">{mad(c.premium)}</td>
-                <td className="px-3 py-2.5 tabular">{shortDate(c.end_date)}</td>
+                <td className="whitespace-nowrap px-3 py-2.5 tabular text-muted-foreground">{c.policy_number || "—"}</td>
+                <td className="whitespace-nowrap px-3 py-2.5 text-right tabular">{mad(c.premium)}</td>
+                <td className="whitespace-nowrap px-3 py-2.5 tabular">{shortDate(c.end_date)}</td>
                 <td className="px-3 py-2.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="tabular">{shortDate(c.deadline)}</span>
-                    {c.status === "renewing" ? <Badge variant="info">Renouvellement en cours</Badge> : <UrgencyBadge c={c} />}
-                  </div>
+                  <div className="flex flex-wrap items-center gap-2"><span className="tabular">{shortDate(c.deadline)}</span><StatusCell c={c} /></div>
                 </td>
-                <td className="px-3 py-2.5 text-muted-foreground">{c.owner?.name ?? "—"}</td>
+                {!compact && <td className="px-3 py-2.5 text-muted-foreground">{c.owner?.name ?? "—"}</td>}
               </tr>
             ))}
           </tbody>
         </table>
-      </Card>
-      <div className="space-y-2 md:hidden">
+      </Card>}
+      <div className={cn("space-y-2", compact ? "p-3" : "md:hidden")}>
         {items.map((c) => (
           <Link key={c.id} to={`/contracts/${c.id}`} className="block rounded-xl border bg-card p-3 text-sm">
             <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0"><p className="truncate font-medium">{c.client_name}</p><p className="text-xs text-muted-foreground">{c.branch} · {c.insurer_name}</p></div>
-              {c.status === "renewing" ? <Badge variant="info">En renouvellement</Badge> : <UrgencyBadge c={c} />}
+              <div className="min-w-0"><p className="truncate font-medium">{compact ? c.branch : c.client_name}</p>
+                <p className="text-xs text-muted-foreground">{compact ? "" : `${c.branch} · `}{c.insurer_name}{c.policy_number ? ` · ${c.policy_number}` : ""}</p></div>
+              <StatusCell c={c} />
             </div>
             <div className="mt-2 flex justify-between text-xs text-muted-foreground">
               <span>Préavis avant le <span className="tabular text-foreground">{shortDate(c.deadline)}</span></span><span className="tabular">{mad(c.premium)}</span>
@@ -183,45 +237,157 @@ function ContractTable({ items }: { items: Contract[] }) {
   );
 }
 
+/** Contrats d'un client (fiche Entreprise ou Contact), ou d'une compagnie (fiche de l'assureur). */
+export function ContractsPanel({ company, contact, insurer }: {
+  company?: { id: number; name: string }; insurer?: { id: number; name: string };
+  contact?: { id: number; name: string; company?: { id: number; name: string } | null };
+}) {
+  const filters = company ? { company_id: company.id } : insurer ? { insurer: String(insurer.id) } : { contact_id: contact!.id };
+  const { data } = useQuery({ queryKey: ["contracts", { f: "all", ...filters }], queryFn: () => api.contracts({ f: "all", ...filters }) });
+  const [adding, setAdding] = useState(false);
+  const items = data?.items ?? [];
+  const live = items.filter((c) => c.status !== "ended");
+  const client = company ?? contact?.company ?? null;
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-6 pb-3 pt-5">
+        <div>
+          <h3 className="font-semibold leading-none tracking-tight">Contrats</h3>
+          {data && items.length > 0 && <p className="mt-1.5 text-xs text-muted-foreground">{live.length} en cours{data.totals.premium ? ` · ${mad(live.reduce((s, c) => s + (c.premium ?? 0), 0))} de primes nettes` : ""}{items.length > live.length ? ` · ${items.length - live.length} terminé${items.length - live.length > 1 ? "s" : ""}` : ""}</p>}
+        </div>
+        <div className="flex gap-2">
+          {insurer && items.length > 0 && <Button size="sm" variant="ghost" asChild><Link to={`/contracts?f=all&insurer=${insurer.id}`}>Tout voir</Link></Button>}
+          {!insurer && <Button size="sm" variant="outline" onClick={() => setAdding(true)}><Plus /> Contrat</Button>}
+        </div>
+      </div>
+      {items.length === 0 ? <p className="px-6 pb-5 text-sm text-muted-foreground">Aucun contrat.</p> : (
+        <div className="border-t"><ContractTable items={items.slice(0, insurer ? 8 : 50)} compact={!insurer} /></div>
+      )}
+      {!insurer && (
+        <ContractDialog open={adding} onClose={() => setAdding(false)} noticeDays={data?.notice_days ?? 60}
+          preset={{ client_name: client?.name ?? contact?.name ?? "", company_id: client?.id ?? null, contact_id: contact?.id ?? null }} stay />
+      )}
+    </Card>
+  );
+}
+
 /* ------------------------------------------------------------------ saisie */
 
-type Form = Record<keyof Omit<ContractInput, "tacit" | "company_id" | "contact_id" | "insurer_id" | "owner_id">, string> & {
-  tacit: boolean; insurer_id: string; owner_id: string;
+type Form = {
+  client_name: string; company_id: number | null; contact_id: number | null; insurer_id: string; insurer_name: string;
+  branch: string; policy_number: string; base_amount: string; rate: string; premium: string; accessories: string;
+  tax_rate: string; parafiscal_rate: string; commission_rate: string; start_date: string; end_date: string;
+  notice_days: string; tacit: boolean; owner_id: string; notes: string;
 };
+
+const num = (v: number | null | undefined) => (v == null ? "" : String(v).replace(".", ","));
 
 function toForm(c: Contract | null, noticeDays: number): Form {
   return {
-    client_name: c?.client_name ?? "", insurer_id: c?.insurer_id ? String(c.insurer_id) : "", insurer_name: c?.insurer_id ? "" : c?.insurer_name ?? "",
-    branch: c?.branch ?? "", policy_number: c?.policy_number ?? "", premium: c?.premium != null ? String(c.premium) : "",
-    rate: c?.rate ?? "", commission_rate: c?.commission_rate != null ? String(c.commission_rate).replace(".", ",") : "",
-    start_date: c?.start_date ?? "", end_date: c?.end_date ?? "", notice_days: String(c?.notice_days ?? noticeDays),
-    tacit: c?.tacit ?? true, owner_id: c?.owner ? String(c.owner.id) : "", notes: c?.notes ?? "",
+    client_name: c?.client_name ?? "", company_id: c?.company_id ?? null, contact_id: c?.contact?.id ?? null,
+    insurer_id: c?.insurer_id ? String(c.insurer_id) : "", insurer_name: c?.insurer_id ? "" : c?.insurer_name ?? "",
+    branch: c?.branch ?? "", policy_number: c?.policy_number ?? "", base_amount: num(c?.base_amount), rate: c?.rate ?? "",
+    premium: num(c?.premium), accessories: num(c?.accessories), tax_rate: num(c?.tax_rate), parafiscal_rate: num(c?.parafiscal_rate),
+    commission_rate: num(c?.commission_rate), start_date: c?.start_date ?? "", end_date: c?.end_date ?? "",
+    notice_days: String(c?.notice_days ?? noticeDays), tacit: c?.tacit ?? true, owner_id: c?.owner ? String(c.owner.id) : "", notes: c?.notes ?? "",
   };
 }
 
 function toInput(f: Form): ContractInput {
   return {
-    client_name: f.client_name, insurer_id: f.insurer_id ? Number(f.insurer_id) : null, insurer_name: f.insurer_id ? "" : f.insurer_name,
-    branch: f.branch, policy_number: f.policy_number, premium: f.premium, rate: f.rate, commission_rate: f.commission_rate,
+    client_name: f.client_name, company_id: f.company_id, contact_id: f.contact_id,
+    insurer_id: f.insurer_id ? Number(f.insurer_id) : null, insurer_name: f.insurer_id ? "" : f.insurer_name,
+    branch: f.branch, policy_number: f.policy_number, base_amount: f.base_amount, rate: f.rate, premium: f.premium,
+    accessories: f.accessories, tax_rate: f.tax_rate, parafiscal_rate: f.parafiscal_rate, commission_rate: f.commission_rate,
     start_date: f.start_date || null, end_date: f.end_date || null, notice_days: f.notice_days, tacit: f.tacit,
     ...(f.owner_id ? { owner_id: Number(f.owner_id) } : {}), notes: f.notes,
   };
 }
 
-function ContractFields({ f, set, branches, errors, withClient = true }: {
-  f: Form; set: (patch: Partial<Form>) => void; branches: string[]; errors?: Record<string, string>; withClient?: boolean;
-}) {
+const toNumber = (s: string) => {
+  const v = Number(String(s).replace(/[\s  ]/g, "").replace(",", "."));
+  return s.trim() === "" || Number.isNaN(v) ? null : v;
+};
+
+/** Même règle que le serveur : « 2,1 % » → 0,021 ; « 3 ‰ » → 0,003 ; « 2,1 » → pour cent. */
+export function parseRate(rate: string): number | null {
+  const raw = rate.replace(/\s/g, "").replace(",", ".");
+  if (!raw) return null;
+  const v = Number(raw.replace("‰", "").replace("%", ""));
+  if (Number.isNaN(v)) return null;
+  return raw.includes("‰") ? v / 1000 : v / 100;
+}
+
+function useAmounts(f: Form) {
+  const net = toNumber(f.premium);
+  const acc = toNumber(f.accessories) ?? 0;
+  if (net == null) return null;
+  const tax = Math.round(((net + acc) * (toNumber(f.tax_rate) ?? 0)) / 100);
+  const para = Math.round(((net + acc) * (toNumber(f.parafiscal_rate) ?? 0)) / 100);
+  const com = toNumber(f.commission_rate);
+  return { tax, para, ttc: net + acc + tax + para, commission: com == null ? null : Math.round((net * com) / 100) };
+}
+
+function ClientPicker({ f, set, error }: { f: Form; set: (p: Partial<Form>) => void; error?: string }) {
+  const [open, setOpen] = useState(false);
+  const term = f.client_name.trim();
+  const { data } = useQuery({ queryKey: ["companies", term, "client-picker"], queryFn: () => api.companies({ q: term }), enabled: open && term.length >= 2 });
+  const options = (data?.items ?? []).filter((c) => c.kind !== "insurer").slice(0, 6);
+  return (
+    <Field label="Client" error={error} className="relative sm:col-span-2"
+      hint={f.company_id ? "Relié à la fiche de l'entreprise : le contrat y apparaît." : "Tapez pour retrouver une entreprise de la base, ou laissez un nom libre (particulier)."}>
+      <div className="relative">
+        <Building2 className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+        <Input value={f.client_name} className="pl-8" placeholder="Entreprise ou particulier"
+          onChange={(e) => { set({ client_name: e.target.value, company_id: null }); setOpen(true); }}
+          onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} />
+        {f.company_id && <Badge variant="success" className="absolute right-2 top-2">Fiche reliée</Badge>}
+      </div>
+      {open && options.length > 0 && !f.company_id && (
+        <div className="absolute inset-x-0 top-full z-20 mt-1 overflow-hidden rounded-lg border bg-popover shadow-md">
+          {options.map((c) => (
+            <button key={c.id} type="button" className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
+              onMouseDown={(e) => e.preventDefault()} onClick={() => { set({ client_name: c.name, company_id: c.id }); setOpen(false); }}>
+              <span className="truncate">{c.name}</span><span className="text-xs text-muted-foreground">{c.sector ?? ""}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </Field>
+  );
+}
+
+function ContractFields({ f, set, errors }: { f: Form; set: (patch: Partial<Form>) => void; errors?: Record<string, string> }) {
   const { data: insurers } = useQuery({ queryKey: ["quote-insurers"], queryFn: api.quoteInsurerCompanies });
   const { data: people } = useQuery({ queryKey: ["quote-people"], queryFn: api.quotePeople });
+  const { data: cfg } = useQuery({ queryKey: ["contract-branches"], queryFn: api.contractBranches });
+  const branchCfg = cfg?.items[f.branch];
+  const am = useAmounts(f);
   const deadline = useMemo(() => {
     if (!f.end_date || f.notice_days === "") return null;
     const d = new Date(f.end_date + "T12:00:00");
     d.setDate(d.getDate() - Number(f.notice_days || 0));
     return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
   }, [f.end_date, f.notice_days]);
+  // prime nette = base × taux (recalculée quand l'un des deux change ; la prime reste modifiable)
+  const recompute = (patch: Partial<Form>) => {
+    const next = { ...f, ...patch };
+    const base = toNumber(next.base_amount);
+    const r = parseRate(next.rate);
+    set(base != null && r != null ? { ...patch, premium: String(Math.round(base * r)) } : patch);
+  };
+  const pickBranch = (b: string) => {
+    const c = cfg?.items[b];
+    set(c ? { branch: b, tax_rate: num(c.tax_rate), parafiscal_rate: num(c.parafiscal_rate), commission_rate: num(c.commission_rate) } : { branch: b });
+  };
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      {withClient && <Field label="Client" error={errors?.client_name} className="sm:col-span-2"><Input value={f.client_name} onChange={(e) => set({ client_name: e.target.value })} placeholder="Entreprise ou particulier" /></Field>}
+      <ClientPicker f={f} set={set} error={errors?.client_name} />
+      <Field label="Branche" error={errors?.branch}>
+        <Input list="contract-branches" value={f.branch} onChange={(e) => pickBranch(e.target.value)} />
+        <datalist id="contract-branches">{Object.keys(cfg?.items ?? {}).map((b) => <option key={b} value={b} />)}</datalist>
+      </Field>
+      <Field label="N° de police"><Input value={f.policy_number} onChange={(e) => set({ policy_number: e.target.value })} className="tabular" /></Field>
       <Field label="Compagnie" error={errors?.insurer_id}>
         <NativeSelect value={f.insurer_id} onChange={(e) => set({ insurer_id: e.target.value })}>
           <option value="">Autre (à saisir)</option>
@@ -231,16 +397,34 @@ function ContractFields({ f, set, branches, errors, withClient = true }: {
       {!f.insurer_id ? (
         <Field label="Nom de la compagnie"><Input value={f.insurer_name} onChange={(e) => set({ insurer_name: e.target.value })} /></Field>
       ) : <span className="hidden sm:block" />}
-      <Field label="Branche" error={errors?.branch}>
-        <Input list="contract-branches" value={f.branch} onChange={(e) => set({ branch: e.target.value })} />
-        <datalist id="contract-branches">{branches.map((b) => <option key={b} value={b} />)}</datalist>
-      </Field>
-      <Field label="N° de police"><Input value={f.policy_number} onChange={(e) => set({ policy_number: e.target.value })} className="tabular" /></Field>
-      <Field label="Prime annuelle (MAD)" error={errors?.premium}><Input inputMode="decimal" value={f.premium} onChange={(e) => set({ premium: e.target.value })} className="tabular" /></Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Taux"><Input value={f.rate} onChange={(e) => set({ rate: e.target.value })} placeholder="ex. 2,1 %" className="tabular" /></Field>
-        <Field label="Commission (%)" error={errors?.commission_rate}><Input inputMode="decimal" value={f.commission_rate} onChange={(e) => set({ commission_rate: e.target.value })} className="tabular" /></Field>
+
+      <div className="space-y-3 rounded-lg border bg-muted/20 p-3 sm:col-span-2">
+        <div className="grid gap-3 sm:grid-cols-3">
+          {(branchCfg?.base ?? "none") !== "none" || f.base_amount ? (
+            <Field label={`${branchCfg?.base_label || "Base de calcul"} (MAD)`} error={errors?.base_amount}>
+              <Input inputMode="decimal" value={f.base_amount} onChange={(e) => recompute({ base_amount: e.target.value })} className="tabular" />
+            </Field>
+          ) : null}
+          <Field label="Taux" hint={toNumber(f.base_amount) != null ? "% ou ‰ : la prime se calcule" : undefined}>
+            <Input value={f.rate} onChange={(e) => recompute({ rate: e.target.value })} placeholder="ex. 2,1 % ou 3 ‰" className="tabular" />
+          </Field>
+          <Field label="Prime nette (MAD)" error={errors?.premium}><Input inputMode="decimal" value={f.premium} onChange={(e) => set({ premium: e.target.value })} className="tabular" /></Field>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Field label="Accessoires (MAD)" error={errors?.accessories}><Input inputMode="decimal" value={f.accessories} onChange={(e) => set({ accessories: e.target.value })} className="tabular" /></Field>
+          <Field label="Taxe contrats (%)" error={errors?.tax_rate}><Input inputMode="decimal" value={f.tax_rate} onChange={(e) => set({ tax_rate: e.target.value })} className="tabular" /></Field>
+          <Field label="Taxe parafiscale (%)" error={errors?.parafiscal_rate}><Input inputMode="decimal" value={f.parafiscal_rate} onChange={(e) => set({ parafiscal_rate: e.target.value })} className="tabular" /></Field>
+          <Field label="Commission (%)" error={errors?.commission_rate}><Input inputMode="decimal" value={f.commission_rate} onChange={(e) => set({ commission_rate: e.target.value })} className="tabular" /></Field>
+        </div>
+        {am && (
+          <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <span>Taxes <b className="text-foreground tabular">{mad(am.tax + am.para)}</b></span>
+            <span>Prime TTC <b className="text-foreground tabular">{mad(am.ttc)}</b></span>
+            {am.commission != null && <span>Commission <b className="text-foreground tabular">{mad(am.commission)}</b></span>}
+          </p>
+        )}
       </div>
+
       <Field label="Date d'effet">
         <Input type="date" value={f.start_date} onChange={(e) => set({ start_date: e.target.value, ...(e.target.value && !f.end_date ? { end_date: endFrom(e.target.value) } : {}) })} />
       </Field>
@@ -268,30 +452,38 @@ function ContractFields({ f, set, branches, errors, withClient = true }: {
 }
 
 function errorsOf(e: unknown): Record<string, string> | undefined {
-  const d = (e as { detail?: { errors?: Record<string, string> } })?.detail;
-  return d?.errors;
+  const fields = (e as ApiError)?.fields;
+  return fields && Object.keys(fields).length ? fields : undefined;
 }
 
-function ContractDialog({ open, onClose, branches, noticeDays }: { open: boolean; onClose: () => void; branches: string[]; noticeDays: number }) {
+function ContractDialog({ open, onClose, noticeDays, preset, stay = false }: {
+  open: boolean; onClose: () => void; noticeDays: number;
+  preset?: { client_name: string; company_id: number | null; contact_id: number | null }; stay?: boolean;
+}) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [f, setF] = useState<Form>(() => toForm(null, noticeDays));
   const [errors, setErrors] = useState<Record<string, string>>();
-  useEffect(() => { if (open) { setF(toForm(null, noticeDays)); setErrors(undefined); } }, [open, noticeDays]);
+  useEffect(() => { if (open) { setF({ ...toForm(null, noticeDays), ...(preset ?? {}) }); setErrors(undefined); } }, [open, noticeDays]); // eslint-disable-line react-hooks/exhaustive-deps
   const create = useMutation({
     mutationFn: () => api.contractCreate(toInput(f)),
-    onSuccess: (c) => { toast.success("Contrat enregistré", { description: "Les rappels de préavis sont dans l'Agenda." }); qc.invalidateQueries({ queryKey: ["contracts"] }); onClose(); navigate(`/contracts/${c.id}`); },
+    onSuccess: (c) => {
+      toast.success("Contrat enregistré", { description: "Les rappels de préavis sont dans l'Agenda." });
+      qc.invalidateQueries({ queryKey: ["contracts"] });
+      onClose();
+      if (!stay) navigate(`/contracts/${c.id}`);
+    },
     onError: (e) => { setErrors(errorsOf(e)); if (!errorsOf(e)) toastError(e); },
   });
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nouveau contrat</DialogTitle>
           <DialogDescription>Pour un contrat déjà en cours. Les contrats des dossiers gagnés se créent d'eux-mêmes.</DialogDescription>
         </DialogHeader>
         <form onSubmit={(e) => { e.preventDefault(); create.mutate(); }} className="space-y-4">
-          <ContractFields f={f} set={(p) => setF((x) => ({ ...x, ...p }))} branches={branches} errors={errors} />
+          <ContractFields f={f} set={(p) => setF((x) => ({ ...x, ...p }))} errors={errors} />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Annuler</Button>
             <Button type="submit" disabled={create.isPending}><Plus /> Enregistrer</Button>
@@ -302,6 +494,61 @@ function ContractDialog({ open, onClose, branches, noticeDays }: { open: boolean
   );
 }
 
+/* ------------------------------------------------------------------ réglages : branches, taxes, commissions */
+
+export function BranchSettingsSection() {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ["contract-branches"], queryFn: api.contractBranches });
+  const [rows, setRows] = useState<Record<string, Record<string, string>>>({});
+  useEffect(() => {
+    if (data) setRows(Object.fromEntries(Object.entries(data.items).map(([k, v]) => [k, {
+      base: v.base, tax_rate: num(v.tax_rate), parafiscal_rate: num(v.parafiscal_rate), commission_rate: num(v.commission_rate) }])));
+  }, [data]);
+  const save = useMutation({
+    mutationFn: () => api.contractBranchesSave(rows),
+    onSuccess: (d) => { qc.setQueryData(["contract-branches"], d); toast.success("Taxes et commissions enregistrées", { description: "Elles s'appliquent aux nouveaux contrats ; les contrats existants gardent leurs taux." }); },
+    onError: (e) => toastError(e),
+  });
+  if (!data) return <Skeleton className="h-96 rounded-xl" />;
+  const patch = (b: string, k: string, v: string) => setRows((r) => ({ ...r, [b]: { ...r[b], [k]: v } }));
+  return (
+    <Card className="p-5">
+      <h2 className="text-base font-semibold">Branches : taxes et commissions</h2>
+      <p className="mt-1 text-sm text-muted-foreground">Valeurs proposées par défaut sur chaque nouveau contrat, toujours modifiables contrat par contrat. La base de calcul permet de calculer la prime nette (base × taux).</p>
+      {!data.confirmed && (
+        <p className="mt-3 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm">
+          Valeurs de départ <b>à vérifier</b> : taxe sur les contrats d'après le CGI (art. 284 : 14 %, accidents du travail et assurances vie exonérés) et taxe parafiscale de 1 % (décret 2-19-244). Prévoyance, Transport et la taxe de 1 % sur les AT sont des cas à confirmer avec vos quittances. Enregistrez pour valider.
+        </p>
+      )}
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full min-w-[40rem] text-sm">
+          <thead className="text-left text-xs text-muted-foreground">
+            <tr><th className="py-2 pr-3 font-medium">Branche</th><th className="px-2 py-2 font-medium">Base de calcul</th>
+              <th className="px-2 py-2 font-medium">Taxe contrats (%)</th><th className="px-2 py-2 font-medium">Taxe parafiscale (%)</th>
+              <th className="px-2 py-2 font-medium">Commission (%)</th></tr>
+          </thead>
+          <tbody className="divide-y">
+            {Object.entries(rows).map(([b, r]) => (
+              <tr key={b}>
+                <td className="py-2 pr-3 font-medium">{b}</td>
+                <td className="px-2 py-2">
+                  <NativeSelect value={r.base} onChange={(e) => patch(b, "base", e.target.value)} aria-label={`Base de calcul ${b}`}>
+                    {Object.entries(data.bases).map(([k, v]) => <option key={k} value={k}>{v || "Aucune (prime saisie)"}</option>)}
+                  </NativeSelect>
+                </td>
+                {(["tax_rate", "parafiscal_rate", "commission_rate"] as const).map((k) => (
+                  <td key={k} className="px-2 py-2"><Input inputMode="decimal" value={r[k] ?? ""} onChange={(e) => patch(b, k, e.target.value)} className="w-24 tabular" aria-label={`${k} ${b}`} placeholder={k === "commission_rate" ? "—" : undefined} /></td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-4 flex justify-end"><Button onClick={() => save.mutate()} disabled={save.isPending}>Enregistrer</Button></div>
+    </Card>
+  );
+}
+
 /* ------------------------------------------------------------------ fiche */
 
 export function ContractDetailPage() {
@@ -309,7 +556,6 @@ export function ContractDetailPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { data: c } = useQuery({ queryKey: ["contract", id], queryFn: () => api.contract(id) });
-  const { data: br } = useQuery({ queryKey: ["quote-branches"], queryFn: api.quoteBranches });
   const [f, setF] = useState<Form | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>();
   const [renewing, setRenewing] = useState(false);
@@ -365,7 +611,7 @@ export function ContractDetailPage() {
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <Card className="p-4">
           <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="space-y-4">
-            <ContractFields f={f} set={(p) => setF((x) => ({ ...x!, ...p }))} branches={br?.items.map((b) => b.name) ?? []} errors={errors} />
+            <ContractFields f={f} set={(p) => setF((x) => ({ ...x!, ...p }))} errors={errors} />
             <Field label="Notes"><Textarea rows={2} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></Field>
             <div className="flex justify-end gap-2">
               {dirty && <Button type="button" variant="ghost" onClick={() => { setF(toForm(c, c.notice_days)); setErrors(undefined); }}>Annuler</Button>}
@@ -437,9 +683,14 @@ function Timeline({ c }: { c: Contract }) {
         ))}
       </ol>
       {c.premium != null && (
-        <div className="mt-4 grid grid-cols-2 gap-2 border-t pt-3 text-sm">
-          <span className="text-muted-foreground">Prime annuelle</span><span className="text-right tabular">{mad(c.premium)}</span>
-          {c.commission != null && <><span className="text-muted-foreground">Commission ({String(c.commission_rate).replace(".", ",")} %)</span><span className="text-right tabular">{mad(c.commission)}</span></>}
+        <div className="mt-4 grid grid-cols-2 gap-x-2 gap-y-1.5 border-t pt-3 text-sm">
+          {c.base_amount != null && <><span className="text-muted-foreground">{c.base_label || "Base de calcul"}</span><span className="text-right tabular">{mad(c.base_amount)}</span></>}
+          {c.rate && <><span className="text-muted-foreground">Taux</span><span className="text-right tabular">{c.rate}</span></>}
+          <span className="text-muted-foreground">Prime nette</span><span className="text-right tabular">{mad(c.premium)}</span>
+          {!!c.accessories && <><span className="text-muted-foreground">Accessoires</span><span className="text-right tabular">{mad(c.accessories)}</span></>}
+          <span className="text-muted-foreground">Taxes ({num(c.tax_rate) || 0} % + {num(c.parafiscal_rate) || 0} %)</span><span className="text-right tabular">{mad(c.taxes)}</span>
+          <span className="font-medium">Prime TTC</span><span className="text-right font-medium tabular">{mad(c.ttc)}</span>
+          {c.commission != null && <><span className="text-muted-foreground">Commission ({num(c.commission_rate)} %)</span><span className="text-right tabular">{mad(c.commission)}</span></>}
         </div>
       )}
     </Card>

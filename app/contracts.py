@@ -105,8 +105,92 @@ def _int(value, key: str, lo: int, hi: int) -> int | None:
     return v
 
 
+# ------------------------------------------------------------------------- réglages par branche
+# Base de calcul de la prime nette (prime = base × taux), taxes et commission par défaut. Réglage du
+# cabinet « contract_branches », modifiable dans Réglages ; valeurs de départ ci-dessous, issues du
+# CGI art. 284 (taxe sur les contrats : 14 %, AT exonérés, vie exonérée) et du décret 2-19-244
+# (taxe parafiscale de solidarité contre les événements catastrophiques : 1 %), À CONFIRMER par le
+# cabinet (Prévoyance, Transport, AT/parafiscale : cas douteux, voir DECISIONS 298).
+BASES = {"none": "", "payroll": "Masse salariale", "turnover": "Chiffre d'affaires", "capital": "Capitaux assurés",
+         "works": "Montant du marché", "value": "Valeur transportée"}
+_STD = {"base": "none", "tax_rate": 14.0, "parafiscal_rate": 1.0, "commission_rate": None}
+BRANCH_DEFAULTS = {
+    "Flotte": {},
+    "Accidents du travail": {"base": "payroll", "tax_rate": 0.0, "parafiscal_rate": 0.0},
+    "Prévoyance": {"base": "payroll", "tax_rate": 0.0, "parafiscal_rate": 0.0},
+    "Retraite": {"base": "payroll", "tax_rate": 0.0, "parafiscal_rate": 0.0},
+    "RC professionnelle": {"base": "turnover"},
+    "RC exploitation": {"base": "turnover"},
+    "Multirisque": {"base": "capital"},
+    "Multirisque habitation": {"base": "capital"},
+    "Transport": {"base": "value"},
+    "Tous risques chantier": {"base": "works"},
+}
+
+
+def branch_settings(s: Session) -> dict:
+    """{branche: {base, base_label, tax_rate, parafiscal_rate, commission_rate}} + confirmed (réglages
+    enregistrés par le cabinet, ou encore les valeurs de départ)."""
+    from app import quotes
+    saved = settings_store.get(s, "contract_branches") or {}
+    names = [b["name"] for b in quotes.branches()]
+    names += [n for n in saved.get("items", {}) if n not in names]
+    items = {}
+    for n in names:
+        v = {**_STD, **BRANCH_DEFAULTS.get(n, {}), **(saved.get("items", {}).get(n) or {})}
+        v["base_label"] = BASES.get(v["base"], "")
+        items[n] = v
+    return {"items": items, "confirmed": bool(saved.get("confirmed")), "bases": BASES}
+
+
+def save_branch_settings(s: Session, items: dict) -> dict:
+    clean = {}
+    for name, v in (items or {}).items():
+        name = str(name).strip()[:40]
+        if not name:
+            continue
+        base = v.get("base") if v.get("base") in BASES else "none"
+        clean[name] = {"base": base,
+                       "tax_rate": _percent(v.get("tax_rate"), "tax_rate") or 0.0,
+                       "parafiscal_rate": _percent(v.get("parafiscal_rate"), "parafiscal_rate") or 0.0,
+                       "commission_rate": _percent(v.get("commission_rate"), "commission_rate")}
+    settings_store.set_(s, "contract_branches", {"items": clean, "confirmed": True})
+    return branch_settings(s)
+
+
+def _branch(s: Session, name: str) -> dict:
+    return branch_settings(s)["items"].get(name) or {**_STD, "base_label": ""}
+
+
+def parse_rate(rate: str | None) -> float | None:
+    """« 2,1 % » → 0.021 ; « 3 ‰ » → 0.003 ; « 2.1 » → 0.021 (pour cent par défaut)."""
+    raw = str(rate or "").strip().replace(",", ".").replace(" ", "").replace("\u202f", "")
+    if not raw:
+        return None
+    per_mille = "‰" in raw
+    raw = raw.replace("‰", "").replace("%", "")
+    try:
+        v = float(raw)
+    except ValueError:
+        return None
+    return v / 1000 if per_mille else v / 100
+
+
+def amounts(c: Contract) -> dict:
+    """Prime nette, accessoires, taxes et prime TTC (taxes sur prime nette + accessoires)."""
+    net = c.premium
+    acc = c.accessories or 0
+    if net is None:
+        return {"tax": None, "parafiscal": None, "taxes": None, "ttc": None, "commission": None}
+    tax = round((net + acc) * (c.tax_rate or 0) / 100)
+    para = round((net + acc) * (c.parafiscal_rate or 0) / 100)
+    return {"tax": tax, "parafiscal": para, "taxes": tax + para, "ttc": net + acc + tax + para,
+            "commission": round(net * c.commission_rate / 100) if c.commission_rate is not None else None}
+
+
 EDITABLE = ("client_name", "company_id", "contact_id", "insurer_id", "insurer_name", "branch", "policy_number",
-            "premium", "rate", "commission_rate", "start_date", "end_date", "notice_days", "tacit", "owner_id", "notes")
+            "premium", "rate", "base_amount", "accessories", "tax_rate", "parafiscal_rate", "commission_rate",
+            "start_date", "end_date", "notice_days", "tacit", "owner_id", "notes")
 PLANNING = {"end_date", "notice_days", "owner_id", "client_name", "branch", "insurer_id", "insurer_name"}
 
 
@@ -119,9 +203,9 @@ def _apply(s: Session, c: Contract, data: dict) -> set[str]:
         v = data[k]
         if k in ("start_date", "end_date"):
             v = _date(v, k)
-        elif k == "premium":
+        elif k in ("premium", "base_amount", "accessories"):
             v = _amount(v, k)
-        elif k == "commission_rate":
+        elif k in ("commission_rate", "tax_rate", "parafiscal_rate"):
             v = _percent(v, k)
         elif k == "notice_days":
             v = _int(v, k, 0, 365)
@@ -147,6 +231,17 @@ def _apply(s: Session, c: Contract, data: dict) -> set[str]:
     if c.start_date and not c.end_date:
         c.end_date = default_end(c.start_date)
         changed.add("end_date")
+    # changement de branche : taxes et commission de la nouvelle branche, sauf valeurs fournies
+    if "branch" in changed or c.id is None:
+        cfg = _branch(s, c.branch or "")
+        for k in ("tax_rate", "parafiscal_rate", "commission_rate"):
+            if k not in data or data.get(k) in (None, ""):
+                setattr(c, k, cfg[k])
+    # prime nette = base × taux, si la prime n'est pas saisie
+    if c.base_amount and parse_rate(c.rate) is not None and ("premium" not in data or data.get("premium") in (None, "")) \
+            and changed & {"base_amount", "rate"}:
+        c.premium = round(c.base_amount * parse_rate(c.rate))
+        changed.add("premium")
     errors = {}
     if not (c.client_name or "").strip():
         errors["client_name"] = "Indiquez le client."
@@ -316,12 +411,25 @@ def case_draft(s: Session, case: QuoteCase) -> dict:
             "insurer_id": pick.company_id if pick else None,
             "premium": pick.offer_premium if pick else None, "rate": pick.offer_rate if pick else None,
             "policy_number": old.policy_number if old and pick and old.insurer_id == pick.company_id and old.branch == b else "",
-            "commission_rate": old.commission_rate if old else None,
+            "commission_rate": old.commission_rate if old else _branch(s, b)["commission_rate"],
+            "base_amount": _base_from_fields(fields, _branch(s, b)["base"]) or (old.base_amount if old else None),
             "start_date": start.isoformat() if start else None,
             "end_date": default_end(start).isoformat() if start else None,
             "notice_days": notice,
         })
     return {"items": items, "renewal_of": to_json(s, old) if old else None}
+
+
+_BASE_FIELDS = {"payroll": "masse_salariale", "turnover": "ca", "works": "montant_marche", "value": "valeur"}
+
+
+def _base_from_fields(fields: dict, base: str) -> int | None:
+    """Base de calcul reprise de la fiche du dossier (masse salariale, CA, montant du marché…)."""
+    key = _BASE_FIELDS.get(base)
+    try:
+        return _amount(fields.get(key), "base_amount") if key else None
+    except ContractError:
+        return None
 
 
 def from_case(s: Session, case: QuoteCase, items: list[dict], now_day: date | None = None) -> list[Contract]:
@@ -335,8 +443,8 @@ def from_case(s: Session, case: QuoteCase, items: list[dict], now_day: date | No
         b = str(it.get("branch") or "").strip()
         if b not in quotes.branches_of(case):
             raise ContractError({"branch": f"Branche « {b} » absente du dossier."})
-        data = {k: it.get(k) for k in ("insurer_id", "insurer_name", "premium", "rate", "policy_number",
-                                       "commission_rate", "start_date", "end_date", "notice_days") if k in it}
+        data = {k: it.get(k) for k in ("insurer_id", "insurer_name", "premium", "rate", "policy_number", "base_amount",
+                                       "accessories", "commission_rate", "start_date", "end_date", "notice_days") if k in it}
         if old is not None and not kept_old and old.branch == b and it.get("insurer_id") and int(it["insurer_id"]) == old.insurer_id:
             renew_same(s, old, data, now_day, reason=f"Renouvelé (dossier {case.ref})")
             old.quote_case_id = case.id
@@ -408,7 +516,8 @@ def to_json(s: Session, c: Contract, names: dict[int, str] | None = None, now_da
         if contact else None,
         "insurer_id": c.insurer_id, "insurer_name": c.insurer_name, "branch": c.branch, "policy_number": c.policy_number,
         "premium": c.premium, "rate": c.rate, "commission_rate": c.commission_rate,
-        "commission": round(c.premium * c.commission_rate / 100) if c.premium and c.commission_rate is not None else None,
+        "base_amount": c.base_amount, "base_label": _base_label(s, c.branch), "accessories": c.accessories,
+        "tax_rate": c.tax_rate, "parafiscal_rate": c.parafiscal_rate, **{k: v for k, v in amounts(c).items()},
         "start_date": c.start_date.isoformat() if c.start_date else None, "end_date": c.end_date.isoformat(),
         "notice_days": c.notice_days, "deadline": dl.isoformat(), "days_to_deadline": (dl - now_day).days,
         "days_to_end": (c.end_date - now_day).days, "tacit": c.tacit, "status": c.status,
@@ -420,12 +529,20 @@ def to_json(s: Session, c: Contract, names: dict[int, str] | None = None, now_da
     }
 
 
-FILTERS = {"upcoming": "À renouveler (90 jours)", "active": "En cours", "renewing": "Renouvellement en cours",
+def _base_label(s: Session, branch: str) -> str:
+    return _branch(s, branch).get("base_label", "")
+
+
+FILTERS = {"active": "En cours", "upcoming": "À renouveler (90 jours)", "renewing": "Renouvellement en cours",
            "ended": "Terminés", "all": "Tous"}
+SORTS = {"deadline": "Date limite de préavis", "end_date": "Échéance", "client": "Client", "premium": "Prime",
+         "insurer": "Compagnie", "recent": "Ajout récent"}
 
 
-def listing(s: Session, flt: str = "upcoming", q: str = "", branch: str = "", owner: str = "",
-            company_id: int | None = None, now_day: date | None = None) -> list[Contract]:
+def listing(s: Session, flt: str = "active", q: str = "", branch: str = "", owner: str = "",
+            company_id: int | None = None, now_day: date | None = None, *, policy: str = "",
+            insurer: str = "", contact_id: int | None = None, end_from: date | None = None,
+            end_to: date | None = None, sort: str = "deadline") -> list[Contract]:
     now_day = now_day or today()
     stmt = select(Contract)
     if flt == "upcoming":  # date limite de préavis dans 90 jours ou dépassée (filtrée ci-dessous)
@@ -442,14 +559,38 @@ def listing(s: Session, flt: str = "upcoming", q: str = "", branch: str = "", ow
         stmt = stmt.where(Contract.owner_id == int(owner))
     if company_id:
         stmt = stmt.where(Contract.company_id == company_id)
-    if q.strip():
-        like = f"%{q.strip()}%"
+    if contact_id:
+        stmt = stmt.where(Contract.contact_id == contact_id)
+    if insurer.isdigit():
+        stmt = stmt.where(Contract.insurer_id == int(insurer))
+    elif insurer.strip():
+        stmt = stmt.where(Contract.insurer_name.ilike(f"%{insurer.strip()}%"))
+    if policy.strip():
+        stmt = stmt.where(func.replace(Contract.policy_number, " ", "").ilike(f"%{policy.replace(' ', '').strip()}%"))
+    if end_from:
+        stmt = stmt.where(Contract.end_date >= end_from)
+    if end_to:
+        stmt = stmt.where(Contract.end_date <= end_to)
+    for word in q.split():  # chaque mot doit se trouver dans le client, la police, la compagnie ou la branche
+        like = f"%{word}%"
         stmt = stmt.where(Contract.client_name.ilike(like) | Contract.policy_number.ilike(like)
-                          | Contract.insurer_name.ilike(like))
+                          | Contract.insurer_name.ilike(like) | Contract.branch.ilike(like))
     rows = list(s.scalars(stmt.order_by(Contract.end_date, Contract.id)))
     if flt == "upcoming":
         rows = [c for c in rows if (deadline(c) - now_day).days <= 90]
-    return sorted(rows, key=lambda c: (deadline(c), c.id)) if flt != "ended" else rows[::-1]
+    key = {"deadline": lambda c: (deadline(c), c.id), "end_date": lambda c: (c.end_date, c.id),
+           "client": lambda c: ((c.client_name or "").lower(), c.id), "premium": lambda c: (-(c.premium or 0), c.id),
+           "insurer": lambda c: ((c.insurer_name or "").lower(), c.id), "recent": lambda c: (-c.id,)}
+    if flt == "ended" and sort == "deadline":
+        return rows[::-1]
+    return sorted(rows, key=key.get(sort, key["deadline"]))
+
+
+def totals(rows: list[Contract]) -> dict:
+    """Totaux de la liste affichée (filtres compris)."""
+    am = [amounts(c) for c in rows]
+    return {"count": len(rows), "premium": sum(c.premium or 0 for c in rows),
+            "ttc": sum(a["ttc"] or 0 for a in am), "commission": sum(a["commission"] or 0 for a in am)}
 
 
 def summary(s: Session, now_day: date | None = None) -> dict:
@@ -460,6 +601,7 @@ def summary(s: Session, now_day: date | None = None) -> dict:
     return {
         "active": len(live), "renewing": counts["renewing"], "ended": counts["ended"],
         "premium": sum(c.premium or 0 for c in live),
+        "ttc": sum(amounts(c)["ttc"] or 0 for c in live),
         "commission": sum(round((c.premium or 0) * (c.commission_rate or 0) / 100) for c in live),
         "past_notice": sum(1 for c, d in zip(live, days) if d < 0 and c.end_date >= now_day),
         "due_30": sum(1 for d in days if 0 <= d <= 30), "due_60": sum(1 for d in days if 0 <= d <= 60),

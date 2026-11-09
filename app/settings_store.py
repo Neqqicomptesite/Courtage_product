@@ -42,7 +42,8 @@ def _defaults() -> dict[str, Any]:
         "digest_recipient": "",  # vide = adresse de la boîte mail
         "auto_reply_continues": True,
         "followup_days": 3,  # V2.7 : « sans réponse depuis N jours ouvrés » (tableau de bord, boîte mail)
-        "contract_notice_days": 60,  # Contrats : préavis de résiliation par défaut (jours avant l'échéance)
+        "contract_notice_days": 60,
+        "contract_branches": {},  # Contrats : par branche, base de calcul, taxes et commission (voir contracts.py)  # Contrats : préavis de résiliation par défaut (jours avant l'échéance)
         "quote_followup_days": 4,  # Dossiers de cotation : relancer une compagnie consultée après N jours ouvrés
         "notifications_seen": [],  # V2.8 : clés des notifications déjà vues (pastille de la cloche)
         "guide_checked": [],
@@ -76,6 +77,7 @@ GLOBAL_KEYS = frozenset({
     "backup_copy_dir", "update_url", "update_status", "custom_field_labels", "engine_last_tick",
     "quote_followup_days",  # Dossiers de cotation : réglage du cabinet (pas d'un employé)
     "contract_notice_days",  # Contrats : réglage du cabinet
+    "contract_branches",
 })
 
 

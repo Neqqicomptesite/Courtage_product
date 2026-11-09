@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Command } from "cmdk";
 import { openComposer } from "@/components/composer";
-import { Building2, CalendarDays, FileText, Inbox, PenSquare, LayoutDashboard, ListOrdered, RefreshCw, Rocket, Settings, Upload, User, UserPlus, Users } from "lucide-react";
+import { Building2, CalendarDays, FileCheck2, FileText, Inbox, PenSquare, LayoutDashboard, ListOrdered, RefreshCw, Rocket, Settings, Upload, User, UserPlus, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -36,6 +36,7 @@ export function CommandPalette({ onSync }: { onSync: () => void }) {
   const navigate = useNavigate();
   const { data: contacts } = useQuery({ queryKey: ["picker", q], queryFn: () => api.picker(q), enabled: open && q.length >= 2 });
   const { data: companies } = useQuery({ queryKey: ["companies", q, "palette"], queryFn: () => api.companies({ q }), enabled: open && q.length >= 2 });
+  const { data: contracts } = useQuery({ queryKey: ["contracts", { f: "all", q, limit: 6 }], queryFn: () => api.contracts({ f: "all", q, limit: 6 }), enabled: open && q.length >= 2 });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -84,6 +85,18 @@ export function CommandPalette({ onSync }: { onSync: () => void }) {
                     <Building2 />
                     <span className="flex-1 truncate">{c.name}</span>
                     <span className="text-xs text-muted-foreground">{c.people} pers.</span>
+                  </Command.Item>
+                ))}
+              </Command.Group>
+            )}
+            {contracts && contracts.items.length > 0 && (
+              <Command.Group heading="Contrats" className="text-xs text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
+                {contracts.items.slice(0, 6).map((c) => (
+                  <Command.Item key={c.id} value={`contrat ${c.id} ${c.client_name} ${c.policy_number} ${c.insurer_name} ${c.branch}`} keywords={[q]} className={item}
+                    onSelect={() => go(`/contracts/${c.id}`)}>
+                    <FileCheck2 />
+                    <span className="flex-1 truncate">{c.client_name} · {c.branch}</span>
+                    <span className="truncate text-xs text-muted-foreground tabular">{[c.insurer_name, c.policy_number].filter(Boolean).join(" · ")}</span>
                   </Command.Item>
                 ))}
               </Command.Group>

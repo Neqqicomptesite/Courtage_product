@@ -532,9 +532,13 @@ class Contract(Base):
     insurer_name: Mapped[str] = mapped_column(String(120), default="", server_default="")  # si compagnie hors base
     branch: Mapped[str] = mapped_column(String(40))
     policy_number: Mapped[str] = mapped_column(String(60), default="", server_default="")
-    premium: Mapped[int | None] = mapped_column(Integer)                  # MAD par an
+    premium: Mapped[int | None] = mapped_column(Integer)                  # prime nette, MAD par an
     rate: Mapped[str | None] = mapped_column(String(40))                  # taux (AT, prévoyance…)
-    commission_rate: Mapped[float | None] = mapped_column(Float)          # % de la prime
+    base_amount: Mapped[int | None] = mapped_column(Integer)              # masse salariale, CA… (voir branche)
+    accessories: Mapped[int | None] = mapped_column(Integer)              # accessoires / coût de police
+    tax_rate: Mapped[float | None] = mapped_column(Float)                 # taxe sur les contrats (%)
+    parafiscal_rate: Mapped[float | None] = mapped_column(Float)          # taxe parafiscale catastrophes (%)
+    commission_rate: Mapped[float | None] = mapped_column(Float)          # % de la prime nette
     start_date: Mapped[date | None] = mapped_column(Date)                 # effet de la période en cours
     end_date: Mapped[date] = mapped_column(Date, index=True)              # échéance
     notice_days: Mapped[int] = mapped_column(Integer, default=60, server_default="60")  # préavis de résiliation

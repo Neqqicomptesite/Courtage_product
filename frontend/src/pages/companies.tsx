@@ -23,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ApiError, api, type CompanyDetail, type CompanyInput, type Department, type Kind, type Seniority } from "@/lib/api";
 import { RemindersPanel, openReminder } from "@/pages/agenda";
 import { QuotesPanel } from "@/pages/quotes";
+import { ContractsPanel } from "@/pages/contracts";
 import { openSendSequence } from "@/components/send-sequence";
 import { formatDayTime, fullName } from "@/lib/format";
 import { cn, safeUrl } from "@/lib/utils";
@@ -270,6 +271,8 @@ export function CompanyPage() {
               )}
             </CardContent>
           </Card>
+          {/* contrats : colonne large, le tableau a besoin de place */}
+          {data.kind === "insurer" ? <ContractsPanel insurer={{ id: data.id, name: data.name }} /> : <ContractsPanel company={{ id: data.id, name: data.name }} />}
         </div>
 
         <div className="space-y-6">

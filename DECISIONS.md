@@ -567,3 +567,17 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
      Tacite reconduction : un contrat échu sans action est reconduit d'un an (tâche toutes les 6 h).
      Commission saisie en % de la prime, montant calculé. Import du portefeuille (logiciel DIAMM
      du cabinet) : plus tard, quand Omar aura un export d'exemple.
+298. **Contrats : montants, taxes, commissions par branche (09/11)** : base de calcul par branche
+     (masse salariale pour AT / Prévoyance / Retraite, chiffre d'affaires pour les RC, capitaux pour
+     les multirisques, montant du marché pour TRC, valeur transportée pour Transport) ; prime nette =
+     base × taux (« 2,1 % » ou « 3 ‰ »), recalculée quand l'un change, saisie manuelle prioritaire.
+     Accessoires ; taxes = (prime nette + accessoires) × (taxe sur les contrats + taxe parafiscale).
+     Réglage du cabinet « contract_branches » (Réglages → Taxes et commissions, administrateur) :
+     taux de départ CGI art. 284 (14 % ; AT et vie exonérés) et décret 2-19-244 (1 %), affichés
+     « à vérifier » tant qu'ils n'ont pas été enregistrés ; Prévoyance, Transport, taxe de 1 % sur
+     les AT, base des taxes (avec ou sans accessoires) et commissions : à confirmer par Omar.
+     Les taux sont recopiés sur chaque contrat (un changement de réglage ne touche pas les contrats
+     existants). Recherche : texte libre multi-mots, n° de police (espaces ignorés), compagnie,
+     client (fiche reliée), gestionnaire, échéance du/au, tri ; totaux de la liste ; export Excel ;
+     contrats dans Ctrl+K. Fiches Entreprise et Contact : contrats du client + « Contrat » ; fiche
+     d'une compagnie : ses contrats. Liste par défaut : tous les contrats en cours.

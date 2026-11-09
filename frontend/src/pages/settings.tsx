@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Clock, DatabaseBackup, Download, FlaskConical, Loader2, Lock, Mail, Plus, Send, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, DatabaseBackup, Download, FlaskConical, Percent, Loader2, Lock, Mail, Plus, Send, Trash2, XCircle } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -17,11 +17,13 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { api, type ConnectionReport, type MailboxSettings, type SendingSettings, type Settings } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { BranchSettingsSection } from "@/pages/contracts";
 
 const SECTIONS = [
   { key: "mailbox", label: "Boîte mail", icon: Mail },
   { key: "sending", label: "Rythme d'envoi", icon: Clock },
   { key: "test", label: "Mode test", icon: FlaskConical },
+  { key: "branches", label: "Taxes et commissions", icon: Percent },
   { key: "backup", label: "Sauvegardes", icon: DatabaseBackup },
   { key: "update", label: "Mise à jour", icon: Download },
 ] as const;
@@ -49,6 +51,7 @@ export function SettingsPage() {
             section === "sending" ? <SendingForm key="s" s={data} /> :
             section === "test" ? <TestMode s={data} /> :
             section === "update" ? <UpdateSection /> :
+            section === "branches" ? <BranchSettingsSection /> :
             section === "backup" ? <BackupSection /> : <MailboxForm key="m" s={data} />}
         </div>
       </div>

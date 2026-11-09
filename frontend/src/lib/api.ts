@@ -475,22 +475,30 @@ export type Contract = {
   id: number; client_name: string; company_id: number | null; contact: { id: number; name: string } | null;
   insurer_id: number | null; insurer_name: string; branch: string; policy_number: string;
   premium: number | null; rate: string | null; commission_rate: number | null; commission: number | null;
+  base_amount: number | null; base_label: string; accessories: number | null; tax_rate: number | null; parafiscal_rate: number | null;
+  tax: number | null; parafiscal: number | null; taxes: number | null; ttc: number | null;
   start_date: string | null; end_date: string; notice_days: number; deadline: string; days_to_deadline: number; days_to_end: number;
   tacit: boolean; status: ContractStatus; status_label: string; end_reason: string | null; urgency: ContractUrgency;
   owner: { id: number; name: string } | null; quote_case: { id: number; ref: string } | null;
   renewal_case: { id: number; ref: string; stage: QuoteStage } | null; previous_id: number | null; notes: string;
   history: { ts: string; text: string }[];
 };
-export type ContractSummary = { active: number; renewing: number; ended: number; premium: number; commission: number;
+export type ContractSummary = { active: number; renewing: number; ended: number; premium: number; ttc: number; commission: number;
   past_notice: number; due_30: number; due_60: number; due_90: number; upcoming: number };
-export type ContractList = { filter: string; filters: { key: string; label: string }[]; summary: ContractSummary; items: Contract[];
+export type ContractList = { filter: string; filters: { key: string; label: string }[]; sorts: { key: string; label: string }[];
+  summary: ContractSummary; totals: { count: number; premium: number; ttc: number; commission: number }; items: Contract[];
   branches: string[]; notice_days: number };
+export type BranchSetting = { base: string; base_label: string; tax_rate: number; parafiscal_rate: number; commission_rate: number | null };
+export type BranchSettings = { items: Record<string, BranchSetting>; confirmed: boolean; bases: Record<string, string> };
+export type ContractFilters = Partial<{ f: string; q: string; branch: string; owner: string; company_id: number; contact_id: number;
+  policy: string; insurer: string; end_from: string; end_to: string; sort: string; limit: number }>;
 export type ContractInput = Partial<{ client_name: string; company_id: number | null; contact_id: number | null; insurer_id: number | null;
   insurer_name: string; branch: string; policy_number: string; premium: string | number | null; rate: string | null;
-  commission_rate: string | number | null; start_date: string | null; end_date: string | null; notice_days: string | number | null;
+  commission_rate: string | number | null; base_amount: string | number | null; accessories: string | number | null;
+  tax_rate: string | number | null; parafiscal_rate: string | number | null; start_date: string | null; end_date: string | null; notice_days: string | number | null;
   tacit: boolean; owner_id: number | null; notes: string }>;
 export type ContractDraftItem = { branch: string; choices: { company_id: number; name: string; premium: number | null; rate: string | null; status: string }[];
-  insurer_id: number | null; premium: number | null; rate: string | null; policy_number: string; commission_rate: number | null;
+  insurer_id: number | null; premium: number | null; rate: string | null; policy_number: string; commission_rate: number | null; base_amount?: number | null;
   start_date: string | null; end_date: string | null; notice_days: number };
 export type ContractDraft = { items: ContractDraftItem[]; renewal_of: Contract | null };
 export type QuoteDetail = QuoteSummary & {
@@ -554,6 +562,21 @@ async function request<T>(path: string, init?: RequestInit & { json?: unknown })
     throw new ApiError(typeof detail === "string" ? detail : `Erreur ${res.status}`, res.status);
   }
   return res.json() as Promise<T>;
+}
+
+/** Télécharge un fichier servi par l'API (avec la connexion de l'employé) sous le nom donné. */
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  const token = await accessToken();
+  const res = await fetch(path, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) throw new ApiError(`Erreur ${res.status}`, res.status);
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 const qs = (params: Record<string, string | number | boolean | undefined | null>) => {
@@ -722,8 +745,11 @@ export const api = {
   quoteCreate: (body: QuoteInput) => request<QuoteDetail>("/api/quotes", { method: "POST", json: body }),
   quoteUpdate: (id: number, body: QuoteInput) => request<QuoteDetail>(`/api/quotes/${id}`, { method: "PATCH", json: body }),
   // Contrats et échéances
-  contracts: (p: { f?: string; q?: string; branch?: string; owner?: string; company_id?: number } = {}) =>
-    request<ContractList>(`/api/contracts${qs(p)}`),
+  contracts: (p: ContractFilters = {}) => request<ContractList>(`/api/contracts${qs(p)}`),
+  contractsExportUrl: (p: ContractFilters = {}) => `/api/contracts/export.xlsx${qs(p)}`,
+  contractBranches: () => request<BranchSettings>("/api/contracts/branches"),
+  contractBranchesSave: (items: Record<string, Partial<Record<keyof BranchSetting, string | number | null>>>) =>
+    request<BranchSettings>("/api/contracts/branches", { method: "PUT", json: { items } }),
   contract: (id: number) => request<Contract>(`/api/contracts/${id}`),
   contractCreate: (body: ContractInput) => request<Contract>("/api/contracts", { method: "POST", json: body }),
   contractUpdate: (id: number, body: ContractInput) => request<Contract>(`/api/contracts/${id}`, { method: "PATCH", json: body }),

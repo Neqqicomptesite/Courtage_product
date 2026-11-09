@@ -26,6 +26,7 @@ import { KindCards } from "@/components/kind-cards";
 import { RemindersPanel, openReminder } from "@/pages/agenda";
 import { DEPARTMENTS, SENIORITIES } from "@/pages/companies";
 import { QuotesPanel } from "@/pages/quotes";
+import { ContractsPanel } from "@/pages/contracts";
 import { cn, safeUrl } from "@/lib/utils";
 import { useMe } from "@/pages/login";
 
@@ -410,6 +411,7 @@ function ContactSheet({ id, vocab, companies, companyKinds, onClosed }: { id: nu
       <EnrollDialog open={enrolling} onOpenChange={setEnrolling} contactId={c.id} name={fullName(c)} kind={c.kind} />
 
       {c.kind !== "insurer" && <QuotesPanel contact={{ id: c.id, name: fullName(c), company: c.company_ref }} />}
+      {c.kind !== "insurer" && <ContractsPanel contact={{ id: c.id, name: fullName(c), company: c.company_ref }} />}
       <RemindersPanel contact={c} />
 
       <Notes c={c} />

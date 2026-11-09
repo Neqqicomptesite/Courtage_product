@@ -139,7 +139,8 @@ def test_renew_same_tacit_roll_and_portfolio(client):
     r = client.post(f"/api/contracts/{soon['id']}/renew", json={"premium": "108 000"}, headers=O).json()
     assert r["premium"] == 108000 and r["end_date"] == contracts.default_end(today + timedelta(days=71)).isoformat()
     # listes et totaux
-    data = client.get("/api/contracts").json()
+    assert client.get("/api/contracts").json()["filter"] == "active"   # par défaut : tout le portefeuille
+    data = client.get("/api/contracts?f=upcoming").json()
     assert data["filter"] == "upcoming" and [i["id"] for i in data["items"]] == [fixed["id"]]   # échu sans reconduction
     all_ = client.get("/api/contracts?f=active").json()
     assert {i["id"] for i in all_["items"]} == {soon["id"], later["id"], past["id"], fixed["id"]}
@@ -151,3 +152,55 @@ def test_renew_same_tacit_roll_and_portfolio(client):
     assert client.post(f"/api/contracts/{soon['id']}/end", json={"reason": " "}, headers=O).status_code == 422
     assert client.delete(f"/api/contracts/{fixed['id']}", headers=O).json() == {"ok": True}
     assert _reminders(fixed["id"]) == []
+
+
+def test_amounts_branch_settings_search_and_export(client):
+    """Base de calcul × taux = prime nette ; taxes et commission par défaut selon la branche
+    (réglables) ; recherche par police, compagnie, client, échéance ; export Excel."""
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+    client_co, ins1, ins2 = _setup()
+    cfg = client.get("/api/contracts/branches").json()
+    assert cfg["confirmed"] is False
+    at, rc = cfg["items"]["Accidents du travail"], cfg["items"]["RC professionnelle"]
+    assert at["base_label"] == "Masse salariale" and at["tax_rate"] == 0 and rc["base_label"] == "Chiffre d'affaires"
+    assert rc["tax_rate"] == 14 and rc["parafiscal_rate"] == 1
+    items = cfg["items"]
+    items["RC professionnelle"] = {**rc, "commission_rate": "15"}
+    items["Accidents du travail"] = {**at, "commission_rate": 10}
+    saved = client.put("/api/contracts/branches", json={"items": items}, headers=O).json()
+    assert saved["confirmed"] is True and saved["items"]["RC professionnelle"]["commission_rate"] == 15
+    # RC pro : CA 2 000 000 × 0,35 % = 7 000 de prime nette ; taxes 14 % + 1 % sur prime + accessoires
+    c = client.post("/api/contracts", json={"company_id": client_co, "insurer_id": ins1, "branch": "RC professionnelle",
+                                            "policy_number": "RC 2026 / 0042", "base_amount": "2 000 000", "rate": "0,35 %",
+                                            "accessories": 200, "end_date": "2027-06-30"}, headers=O).json()
+    assert c["base_label"] == "Chiffre d'affaires" and c["premium"] == 7000 and c["commission_rate"] == 15
+    assert c["tax"] == 1008 and c["parafiscal"] == 72 and c["taxes"] == 1080 and c["ttc"] == 8280 and c["commission"] == 1050
+    # taux en pour mille, et prime saisie à la main (minimum de prime) : la saisie l'emporte
+    c = client.patch(f"/api/contracts/{c['id']}", json={"rate": "4 ‰"}, headers=O).json()
+    assert c["premium"] == 8000
+    c = client.patch(f"/api/contracts/{c['id']}", json={"rate": "3 ‰", "premium": "9500"}, headers=O).json()
+    assert c["premium"] == 9500
+    # AT : exonéré, commission de la branche ; changer de branche reprend ses taux
+    at_c = client.post("/api/contracts", json={"client_name": "Textile Démo", "insurer_id": ins2, "branch": "Accidents du travail",
+                                               "policy_number": "AT-77", "base_amount": 3000000, "rate": "2,5 %",
+                                               "end_date": "2027-01-31"}, headers=O).json()
+    assert at_c["premium"] == 75000 and at_c["taxes"] == 0 and at_c["ttc"] == 75000 and at_c["commission"] == 7500
+    moved = client.patch(f"/api/contracts/{at_c['id']}", json={"branch": "RC professionnelle"}, headers=O).json()
+    assert moved["tax_rate"] == 14 and moved["commission_rate"] == 15
+    client.patch(f"/api/contracts/{at_c['id']}", json={"branch": "Accidents du travail"}, headers=O)
+    # recherche
+    get = lambda **p: [i["id"] for i in client.get("/api/contracts", params={"f": "all", **p}).json()["items"]]  # noqa: E731
+    assert get(policy="2026/0042") == [c["id"]] and get(policy="at-77") == [at_c["id"]]
+    assert get(insurer=str(ins2)) == [at_c["id"]] and get(company_id=client_co) == [c["id"]]
+    assert get(q="textile accidents") == [at_c["id"]] and get(q="Atlas Alpha") == [c["id"]]
+    assert get(end_from="2027-03-01") == [c["id"]] and get(end_to="2027-02-01") == [at_c["id"]]
+    assert get(sort="premium") == [at_c["id"], c["id"]]
+    r = client.get("/api/contracts", params={"f": "all"}).json()
+    assert r["totals"] == {"count": 2, "premium": 84500, "ttc": 75000 + 9700 + 1455, "commission": 7500 + 1425}
+    # export Excel : mêmes filtres
+    x = client.get("/api/contracts/export.xlsx", params={"f": "all", "branch": "Accidents du travail"})
+    assert x.status_code == 200 and "spreadsheetml" in x.headers["content-type"]
+    ws = load_workbook(BytesIO(x.content)).active
+    assert ws.max_row == 2 and ws["A2"].value == "Textile Démo" and ws["H2"].value == 75000 and ws["E2"].value == "Masse salariale"
