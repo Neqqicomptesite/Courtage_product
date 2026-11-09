@@ -41,7 +41,7 @@ export function TeamPage() {
 
   return (
     <>
-      <PageHeader title="Équipe" description="Chaque collègue a son compte, sa boîte mail et ses campagnes. Les compagnies d'assurance et les contacts sont communs ; un prospect est suivi par un seul employé." />
+      <PageHeader title="Équipe" description="Chaque collègue a son compte, sa boîte mail et ses campagnes. Les compagnies d'assurance et les contacts sont communs ; tout le monde peut écrire à tout prospect, même si un collègue lui parle déjà." />
       <Card className="mb-5 p-4">
         <form className="grid gap-2 sm:grid-cols-[2fr_2fr_1fr_auto]" onSubmit={(e) => { e.preventDefault(); invite.mutate(); }}>
           <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="prenom.nom@cabinet.ma" aria-label="Email" />

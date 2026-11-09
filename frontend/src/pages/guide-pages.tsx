@@ -278,7 +278,7 @@ const SECTIONS: Section[] = [
       ]} />
       <H2>Les règles communes</H2>
       <Points items={[
-        <><B>Un prospect, un responsable</B> : le premier qui lui écrit le suit. Si un collègue le suit déjà, l'appli refuse l'envoi et indique qui contacter.</>,
+        <><B>Pas de réservation</B> : chacun peut écrire à n'importe quel prospect, même si un collègue lui parle déjà. La fiche indique « Suivi par » le premier qui lui a écrit, pour savoir à qui en parler.</>,
         <>Les <B>compagnies d'assurance</B> (gestionnaires, souscripteurs) sont communes : plusieurs collègues peuvent leur écrire.</>,
         <>Un modèle commun ne vous convient pas ? <B>Dupliquez-le</B> : la copie est à vous, modifiable, invisible des autres.</>,
         <>Effacer un contact suivi par un collègue, supprimer une compagnie ou retirer une exclusion : réservé à l'administrateur.</>,

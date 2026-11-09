@@ -285,18 +285,13 @@ def status_allows(contact: Contact, prospection: bool, direct: bool = False) -> 
 
 
 def claim_prospect(s: Session, contact: Contact) -> None:
-    """V3 : base commune, un responsable par prospect. Le premier employé qui lui écrit en
-    devient responsable ; les autres sont arrêtés (« suivi par Hamza ») pour ne jamais écrire
-    deux fois au même prospect. Les assureurs et partenaires, eux, restent à tout le monde."""
+    """V3.3.3 : pas de réservation. Tout le monde peut écrire à tout prospect, même si un
+    collègue lui parle déjà. Le premier qui lui écrit est seulement noté comme « suivi par »
+    (repère visible sur la fiche, modifiable par l'administrateur) ; cela ne bloque personne."""
     from app.current import user_id
     uid = user_id()
-    if uid is None or contact.kind != "prospect":
+    if uid is None or contact.kind != "prospect" or contact.owner_id:
         return
-    if contact.owner_id and contact.owner_id != uid:
-        from app.models import AppUser
-        owner = s.get(AppUser, contact.owner_id)
-        who = (owner.full_name or owner.email) if owner else "un collègue"
-        raise EnrollRefused(f"Ce prospect est suivi par {who}. Demandez-lui, ou à l'administrateur, de vous le confier.")
     contact.owner_id = uid
 
 
@@ -323,7 +318,7 @@ def enroll_one(s: Session, camp: Campaign, contact: Contact, include_overlapping
         raise EnrollRefused(f"{KIND_LABELS[contact.kind]} : seuls les prospects peuvent entrer dans une campagne de prospection.")
     if suppression.is_suppressed_db(s, contact.email):
         raise EnrollRefused("Adresse sur la liste d'exclusion.")
-    claim_prospect(s, contact)  # V3 : un prospect = un responsable
+    claim_prospect(s, contact)  # V3.3.3 : note « suivi par » le premier, ne bloque personne
     overrides = clean_overrides(overrides)
     n_steps = len(ss.steps_of(s, seq))
     max_steps = max_steps if max_steps and 0 < max_steps < n_steps else None  # V2.24 ; sinon toute la séquence

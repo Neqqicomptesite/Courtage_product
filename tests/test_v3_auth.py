@@ -134,7 +134,7 @@ def _two_boxes():
     return ids
 
 
-def test_one_owner_per_prospect_and_private_campaigns(server):
+def test_no_prospect_reservation_and_private_campaigns(server):
     from tests.test_v223 import _setup
     from app.models import Contact
     ids = _two_boxes()
@@ -143,8 +143,11 @@ def test_one_owner_per_prospect_and_private_campaigns(server):
     assert len(r["sent"]) == 1, r
     with get_session() as s:
         assert s.get(Contact, p).owner_id == ids["omar@oddo.ma"]
+    # V3.3.3 : pas de réservation, Hamza peut lui écrire aussi ; Omar reste noté « suivi par »
     r = server.post(f"/api/sequences/{seq['P2']}/send", json={"contact_ids": [p]}, headers=H("hamza@oddo.ma")).json()
-    assert not r["sent"] and "suivi par Omar" in r["refused"][0]["reason"]
+    assert len(r["sent"]) == 1 and not r["refused"], r
+    with get_session() as s:
+        assert s.get(Contact, p).owner_id == ids["omar@oddo.ma"]
     # un assureur reste à tout le monde
     ov = {"1": {"subject": "Demande d'avenant – police 40.1 – Client A", "body": "Bonjour Karima,\n\nMerci.\n"}}
     for who in ("omar@oddo.ma", "hamza@oddo.ma"):

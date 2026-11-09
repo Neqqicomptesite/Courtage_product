@@ -144,7 +144,7 @@ class Contact(Base):
     department: Mapped[str | None] = mapped_column(String(20))   # V2.8 : souscription, gestion…
     seniority: Mapped[str | None] = mapped_column(String(12))    # V2.8 : junior, senior, directeur
     notes: Mapped[str] = mapped_column(Text, default="")
-    # V3 : responsable du contact (base commune, un responsable par prospect)
+    # V3 : « suivi par » (repère : premier qui lui a écrit, ou choisi par l'admin) ; ne bloque aucun envoi
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id", ondelete="SET NULL"), index=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)

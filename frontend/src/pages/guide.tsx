@@ -138,7 +138,7 @@ const CHAPTERS: Chapter[] = [
 type Rule = { icon: LucideIcon; title: string; text: string };
 const SERVER_RULES: Record<string, Rule> = {
   "La fenêtre noire reste ouverte": { icon: MonitorCheck, title: "L'appli tourne en ligne", text: "Elle envoie et lit votre boîte 24 h/24, même PC éteint. Ouvrez-la depuis votre navigateur, avec votre compte." },
-  "Se répartir les prospects": { icon: Users, title: "Un prospect, un responsable", text: "Le premier qui écrit à un prospect le suit ; l'appli refuse qu'un collègue lui écrive aussi. Les compagnies d'assurance sont communes." },
+  "Se répartir les prospects": { icon: Users, title: "Pas de réservation", text: "Chacun peut écrire à n'importe quel prospect, même si un collègue lui parle déjà. La fiche indique qui lui a écrit en premier. Les compagnies d'assurance sont communes." },
   "Ne jamais supprimer le dossier « data »": { icon: FolderLock, title: "Modèles communs : on duplique", text: "Les modèles de l'équipe ne se modifient pas (sauf l'administrateur) : « Dupliquer » crée votre version, que vous seul voyez." },
 };
 const RULES_PC: Rule[] = [
