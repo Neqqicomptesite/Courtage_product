@@ -355,10 +355,27 @@ function ConsultDialog({ q, target, onClose, onChange }: { q: QuoteDetail; targe
   });
   const [cc, setCc] = useState(""); const [subject, setSubject] = useState(""); const [body, setBody] = useState("");
   const [atts, setAtts] = useState<number[]>([]);
+  // fichiers joints depuis l'ordinateur dans cette fenêtre (rangés aussi dans les pièces du dossier)
+  const [extra, setExtra] = useState<{ id: number; name: string }[]>([]);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const upload = useMutation({
+    mutationFn: async (file: File) => {
+      const a = await api.uploadAttachment(file);
+      const d = await api.quoteAddFile(q.id, { attachment_id: a.id, kind: "client", label: "" });
+      return { a, d };
+    },
+    onSuccess: ({ a, d }) => {
+      onChange(d);
+      setExtra((p) => [...p, { id: a.id, name: a.name }]);
+      setAtts((p) => [...p, a.id]);
+      toast.success(`${a.name} joint`, { description: "Rangé aussi dans les pièces du dossier, pour les autres compagnies." });
+    },
+    onError: (e) => toastError(e, "Fichier non joint"),
+  });
   const [confirm, setConfirm] = useState<string | null>(null);
   const [tab, setTab] = useState<"edit" | "preview">("edit");
   useEffect(() => { if (target) setTab("edit"); }, [target]);
-  const attNames = (draft?.attachments ?? []).filter((a) => atts.includes(a.id)).map((a) => a.name);
+  const attNames = [...(draft?.attachments ?? []), ...extra].filter((a) => atts.includes(a.id)).map((a) => a.name);
   const { data: pv, isFetching: pvLoading } = useQuery({
     queryKey: ["quote-preview", q.id, to?.join(","), cc, subject, body, attNames.join("|")],
     queryFn: () => api.quotePreview(q.id, { to: to ?? [], cc, subject, body, attachment_names: attNames }),
@@ -369,7 +386,7 @@ function ConsultDialog({ q, target, onClose, onChange }: { q: QuoteDetail; targe
     setSubject(draft.subject); setBody(draft.body); setAtts(draft.attachments.filter((a) => a.checked).map((a) => a.id));
     if (to === null) setTo(draft.to);
   }, [draft]);  // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (target) setCc(""); }, [target]);
+  useEffect(() => { if (target) { setCc(""); setExtra([]); } }, [target]);
   const left = useMemo(() => [...new Set([...`${subject}\n${body}`.matchAll(/\[([^[\]\n]{2,60})\]/g)].map((m) => m[1]))], [subject, body]);
   // branches que l'on peut regrouper dans cet email (même nature d'envoi que la sélection de départ)
   const rows = target?.company.rows ?? [];
@@ -442,18 +459,24 @@ function ConsultDialog({ q, target, onClose, onChange }: { q: QuoteDetail; targe
                 <span>À compléter avant l'envoi : {left.map((p) => `[${p}]`).join(", ")}. Remplissez la fiche du dossier ou écrivez directement dans le message.</span>
               </p>
             )}
-            {draft.attachments.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-sm font-medium">Pièces jointes du dossier</p>
-                {draft.attachments.map((a) => (
-                  <label key={a.id} className="flex items-center gap-2 text-sm">
-                    <Checkbox checked={atts.includes(a.id)} onCheckedChange={(v) => setAtts((p) => (v ? [...p, a.id] : p.filter((x) => x !== a.id)))} />
-                    <Paperclip className="size-3.5 text-muted-foreground" />{a.label || a.name}
-                    <span className="text-xs text-muted-foreground">{a.kind === "current" ? "conditions actuelles" : a.label && a.name}</span>
-                  </label>
-                ))}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">Pièces jointes</p>
+                <Button type="button" size="sm" variant="outline" disabled={upload.isPending} onClick={() => fileInput.current?.click()}>
+                  {upload.isPending ? <RotateCw className="animate-spin" /> : <Paperclip />} Joindre un fichier
+                </Button>
+                <input ref={fileInput} type="file" multiple className="hidden"
+                  onChange={(e) => { Array.from(e.target.files ?? []).forEach((file) => upload.mutate(file)); e.target.value = ""; }} />
               </div>
-            )}
+              {draft.attachments.length === 0 && extra.length === 0 && <p className="text-xs text-muted-foreground">Aucune pièce jointe. Les documents du dossier (pièces du client, conditions actuelles) apparaissent ici.</p>}
+              {[...draft.attachments.filter((a) => !extra.some((x) => x.id === a.id)), ...extra.map((x) => ({ ...x, label: "", kind: "client" as const }))].map((a) => (
+                <label key={a.id} className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={atts.includes(a.id)} onCheckedChange={(v) => setAtts((p) => (v ? [...p, a.id] : p.filter((x) => x !== a.id)))} />
+                  <Paperclip className="size-3.5 text-muted-foreground" />{a.label || a.name}
+                  <span className="text-xs text-muted-foreground">{a.kind === "current" ? "conditions actuelles" : a.label && a.name}</span>
+                </label>
+              ))}
+            </div>
             {draft.kind !== "renegotiate" && (
               <p className="text-xs text-muted-foreground">Sans réponse : relance automatique {q.companies.length ? "4 jours ouvrés après l'envoi, puis une seconde" : ""} dans la même conversation, arrêtées dès que la compagnie répond, fait une offre ou refuse. Annulables depuis la compagnie.</p>
             )}
