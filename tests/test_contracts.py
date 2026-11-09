@@ -196,6 +196,15 @@ def test_amounts_branch_settings_search_and_export(client):
     moved = client.patch(f"/api/contracts/{at_c['id']}", json={"branch": "RC professionnelle"}, headers=O).json()
     assert moved["tax_rate"] == 15 and moved["commission_rate"] == 15
     client.patch(f"/api/contracts/{at_c['id']}", json={"branch": "Accidents du travail"}, headers=O)
+    # automatique : branche tapée sans majuscule ni accent, cases vides → valeurs de la branche
+    auto = client.post("/api/contracts", json={"client_name": "Auto Démo", "insurer_name": "Autre", "branch": "accidents du TRAVAIL",
+                                               "premium": 1000, "tax_rate": "", "accessories": "", "end_date": "2027-02-28"}, headers=O).json()
+    assert auto["branch"] == "Accidents du travail" and auto["tax_rate"] == 20 and auto["accessories"] == 25 and auto["ttc"] == 1225
+    auto = client.patch(f"/api/contracts/{auto['id']}", json={"tax_rate": "18"}, headers=O).json()
+    assert auto["tax_rate"] == 18
+    auto = client.patch(f"/api/contracts/{auto['id']}", json={"tax_rate": ""}, headers=O).json()
+    assert auto["tax_rate"] == 20
+    client.delete(f"/api/contracts/{auto['id']}", headers=O)
     # Multirisque : EVCAT 8 % plafonnée à 100 000 MAD, taxes sur prime + EVCAT
     m = client.post("/api/contracts", json={"client_name": "Entrepôt Démo", "insurer_id": ins1, "branch": "Multirisque",
                                             "premium": 2000000, "end_date": "2027-05-31"}, headers=O).json()

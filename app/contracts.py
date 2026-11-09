@@ -180,8 +180,19 @@ def save_branch_settings(s: Session, items: dict) -> dict:
     return branch_settings(s)
 
 
+def _fold(text: str) -> str:
+    import unicodedata
+    return "".join(ch for ch in unicodedata.normalize("NFKD", text or "") if not unicodedata.combining(ch)).casefold().strip()
+
+
+def canonical_branch(s: Session, name: str) -> str:
+    """« accidents du travail » → « Accidents du travail » (nom du réglage), sinon tel quel."""
+    folded = _fold(name)
+    return next((n for n in branch_settings(s)["items"] if _fold(n) == folded), (name or "").strip())
+
+
 def _branch(s: Session, name: str) -> dict:
-    return branch_settings(s)["items"].get(name) or {**_STD, "base_label": ""}
+    return branch_settings(s)["items"].get(canonical_branch(s, name)) or {**_STD, "base_label": ""}
 
 
 def parse_rate(rate: str | None) -> float | None:
@@ -257,13 +268,16 @@ def _apply(s: Session, c: Contract, data: dict) -> set[str]:
     if c.start_date and not c.end_date:
         c.end_date = default_end(c.start_date)
         changed.add("end_date")
-    # changement de branche : taxes, EVCAT, accessoires et commission de la nouvelle branche,
-    # sauf valeurs fournies
-    if "branch" in changed or c.id is None:
-        cfg = _branch(s, c.branch or "")
-        for k in ("tax_rate", "evcat_rate", "evcat_cap", "accessories", "commission_rate"):
-            if k not in data or (data.get(k) in (None, "") and c.id is None):
-                setattr(c, k, cfg[k])
+    if c.branch:
+        c.branch = canonical_branch(s, c.branch)
+    # taxes, EVCAT, accessoires et commission : automatiques d'après la branche. Changement de
+    # branche → valeurs de la nouvelle branche (sauf valeurs fournies) ; une case laissée vide
+    # reprend toujours la valeur de la branche.
+    cfg = _branch(s, c.branch or "")
+    for k in ("tax_rate", "evcat_rate", "evcat_cap", "accessories", "commission_rate"):
+        given = k in data and data.get(k) not in (None, "")
+        if (("branch" in changed or c.id is None) and not given) or (getattr(c, k) is None and cfg[k] is not None):
+            setattr(c, k, cfg[k])
     # prime nette = base × taux, si la prime n'est pas saisie
     if c.base_amount and parse_rate(c.rate) is not None and ("premium" not in data or data.get("premium") in (None, "")) \
             and changed & {"base_amount", "rate"}:

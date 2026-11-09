@@ -19,7 +19,7 @@ import { NativeSelect } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { api, downloadFile, type ApiError, type Contract, type ContractDraftItem, type ContractInput, type ContractUrgency } from "@/lib/api";
+import { api, downloadFile, type ApiError, type BranchSetting, type Contract, type ContractDraftItem, type ContractInput, type ContractUrgency } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { mad, shortDate } from "@/pages/quotes";
 
@@ -380,11 +380,20 @@ function ContractFields({ f, set, errors }: { f: Form; set: (patch: Partial<Form
     const r = parseRate(next.rate);
     set(base != null && r != null ? { ...patch, premium: String(Math.round(base * r)) } : patch);
   };
+  const ratesOf = (c: BranchSetting) => ({ tax_rate: num(c.tax_rate), evcat_rate: num(c.evcat_rate), evcat_cap: num(c.evcat_cap),
+    accessories: num(c.accessories), commission_rate: num(c.commission_rate) });
+  // taxes, EVCAT, accessoires et commission : repris automatiquement de la branche (Réglages)
   const pickBranch = (b: string) => {
-    const c = cfg?.items[b];
-    set(c ? { branch: b, tax_rate: num(c.tax_rate), evcat_rate: num(c.evcat_rate), evcat_cap: num(c.evcat_cap),
-      accessories: num(c.accessories), commission_rate: num(c.commission_rate) } : { branch: b });
+    const fold = (x: string) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    const name = Object.keys(cfg?.items ?? {}).find((k) => fold(k) === fold(b));
+    set(name ? { branch: name, ...ratesOf(cfg!.items[name]) } : { branch: b });
   };
+  const [editRates, setEditRates] = useState(false);
+  const RATE_KEYS = ["tax_rate", "evcat_rate", "accessories", "commission_rate"] as const;
+  useEffect(() => { // contrat sans taux (saisi avant, ou branche tapée autrement) : valeurs de la branche
+    if (branchCfg && RATE_KEYS.every((k) => f[k].trim() === "")) set(ratesOf(branchCfg));
+  }, [branchCfg]); // eslint-disable-line react-hooks/exhaustive-deps
+  const custom = branchCfg ? RATE_KEYS.some((k) => f[k] !== ratesOf(branchCfg)[k]) : false;
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <ClientPicker f={f} set={set} error={errors?.client_name} />
@@ -415,6 +424,16 @@ function ContractFields({ f, set, errors }: { f: Form; set: (patch: Partial<Form
           </Field>
           <Field label="Prime nette (MAD)" error={errors?.premium}><Input inputMode="decimal" value={f.premium} onChange={(e) => set({ premium: e.target.value })} className="tabular" /></Field>
         </div>
+        {!editRates && !errors?.tax_rate && !errors?.evcat_rate && !errors?.accessories && !errors?.commission_rate ? (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <span className="text-muted-foreground">Taxes <b className="text-foreground tabular">{f.tax_rate ? `${f.tax_rate} %` : "à compléter"}</b></span>
+            {toNumber(f.evcat_rate) ? <span className="text-muted-foreground">EVCAT <b className="text-foreground tabular">{f.evcat_rate} %</b>{toNumber(f.evcat_cap) ? ` (plafond ${mad(toNumber(f.evcat_cap))})` : ""}</span> : null}
+            <span className="text-muted-foreground">Accessoires <b className="text-foreground tabular">{f.accessories ? mad(toNumber(f.accessories)) : "—"}</b></span>
+            <span className="text-muted-foreground">Commission <b className="text-foreground tabular">{f.commission_rate ? `${f.commission_rate} %` : "—"}</b></span>
+            <span className="text-xs text-muted-foreground">{branchCfg ? (custom ? "· modifiés pour ce contrat" : "· selon la branche (Réglages)") : f.branch ? "· branche hors réglages" : "· choisissez la branche"}</span>
+            <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setEditRates(true)}>Modifier pour ce contrat</Button>
+          </div>
+        ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Field label="EVCAT (%)" error={errors?.evcat_rate} hint={toNumber(f.evcat_cap) ? `Plafond ${mad(toNumber(f.evcat_cap))}` : undefined}>
             <Input inputMode="decimal" value={f.evcat_rate} onChange={(e) => set({ evcat_rate: e.target.value })} className="tabular" /></Field>
@@ -423,7 +442,10 @@ function ContractFields({ f, set, errors }: { f: Form; set: (patch: Partial<Form
           <Field label="Accessoires (MAD)" error={errors?.accessories} hint={cfg?.items[f.branch]?.per_vehicle ? `${num(cfg.items[f.branch].accessories)} MAD par véhicule` : "Non taxés"}>
             <Input inputMode="decimal" value={f.accessories} onChange={(e) => set({ accessories: e.target.value })} className="tabular" /></Field>
           <Field label="Commission (%)" error={errors?.commission_rate}><Input inputMode="decimal" value={f.commission_rate} onChange={(e) => set({ commission_rate: e.target.value })} className="tabular" /></Field>
+          {branchCfg && custom && <Button type="button" variant="link" size="sm" className="col-span-full h-auto justify-start p-0"
+            onClick={() => set(ratesOf(branchCfg))}>Reprendre les valeurs de la branche</Button>}
         </div>
+        )}
         {am && (
           <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
             {am.evcat > 0 && <span>EVCAT <b className="text-foreground tabular">{mad(am.evcat)}</b></span>}
