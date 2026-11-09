@@ -475,8 +475,8 @@ export type Contract = {
   id: number; client_name: string; company_id: number | null; contact: { id: number; name: string } | null;
   insurer_id: number | null; insurer_name: string; branch: string; policy_number: string;
   premium: number | null; rate: string | null; commission_rate: number | null; commission: number | null;
-  base_amount: number | null; base_label: string; accessories: number | null; tax_rate: number | null; parafiscal_rate: number | null;
-  tax: number | null; parafiscal: number | null; taxes: number | null; ttc: number | null;
+  base_amount: number | null; base_label: string; accessories: number | null; tax_rate: number | null;
+  evcat_rate: number | null; evcat_cap: number | null; evcat: number | null; taxes: number | null; ttc: number | null;
   start_date: string | null; end_date: string; notice_days: number; deadline: string; days_to_deadline: number; days_to_end: number;
   tacit: boolean; status: ContractStatus; status_label: string; end_reason: string | null; urgency: ContractUrgency;
   owner: { id: number; name: string } | null; quote_case: { id: number; ref: string } | null;
@@ -488,14 +488,15 @@ export type ContractSummary = { active: number; renewing: number; ended: number;
 export type ContractList = { filter: string; filters: { key: string; label: string }[]; sorts: { key: string; label: string }[];
   summary: ContractSummary; totals: { count: number; premium: number; ttc: number; commission: number }; items: Contract[];
   branches: string[]; notice_days: number };
-export type BranchSetting = { base: string; base_label: string; tax_rate: number; parafiscal_rate: number; commission_rate: number | null };
+export type BranchSetting = { base: string; base_label: string; tax_rate: number | null; evcat_rate: number; evcat_cap: number | null;
+  accessories: number | null; commission_rate: number | null; per_vehicle: boolean; note: string };
 export type BranchSettings = { items: Record<string, BranchSetting>; confirmed: boolean; bases: Record<string, string> };
 export type ContractFilters = Partial<{ f: string; q: string; branch: string; owner: string; company_id: number; contact_id: number;
   policy: string; insurer: string; end_from: string; end_to: string; sort: string; limit: number }>;
 export type ContractInput = Partial<{ client_name: string; company_id: number | null; contact_id: number | null; insurer_id: number | null;
   insurer_name: string; branch: string; policy_number: string; premium: string | number | null; rate: string | null;
   commission_rate: string | number | null; base_amount: string | number | null; accessories: string | number | null;
-  tax_rate: string | number | null; parafiscal_rate: string | number | null; start_date: string | null; end_date: string | null; notice_days: string | number | null;
+  tax_rate: string | number | null; evcat_rate: string | number | null; evcat_cap: string | number | null; start_date: string | null; end_date: string | null; notice_days: string | number | null;
   tacit: boolean; owner_id: number | null; notes: string }>;
 export type ContractDraftItem = { branch: string; choices: { company_id: number; name: string; premium: number | null; rate: string | null; status: string }[];
   insurer_id: number | null; premium: number | null; rate: string | null; policy_number: string; commission_rate: number | null; base_amount?: number | null;
@@ -748,7 +749,7 @@ export const api = {
   contracts: (p: ContractFilters = {}) => request<ContractList>(`/api/contracts${qs(p)}`),
   contractsExportUrl: (p: ContractFilters = {}) => `/api/contracts/export.xlsx${qs(p)}`,
   contractBranches: () => request<BranchSettings>("/api/contracts/branches"),
-  contractBranchesSave: (items: Record<string, Partial<Record<keyof BranchSetting, string | number | null>>>) =>
+  contractBranchesSave: (items: Record<string, Partial<Record<keyof BranchSetting, string | number | boolean | null>>>) =>
     request<BranchSettings>("/api/contracts/branches", { method: "PUT", json: { items } }),
   contract: (id: number) => request<Contract>(`/api/contracts/${id}`),
   contractCreate: (body: ContractInput) => request<Contract>("/api/contracts", { method: "POST", json: body }),

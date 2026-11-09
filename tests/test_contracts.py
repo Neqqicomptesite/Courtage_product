@@ -72,6 +72,7 @@ def test_won_case_becomes_contract_and_renewal_cycle(client):
     assert draft["renewal_of"] is None and len(it["choices"]) == 2
     assert it["insurer_id"] == ins2 and it["premium"] == 176000 and it["rate"] == "3 %"   # la moins chère
     assert it["start_date"] == "2027-01-01" and it["end_date"] == "2027-12-31" and it["notice_days"] == 45
+    assert it["accessories"] == 17 * 12   # Flotte : 17 MAD par véhicule
     res = client.post(f"/api/quotes/{case['id']}/win", json={"items": [{**it, "policy_number": "B-778"}]}, headers=O).json()
     assert res["quote"]["stage"] == "won"
     c = res["contracts"][0]
@@ -155,41 +156,56 @@ def test_renew_same_tacit_roll_and_portfolio(client):
 
 
 def test_amounts_branch_settings_search_and_export(client):
-    """Base de calcul × taux = prime nette ; taxes et commission par défaut selon la branche
-    (réglables) ; recherche par police, compagnie, client, échéance ; export Excel."""
+    """Base de calcul × taux = prime nette ; prime TTC = (nette + EVCAT) × (1 + taxes) + accessoires
+    (tableau d'Omar du 09/11) ; taux par branche réglables ; recherche ; export Excel."""
     from io import BytesIO
 
     from openpyxl import load_workbook
     client_co, ins1, ins2 = _setup()
     cfg = client.get("/api/contracts/branches").json()
     assert cfg["confirmed"] is False
-    at, rc = cfg["items"]["Accidents du travail"], cfg["items"]["RC professionnelle"]
-    assert at["base_label"] == "Masse salariale" and at["tax_rate"] == 0 and rc["base_label"] == "Chiffre d'affaires"
-    assert rc["tax_rate"] == 14 and rc["parafiscal_rate"] == 1
+    at, rc, mrp = (cfg["items"][k] for k in ("Accidents du travail", "RC professionnelle", "Multirisque"))
+    assert at["base_label"] == "Masse salariale" and at["tax_rate"] == 20 and at["accessories"] == 25
+    assert rc["base_label"] == "Chiffre d'affaires" and rc["tax_rate"] == 15 and rc["accessories"] == 25
+    assert mrp["tax_rate"] == 15.5 and mrp["evcat_rate"] == 8 and mrp["evcat_cap"] == 100000
+    assert cfg["items"]["Flotte"]["tax_rate"] == 17 and cfg["items"]["Flotte"]["evcat_rate"] == 3.5
+    assert cfg["items"]["Prévoyance"]["tax_rate"] is None and cfg["items"]["Santé"]["tax_rate"] == 15.5
     items = cfg["items"]
     items["RC professionnelle"] = {**rc, "commission_rate": "15"}
     items["Accidents du travail"] = {**at, "commission_rate": 10}
     saved = client.put("/api/contracts/branches", json={"items": items}, headers=O).json()
     assert saved["confirmed"] is True and saved["items"]["RC professionnelle"]["commission_rate"] == 15
-    # RC pro : CA 2 000 000 × 0,35 % = 7 000 de prime nette ; taxes 14 % + 1 % sur prime + accessoires
+    assert saved["items"]["Flotte"]["per_vehicle"] is True and saved["items"]["Prévoyance"]["tax_rate"] is None
+    # RC pro : CA 2 000 000 × 0,35 % = 7 000 ; taxes 15 % ; accessoires 200 (non taxés)
     c = client.post("/api/contracts", json={"company_id": client_co, "insurer_id": ins1, "branch": "RC professionnelle",
                                             "policy_number": "RC 2026 / 0042", "base_amount": "2 000 000", "rate": "0,35 %",
                                             "accessories": 200, "end_date": "2027-06-30"}, headers=O).json()
     assert c["base_label"] == "Chiffre d'affaires" and c["premium"] == 7000 and c["commission_rate"] == 15
-    assert c["tax"] == 1008 and c["parafiscal"] == 72 and c["taxes"] == 1080 and c["ttc"] == 8280 and c["commission"] == 1050
+    assert c["evcat"] == 0 and c["taxes"] == 1050 and c["ttc"] == 8250 and c["commission"] == 1050
     # taux en pour mille, et prime saisie à la main (minimum de prime) : la saisie l'emporte
     c = client.patch(f"/api/contracts/{c['id']}", json={"rate": "4 ‰"}, headers=O).json()
     assert c["premium"] == 8000
     c = client.patch(f"/api/contracts/{c['id']}", json={"rate": "3 ‰", "premium": "9500"}, headers=O).json()
-    assert c["premium"] == 9500
-    # AT : exonéré, commission de la branche ; changer de branche reprend ses taux
+    assert c["premium"] == 9500 and c["ttc"] == 9500 + 1425 + 200
+    # AT : l'offre Sanlam du tableau (126 250 net → 151 525 TTC : 20 % + 25 MAD d'accessoires)
     at_c = client.post("/api/contracts", json={"client_name": "Textile Démo", "insurer_id": ins2, "branch": "Accidents du travail",
-                                               "policy_number": "AT-77", "base_amount": 3000000, "rate": "2,5 %",
+                                               "policy_number": "AT-77", "base_amount": 5050000, "rate": "2,5 %",
                                                "end_date": "2027-01-31"}, headers=O).json()
-    assert at_c["premium"] == 75000 and at_c["taxes"] == 0 and at_c["ttc"] == 75000 and at_c["commission"] == 7500
+    assert at_c["premium"] == 126250 and at_c["accessories"] == 25 and at_c["taxes"] == 25250 and at_c["ttc"] == 151525
+    assert at_c["commission"] == 12625
     moved = client.patch(f"/api/contracts/{at_c['id']}", json={"branch": "RC professionnelle"}, headers=O).json()
-    assert moved["tax_rate"] == 14 and moved["commission_rate"] == 15
+    assert moved["tax_rate"] == 15 and moved["commission_rate"] == 15
     client.patch(f"/api/contracts/{at_c['id']}", json={"branch": "Accidents du travail"}, headers=O)
+    # Multirisque : EVCAT 8 % plafonnée à 100 000 MAD, taxes sur prime + EVCAT
+    m = client.post("/api/contracts", json={"client_name": "Entrepôt Démo", "insurer_id": ins1, "branch": "Multirisque",
+                                            "premium": 2000000, "end_date": "2027-05-31"}, headers=O).json()
+    assert m["evcat"] == 100000 and m["taxes"] == 325500 and m["ttc"] == 2425500
+    # taux « à compléter » : pas de prime TTC inventée
+    pv = client.post("/api/contracts", json={"client_name": "Cabinet Démo", "insurer_name": "Autre", "branch": "Prévoyance",
+                                             "premium": 30000, "end_date": "2027-04-30"}, headers=O).json()
+    assert pv["taxes"] is None and pv["ttc"] is None
+    client.delete(f"/api/contracts/{m['id']}", headers=O)
+    client.delete(f"/api/contracts/{pv['id']}", headers=O)
     # recherche
     get = lambda **p: [i["id"] for i in client.get("/api/contracts", params={"f": "all", **p}).json()["items"]]  # noqa: E731
     assert get(policy="2026/0042") == [c["id"]] and get(policy="at-77") == [at_c["id"]]
@@ -198,9 +214,10 @@ def test_amounts_branch_settings_search_and_export(client):
     assert get(end_from="2027-03-01") == [c["id"]] and get(end_to="2027-02-01") == [at_c["id"]]
     assert get(sort="premium") == [at_c["id"], c["id"]]
     r = client.get("/api/contracts", params={"f": "all"}).json()
-    assert r["totals"] == {"count": 2, "premium": 84500, "ttc": 75000 + 9700 + 1455, "commission": 7500 + 1425}
+    assert r["totals"] == {"count": 2, "premium": 135750, "ttc": 151525 + 11125, "commission": 12625 + 1425}
     # export Excel : mêmes filtres
     x = client.get("/api/contracts/export.xlsx", params={"f": "all", "branch": "Accidents du travail"})
     assert x.status_code == 200 and "spreadsheetml" in x.headers["content-type"]
     ws = load_workbook(BytesIO(x.content)).active
-    assert ws.max_row == 2 and ws["A2"].value == "Textile Démo" and ws["H2"].value == 75000 and ws["E2"].value == "Masse salariale"
+    assert ws.max_row == 2 and ws["A2"].value == "Textile Démo" and ws["H2"].value == 126250 and ws["E2"].value == "Masse salariale"
+    assert ws["L2"].value == 151525

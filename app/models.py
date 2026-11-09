@@ -536,8 +536,10 @@ class Contract(Base):
     rate: Mapped[str | None] = mapped_column(String(40))                  # taux (AT, prévoyance…)
     base_amount: Mapped[int | None] = mapped_column(Integer)              # masse salariale, CA… (voir branche)
     accessories: Mapped[int | None] = mapped_column(Integer)              # accessoires / coût de police
-    tax_rate: Mapped[float | None] = mapped_column(Float)                 # taxe sur les contrats (%)
-    parafiscal_rate: Mapped[float | None] = mapped_column(Float)          # taxe parafiscale catastrophes (%)
+    tax_rate: Mapped[float | None] = mapped_column(Float)                 # taux total des taxes (%) ; vide = à compléter
+    parafiscal_rate: Mapped[float | None] = mapped_column(Float)          # (0018, inutilisé : compris dans tax_rate)
+    evcat_rate: Mapped[float | None] = mapped_column(Float)               # EVCAT, % de la prime nette
+    evcat_cap: Mapped[int | None] = mapped_column(Integer)                # plafond de l'EVCAT (MAD)
     commission_rate: Mapped[float | None] = mapped_column(Float)          # % de la prime nette
     start_date: Mapped[date | None] = mapped_column(Date)                 # effet de la période en cours
     end_date: Mapped[date] = mapped_column(Date, index=True)              # échéance

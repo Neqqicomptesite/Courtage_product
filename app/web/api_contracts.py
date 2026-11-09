@@ -69,7 +69,7 @@ def export_contracts(f: str = "active", q: str = "", branch: str = "", owner: st
         ws = wb.active
         ws.title = "Contrats"
         head = ["Client", "Branche", "Compagnie", "N° de police", "Base de calcul", "Montant de la base", "Taux",
-                "Prime nette", "Accessoires", "Taxes", "Prime TTC", "Commission (%)", "Commission", "Date d'effet",
+                "Prime nette", "EVCAT", "Taxes", "Accessoires", "Prime TTC", "Commission (%)", "Commission", "Date d'effet",
                 "Échéance", "Préavis (jours)", "Date limite de préavis", "Statut", "Gestionnaire"]
         ws.append(head)
         for cell in ws[1]:
@@ -77,13 +77,13 @@ def export_contracts(f: str = "active", q: str = "", branch: str = "", owner: st
         for c in rows:
             j = contracts.to_json(s, c, names, day)
             ws.append([j["client_name"], j["branch"], j["insurer_name"], j["policy_number"], j["base_label"], j["base_amount"],
-                       j["rate"], j["premium"], j["accessories"], j["taxes"], j["ttc"], j["commission_rate"], j["commission"],
+                       j["rate"], j["premium"], j["evcat"], j["taxes"], j["accessories"], j["ttc"], j["commission_rate"], j["commission"],
                        c.start_date, c.end_date, j["notice_days"], contracts.deadline(c),
                        j["status_label"] + (f" ({j['end_reason']})" if j["end_reason"] else ""), (j["owner"] or {}).get("name", "")])
-        for col, w in zip("ABCDEFGHIJKLMNOPQRS", (28, 22, 24, 16, 18, 16, 10, 13, 12, 11, 13, 14, 12, 12, 12, 10, 14, 22, 18)):
+        for col, w in zip("ABCDEFGHIJKLMNOPQRST", (28, 22, 24, 16, 18, 16, 10, 13, 11, 11, 12, 13, 14, 12, 12, 12, 10, 14, 22, 18)):
             ws.column_dimensions[col].width = w
         for row in ws.iter_rows(min_row=2):
-            for cell in row[13:17]:
+            for cell in row[14:18]:
                 if cell.value is not None and not isinstance(cell.value, int):
                     cell.number_format = "DD/MM/YYYY"
         ws.freeze_panes = "A2"

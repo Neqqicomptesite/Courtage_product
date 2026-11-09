@@ -106,34 +106,51 @@ def _int(value, key: str, lo: int, hi: int) -> int | None:
 
 
 # ------------------------------------------------------------------------- réglages par branche
-# Base de calcul de la prime nette (prime = base × taux), taxes et commission par défaut. Réglage du
-# cabinet « contract_branches », modifiable dans Réglages ; valeurs de départ ci-dessous, issues du
-# CGI art. 284 (taxe sur les contrats : 14 %, AT exonérés, vie exonérée) et du décret 2-19-244
-# (taxe parafiscale de solidarité contre les événements catastrophiques : 1 %), À CONFIRMER par le
-# cabinet (Prévoyance, Transport, AT/parafiscale : cas douteux, voir DECISIONS 298).
+# Par branche : base de calcul de la prime nette (prime = base × taux), taux total des taxes, EVCAT
+# (garantie événements catastrophiques, % de la prime nette, plafond éventuel), accessoires et
+# commission par défaut. Réglage du cabinet « contract_branches », modifiable dans Réglages.
+# Valeurs de départ = tableau d'Omar du 09/11 (« Taxes par branche, prime nette → TTC ») :
+#   prime TTC = (prime nette + EVCAT) × (1 + taux total des taxes) + accessoires (non taxés).
+# « à compléter » = taux inconnu : la prime TTC n'est pas calculée (DECISIONS 299).
 BASES = {"none": "", "payroll": "Masse salariale", "turnover": "Chiffre d'affaires", "capital": "Capitaux assurés",
          "works": "Montant du marché", "value": "Valeur transportée"}
-_STD = {"base": "none", "tax_rate": 14.0, "parafiscal_rate": 1.0, "commission_rate": None}
+_STD = {"base": "none", "tax_rate": None, "evcat_rate": 0.0, "evcat_cap": None, "accessories": None,
+        "commission_rate": None, "per_vehicle": False, "note": "Taux à compléter."}
+_MRP = {"base": "capital", "tax_rate": 15.5, "evcat_rate": 8.0, "evcat_cap": 100000,
+        "note": "14 % + 1,5 %. EVCAT 8 % de la prime, plafonnée à 100 000 MAD. Accessoires à confirmer."}
+_RC = {"base": "turnover", "tax_rate": 15.0, "accessories": 25, "note": "À confirmer sur facture ; EVCAT selon le contrat."}
 BRANCH_DEFAULTS = {
-    "Flotte": {},
-    "Accidents du travail": {"base": "payroll", "tax_rate": 0.0, "parafiscal_rate": 0.0},
-    "Prévoyance": {"base": "payroll", "tax_rate": 0.0, "parafiscal_rate": 0.0},
-    "Retraite": {"base": "payroll", "tax_rate": 0.0, "parafiscal_rate": 0.0},
-    "RC professionnelle": {"base": "turnover"},
-    "RC exploitation": {"base": "turnover"},
-    "Multirisque": {"base": "capital"},
-    "Multirisque habitation": {"base": "capital"},
-    "Transport": {"base": "value"},
+    "Flotte": {"tax_rate": 17.0, "evcat_rate": 3.5, "accessories": 17, "per_vehicle": True,
+               "note": "Auto RC (offre Wafa) : 14 % + 1,5 % + 1,5 pt non expliqué. EVCAT 3,5 % (2 % transport public "
+                       "de voyageurs). Accessoires 17 MAD par véhicule. Garanties annexes : 15,5 %, EVCAT 1,5 %."},
+    "Accidents du travail": {"base": "payroll", "tax_rate": 20.0, "accessories": 25,
+                             "note": "Confirmé (offre Sanlam : 126 250 net → 151 525 TTC)."},
+    "Prévoyance": {"base": "payroll"},
+    "Retraite": {"base": "payroll", "note": "Vie : régime à compléter."},
+    "RC professionnelle": _RC,
+    "RC exploitation": _RC,
+    "Multirisque": _MRP,
+    "Multirisque habitation": _MRP,
+    "Transport": {"base": "value", "note": "Taux à compléter (8,5 % pour les corps de navires seulement)."},
     "Tous risques chantier": {"base": "works"},
+    # branches sans fiche de dossier, utiles pour les contrats
+    "Auto - garanties annexes": {"tax_rate": 15.5, "evcat_rate": 1.5, "note": "14 % + 1,5 %. EVCAT 1,5 %. Taxes confirmées."},
+    "Santé": {"tax_rate": 15.5, "note": "14 % + 1,5 %. À confirmer sur facture."},
+    "Assistance": {"tax_rate": 15.5, "note": "14 % + 1,5 %. À confirmer sur facture."},
+    "Crédit": {"tax_rate": 15.5, "note": "14 % + 1,5 %. À confirmer sur facture."},
+    "Décès emprunteur": {"tax_rate": 11.5, "note": "10 % + 1,5 % ; parafiscale à confirmer."},
+    "Corps de navires": {"tax_rate": 8.5, "note": "7 % + 1,5 % ; parafiscale à confirmer."},
 }
+SETTING_KEYS = ("base", "tax_rate", "evcat_rate", "evcat_cap", "accessories", "commission_rate", "per_vehicle", "note")
 
 
 def branch_settings(s: Session) -> dict:
-    """{branche: {base, base_label, tax_rate, parafiscal_rate, commission_rate}} + confirmed (réglages
-    enregistrés par le cabinet, ou encore les valeurs de départ)."""
+    """{branche: {base, base_label, tax_rate, evcat_rate, evcat_cap, accessories, commission_rate,
+    per_vehicle, note}} + confirmed (réglages enregistrés par le cabinet, ou valeurs de départ)."""
     from app import quotes
     saved = settings_store.get(s, "contract_branches") or {}
     names = [b["name"] for b in quotes.branches()]
+    names += [n for n in BRANCH_DEFAULTS if n not in names]
     names += [n for n in saved.get("items", {}) if n not in names]
     items = {}
     for n in names:
@@ -144,6 +161,7 @@ def branch_settings(s: Session) -> dict:
 
 
 def save_branch_settings(s: Session, items: dict) -> dict:
+    current = branch_settings(s)["items"]
     clean = {}
     for name, v in (items or {}).items():
         name = str(name).strip()[:40]
@@ -151,9 +169,13 @@ def save_branch_settings(s: Session, items: dict) -> dict:
             continue
         base = v.get("base") if v.get("base") in BASES else "none"
         clean[name] = {"base": base,
-                       "tax_rate": _percent(v.get("tax_rate"), "tax_rate") or 0.0,
-                       "parafiscal_rate": _percent(v.get("parafiscal_rate"), "parafiscal_rate") or 0.0,
-                       "commission_rate": _percent(v.get("commission_rate"), "commission_rate")}
+                       "tax_rate": _percent(v.get("tax_rate"), "tax_rate"),
+                       "evcat_rate": _percent(v.get("evcat_rate"), "evcat_rate") or 0.0,
+                       "evcat_cap": _amount(v.get("evcat_cap"), "evcat_cap"),
+                       "accessories": _amount(v.get("accessories"), "accessories"),
+                       "commission_rate": _percent(v.get("commission_rate"), "commission_rate"),
+                       "per_vehicle": bool(v.get("per_vehicle", (current.get(name) or {}).get("per_vehicle", False))),
+                       "note": " ".join(str(v.get("note") or "").split())[:300]}
     settings_store.set_(s, "contract_branches", {"items": clean, "confirmed": True})
     return branch_settings(s)
 
@@ -177,19 +199,23 @@ def parse_rate(rate: str | None) -> float | None:
 
 
 def amounts(c: Contract) -> dict:
-    """Prime nette, accessoires, taxes et prime TTC (taxes sur prime nette + accessoires)."""
+    """Prime TTC = (prime nette + EVCAT) × (1 + taux des taxes) + accessoires (non taxés).
+    Taux des taxes inconnu (« à compléter ») : taxes et prime TTC non calculées."""
     net = c.premium
-    acc = c.accessories or 0
+    empty = {"evcat": None, "taxes": None, "ttc": None, "commission": None}
     if net is None:
-        return {"tax": None, "parafiscal": None, "taxes": None, "ttc": None, "commission": None}
-    tax = round((net + acc) * (c.tax_rate or 0) / 100)
-    para = round((net + acc) * (c.parafiscal_rate or 0) / 100)
-    return {"tax": tax, "parafiscal": para, "taxes": tax + para, "ttc": net + acc + tax + para,
+        return empty
+    evcat = round(net * (c.evcat_rate or 0) / 100)
+    if c.evcat_cap:
+        evcat = min(evcat, c.evcat_cap)
+    taxes = round((net + evcat) * c.tax_rate / 100) if c.tax_rate is not None else None
+    return {"evcat": evcat, "taxes": taxes,
+            "ttc": net + evcat + taxes + (c.accessories or 0) if taxes is not None else None,
             "commission": round(net * c.commission_rate / 100) if c.commission_rate is not None else None}
 
 
 EDITABLE = ("client_name", "company_id", "contact_id", "insurer_id", "insurer_name", "branch", "policy_number",
-            "premium", "rate", "base_amount", "accessories", "tax_rate", "parafiscal_rate", "commission_rate",
+            "premium", "rate", "base_amount", "accessories", "tax_rate", "evcat_rate", "evcat_cap", "commission_rate",
             "start_date", "end_date", "notice_days", "tacit", "owner_id", "notes")
 PLANNING = {"end_date", "notice_days", "owner_id", "client_name", "branch", "insurer_id", "insurer_name"}
 
@@ -203,9 +229,9 @@ def _apply(s: Session, c: Contract, data: dict) -> set[str]:
         v = data[k]
         if k in ("start_date", "end_date"):
             v = _date(v, k)
-        elif k in ("premium", "base_amount", "accessories"):
+        elif k in ("premium", "base_amount", "accessories", "evcat_cap"):
             v = _amount(v, k)
-        elif k in ("commission_rate", "tax_rate", "parafiscal_rate"):
+        elif k in ("commission_rate", "tax_rate", "evcat_rate"):
             v = _percent(v, k)
         elif k == "notice_days":
             v = _int(v, k, 0, 365)
@@ -231,11 +257,12 @@ def _apply(s: Session, c: Contract, data: dict) -> set[str]:
     if c.start_date and not c.end_date:
         c.end_date = default_end(c.start_date)
         changed.add("end_date")
-    # changement de branche : taxes et commission de la nouvelle branche, sauf valeurs fournies
+    # changement de branche : taxes, EVCAT, accessoires et commission de la nouvelle branche,
+    # sauf valeurs fournies
     if "branch" in changed or c.id is None:
         cfg = _branch(s, c.branch or "")
-        for k in ("tax_rate", "parafiscal_rate", "commission_rate"):
-            if k not in data or data.get(k) in (None, ""):
+        for k in ("tax_rate", "evcat_rate", "evcat_cap", "accessories", "commission_rate"):
+            if k not in data or (data.get(k) in (None, "") and c.id is None):
                 setattr(c, k, cfg[k])
     # prime nette = base × taux, si la prime n'est pas saisie
     if c.base_amount and parse_rate(c.rate) is not None and ("premium" not in data or data.get("premium") in (None, "")) \
@@ -413,11 +440,25 @@ def case_draft(s: Session, case: QuoteCase) -> dict:
             "policy_number": old.policy_number if old and pick and old.insurer_id == pick.company_id and old.branch == b else "",
             "commission_rate": old.commission_rate if old else _branch(s, b)["commission_rate"],
             "base_amount": _base_from_fields(fields, _branch(s, b)["base"]) or (old.base_amount if old else None),
+            "accessories": _draft_accessories(_branch(s, b), fields, old),
             "start_date": start.isoformat() if start else None,
             "end_date": default_end(start).isoformat() if start else None,
             "notice_days": notice,
         })
     return {"items": items, "renewal_of": to_json(s, old) if old else None}
+
+
+def _draft_accessories(cfg: dict, fields: dict, old: Contract | None) -> int | None:
+    """Accessoires proposés : ceux du contrat renouvelé, sinon ceux de la branche (Flotte : par véhicule)."""
+    if old is not None and old.accessories is not None:
+        return old.accessories
+    acc = cfg.get("accessories")
+    if acc and cfg.get("per_vehicle"):
+        try:
+            return acc * max(1, int(str(fields.get("nb_vehicules") or "1").strip()))
+        except ValueError:
+            return acc
+    return acc
 
 
 _BASE_FIELDS = {"payroll": "masse_salariale", "turnover": "ca", "works": "montant_marche", "value": "valeur"}
@@ -517,7 +558,7 @@ def to_json(s: Session, c: Contract, names: dict[int, str] | None = None, now_da
         "insurer_id": c.insurer_id, "insurer_name": c.insurer_name, "branch": c.branch, "policy_number": c.policy_number,
         "premium": c.premium, "rate": c.rate, "commission_rate": c.commission_rate,
         "base_amount": c.base_amount, "base_label": _base_label(s, c.branch), "accessories": c.accessories,
-        "tax_rate": c.tax_rate, "parafiscal_rate": c.parafiscal_rate, **{k: v for k, v in amounts(c).items()},
+        "tax_rate": c.tax_rate, "evcat_rate": c.evcat_rate, "evcat_cap": c.evcat_cap, **amounts(c),
         "start_date": c.start_date.isoformat() if c.start_date else None, "end_date": c.end_date.isoformat(),
         "notice_days": c.notice_days, "deadline": dl.isoformat(), "days_to_deadline": (dl - now_day).days,
         "days_to_end": (c.end_date - now_day).days, "tacit": c.tacit, "status": c.status,

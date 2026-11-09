@@ -581,3 +581,14 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
      client (fiche reliée), gestionnaire, échéance du/au, tri ; totaux de la liste ; export Excel ;
      contrats dans Ctrl+K. Fiches Entreprise et Contact : contrats du client + « Contrat » ; fiche
      d'une compagnie : ses contrats. Liste par défaut : tous les contrats en cours.
+299. **Taxes : tableau d'Omar du 09/11 (remplace les taux de départ de 298)** : prime TTC =
+     (prime nette + EVCAT) × (1 + taux total des taxes) + accessoires, accessoires non taxés
+     (modèles Sanlam AT et Wafa HESS). Par branche : AT 20 % + 25 MAD (confirmé, offre Sanlam
+     126 250 → 151 525) ; RC 15 % + 25 MAD (à confirmer) ; Flotte = Auto RC 17 %, EVCAT 3,5 %,
+     17 MAD par véhicule (accessoires d'un dossier gagné = 17 × nombre de véhicules) ; Multirisque
+     15,5 %, EVCAT 8 % plafonnée à 100 000 MAD ; Santé, Assistance, Crédit, Auto garanties annexes
+     (EVCAT 1,5 %) 15,5 % ; Décès emprunteur 11,5 % ; Corps de navires 8,5 %. Prévoyance, Retraite
+     (vie), Transport, Tous risques chantier : taux à compléter (vide → taxes et TTC non calculées,
+     jamais inventées). Une seule colonne « taux total » ; la colonne parafiscal_rate (0018) n'est
+     plus utilisée (migration 0019 : additionnée au taux total, plus EVCAT taux + plafond). Remarque
+     par branche (statut et source) modifiable dans Réglages.

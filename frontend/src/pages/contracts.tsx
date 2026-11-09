@@ -276,7 +276,7 @@ export function ContractsPanel({ company, contact, insurer }: {
 type Form = {
   client_name: string; company_id: number | null; contact_id: number | null; insurer_id: string; insurer_name: string;
   branch: string; policy_number: string; base_amount: string; rate: string; premium: string; accessories: string;
-  tax_rate: string; parafiscal_rate: string; commission_rate: string; start_date: string; end_date: string;
+  tax_rate: string; evcat_rate: string; evcat_cap: string; commission_rate: string; start_date: string; end_date: string;
   notice_days: string; tacit: boolean; owner_id: string; notes: string;
 };
 
@@ -287,7 +287,7 @@ function toForm(c: Contract | null, noticeDays: number): Form {
     client_name: c?.client_name ?? "", company_id: c?.company_id ?? null, contact_id: c?.contact?.id ?? null,
     insurer_id: c?.insurer_id ? String(c.insurer_id) : "", insurer_name: c?.insurer_id ? "" : c?.insurer_name ?? "",
     branch: c?.branch ?? "", policy_number: c?.policy_number ?? "", base_amount: num(c?.base_amount), rate: c?.rate ?? "",
-    premium: num(c?.premium), accessories: num(c?.accessories), tax_rate: num(c?.tax_rate), parafiscal_rate: num(c?.parafiscal_rate),
+    premium: num(c?.premium), accessories: num(c?.accessories), tax_rate: num(c?.tax_rate), evcat_rate: num(c?.evcat_rate), evcat_cap: num(c?.evcat_cap),
     commission_rate: num(c?.commission_rate), start_date: c?.start_date ?? "", end_date: c?.end_date ?? "",
     notice_days: String(c?.notice_days ?? noticeDays), tacit: c?.tacit ?? true, owner_id: c?.owner ? String(c.owner.id) : "", notes: c?.notes ?? "",
   };
@@ -298,7 +298,7 @@ function toInput(f: Form): ContractInput {
     client_name: f.client_name, company_id: f.company_id, contact_id: f.contact_id,
     insurer_id: f.insurer_id ? Number(f.insurer_id) : null, insurer_name: f.insurer_id ? "" : f.insurer_name,
     branch: f.branch, policy_number: f.policy_number, base_amount: f.base_amount, rate: f.rate, premium: f.premium,
-    accessories: f.accessories, tax_rate: f.tax_rate, parafiscal_rate: f.parafiscal_rate, commission_rate: f.commission_rate,
+    accessories: f.accessories, tax_rate: f.tax_rate, evcat_rate: f.evcat_rate, evcat_cap: f.evcat_cap, commission_rate: f.commission_rate,
     start_date: f.start_date || null, end_date: f.end_date || null, notice_days: f.notice_days, tacit: f.tacit,
     ...(f.owner_id ? { owner_id: Number(f.owner_id) } : {}), notes: f.notes,
   };
@@ -318,14 +318,18 @@ export function parseRate(rate: string): number | null {
   return raw.includes("‰") ? v / 1000 : v / 100;
 }
 
+/** Même calcul que le serveur : TTC = (nette + EVCAT) × (1 + taxes) + accessoires (non taxés). */
 function useAmounts(f: Form) {
   const net = toNumber(f.premium);
-  const acc = toNumber(f.accessories) ?? 0;
   if (net == null) return null;
-  const tax = Math.round(((net + acc) * (toNumber(f.tax_rate) ?? 0)) / 100);
-  const para = Math.round(((net + acc) * (toNumber(f.parafiscal_rate) ?? 0)) / 100);
+  let evcat = Math.round((net * (toNumber(f.evcat_rate) ?? 0)) / 100);
+  const cap = toNumber(f.evcat_cap);
+  if (cap) evcat = Math.min(evcat, cap);
+  const rate = toNumber(f.tax_rate);
+  const taxes = rate == null ? null : Math.round(((net + evcat) * rate) / 100);
   const com = toNumber(f.commission_rate);
-  return { tax, para, ttc: net + acc + tax + para, commission: com == null ? null : Math.round((net * com) / 100) };
+  return { evcat, taxes, ttc: taxes == null ? null : net + evcat + taxes + (toNumber(f.accessories) ?? 0),
+    commission: com == null ? null : Math.round((net * com) / 100) };
 }
 
 function ClientPicker({ f, set, error }: { f: Form; set: (p: Partial<Form>) => void; error?: string }) {
@@ -378,7 +382,8 @@ function ContractFields({ f, set, errors }: { f: Form; set: (patch: Partial<Form
   };
   const pickBranch = (b: string) => {
     const c = cfg?.items[b];
-    set(c ? { branch: b, tax_rate: num(c.tax_rate), parafiscal_rate: num(c.parafiscal_rate), commission_rate: num(c.commission_rate) } : { branch: b });
+    set(c ? { branch: b, tax_rate: num(c.tax_rate), evcat_rate: num(c.evcat_rate), evcat_cap: num(c.evcat_cap),
+      accessories: num(c.accessories), commission_rate: num(c.commission_rate) } : { branch: b });
   };
   return (
     <div className="grid gap-3 sm:grid-cols-2">
@@ -411,18 +416,23 @@ function ContractFields({ f, set, errors }: { f: Form; set: (patch: Partial<Form
           <Field label="Prime nette (MAD)" error={errors?.premium}><Input inputMode="decimal" value={f.premium} onChange={(e) => set({ premium: e.target.value })} className="tabular" /></Field>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Field label="Accessoires (MAD)" error={errors?.accessories}><Input inputMode="decimal" value={f.accessories} onChange={(e) => set({ accessories: e.target.value })} className="tabular" /></Field>
-          <Field label="Taxe contrats (%)" error={errors?.tax_rate}><Input inputMode="decimal" value={f.tax_rate} onChange={(e) => set({ tax_rate: e.target.value })} className="tabular" /></Field>
-          <Field label="Taxe parafiscale (%)" error={errors?.parafiscal_rate}><Input inputMode="decimal" value={f.parafiscal_rate} onChange={(e) => set({ parafiscal_rate: e.target.value })} className="tabular" /></Field>
+          <Field label="EVCAT (%)" error={errors?.evcat_rate} hint={toNumber(f.evcat_cap) ? `Plafond ${mad(toNumber(f.evcat_cap))}` : undefined}>
+            <Input inputMode="decimal" value={f.evcat_rate} onChange={(e) => set({ evcat_rate: e.target.value })} className="tabular" /></Field>
+          <Field label="Taxes (%)" error={errors?.tax_rate} hint={f.tax_rate.trim() === "" ? "À compléter" : "Taux total"}>
+            <Input inputMode="decimal" value={f.tax_rate} onChange={(e) => set({ tax_rate: e.target.value })} className="tabular" /></Field>
+          <Field label="Accessoires (MAD)" error={errors?.accessories} hint={cfg?.items[f.branch]?.per_vehicle ? `${num(cfg.items[f.branch].accessories)} MAD par véhicule` : "Non taxés"}>
+            <Input inputMode="decimal" value={f.accessories} onChange={(e) => set({ accessories: e.target.value })} className="tabular" /></Field>
           <Field label="Commission (%)" error={errors?.commission_rate}><Input inputMode="decimal" value={f.commission_rate} onChange={(e) => set({ commission_rate: e.target.value })} className="tabular" /></Field>
         </div>
         {am && (
           <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            <span>Taxes <b className="text-foreground tabular">{mad(am.tax + am.para)}</b></span>
-            <span>Prime TTC <b className="text-foreground tabular">{mad(am.ttc)}</b></span>
+            {am.evcat > 0 && <span>EVCAT <b className="text-foreground tabular">{mad(am.evcat)}</b></span>}
+            <span>Taxes <b className="text-foreground tabular">{am.taxes == null ? "taux à compléter" : mad(am.taxes)}</b></span>
+            <span>Prime TTC <b className="text-foreground tabular">{am.ttc == null ? "—" : mad(am.ttc)}</b></span>
             {am.commission != null && <span>Commission <b className="text-foreground tabular">{mad(am.commission)}</b></span>}
           </p>
         )}
+        {cfg?.items[f.branch]?.note && <p className="text-xs text-muted-foreground">{f.branch} : {cfg.items[f.branch].note}</p>}
       </div>
 
       <Field label="Date d'effet">
@@ -499,10 +509,11 @@ function ContractDialog({ open, onClose, noticeDays, preset, stay = false }: {
 export function BranchSettingsSection() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["contract-branches"], queryFn: api.contractBranches });
-  const [rows, setRows] = useState<Record<string, Record<string, string>>>({});
+  const [rows, setRows] = useState<Record<string, Record<string, string | boolean>>>({});
   useEffect(() => {
     if (data) setRows(Object.fromEntries(Object.entries(data.items).map(([k, v]) => [k, {
-      base: v.base, tax_rate: num(v.tax_rate), parafiscal_rate: num(v.parafiscal_rate), commission_rate: num(v.commission_rate) }])));
+      base: v.base, tax_rate: num(v.tax_rate), evcat_rate: num(v.evcat_rate), evcat_cap: num(v.evcat_cap), accessories: num(v.accessories),
+      commission_rate: num(v.commission_rate), per_vehicle: v.per_vehicle, note: v.note }])));
   }, [data]);
   const save = useMutation({
     mutationFn: () => api.contractBranchesSave(rows),
@@ -510,35 +521,49 @@ export function BranchSettingsSection() {
     onError: (e) => toastError(e),
   });
   if (!data) return <Skeleton className="h-96 rounded-xl" />;
-  const patch = (b: string, k: string, v: string) => setRows((r) => ({ ...r, [b]: { ...r[b], [k]: v } }));
+  const patch = (b: string, k: string, v: string | boolean) => setRows((r) => ({ ...r, [b]: { ...r[b], [k]: v } }));
+  const cell = (b: string, k: string, w = "w-20", ph?: string) => (
+    <td className="px-1.5 py-2"><Input inputMode="decimal" value={String(rows[b]?.[k] ?? "")} onChange={(e) => patch(b, k, e.target.value)}
+      className={cn(w, "tabular")} aria-label={`${k} ${b}`} placeholder={ph} /></td>
+  );
   return (
     <Card className="p-5">
       <h2 className="text-base font-semibold">Branches : taxes et commissions</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Valeurs proposées par défaut sur chaque nouveau contrat, toujours modifiables contrat par contrat. La base de calcul permet de calculer la prime nette (base × taux).</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Valeurs proposées sur chaque nouveau contrat, modifiables contrat par contrat. <b>Prime TTC = (prime nette + EVCAT) × (1 + taxes) + accessoires</b> ;
+        les accessoires ne sont pas taxés. Taux des taxes vide = à compléter : la prime TTC n'est pas calculée.
+      </p>
       {!data.confirmed && (
         <p className="mt-3 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm">
-          Valeurs de départ <b>à vérifier</b> : taxe sur les contrats d'après le CGI (art. 284 : 14 %, accidents du travail et assurances vie exonérés) et taxe parafiscale de 1 % (décret 2-19-244). Prévoyance, Transport et la taxe de 1 % sur les AT sont des cas à confirmer avec vos quittances. Enregistrez pour valider.
+          Valeurs reprises de votre tableau du 09/11. Les lignes « à confirmer » sont signalées dans la remarque. Enregistrez pour les valider.
         </p>
       )}
       <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[40rem] text-sm">
+        <table className="w-full min-w-[60rem] text-sm">
           <thead className="text-left text-xs text-muted-foreground">
-            <tr><th className="py-2 pr-3 font-medium">Branche</th><th className="px-2 py-2 font-medium">Base de calcul</th>
-              <th className="px-2 py-2 font-medium">Taxe contrats (%)</th><th className="px-2 py-2 font-medium">Taxe parafiscale (%)</th>
-              <th className="px-2 py-2 font-medium">Commission (%)</th></tr>
+            <tr><th className="py-2 pr-2 font-medium">Branche</th><th className="px-1.5 py-2 font-medium">Base de calcul</th>
+              <th className="px-1.5 py-2 font-medium">Taxes (%)</th><th className="px-1.5 py-2 font-medium">EVCAT (%)</th>
+              <th className="px-1.5 py-2 font-medium">Plafond EVCAT</th><th className="px-1.5 py-2 font-medium">Accessoires</th>
+              <th className="px-1.5 py-2 font-medium">Commission (%)</th><th className="px-1.5 py-2 font-medium">Remarque</th></tr>
           </thead>
           <tbody className="divide-y">
-            {Object.entries(rows).map(([b, r]) => (
-              <tr key={b}>
-                <td className="py-2 pr-3 font-medium">{b}</td>
-                <td className="px-2 py-2">
-                  <NativeSelect value={r.base} onChange={(e) => patch(b, "base", e.target.value)} aria-label={`Base de calcul ${b}`}>
-                    {Object.entries(data.bases).map(([k, v]) => <option key={k} value={k}>{v || "Aucune (prime saisie)"}</option>)}
+            {Object.keys(rows).map((b) => (
+              <tr key={b} className="align-top">
+                <td className="py-2 pr-2 pt-4 font-medium">{b}</td>
+                <td className="px-1.5 py-2">
+                  <NativeSelect value={String(rows[b].base)} onChange={(e) => patch(b, "base", e.target.value)} aria-label={`Base de calcul ${b}`} className="w-40">
+                    {Object.entries(data.bases).map(([k, v]) => <option key={k} value={k}>{v || "Aucune"}</option>)}
                   </NativeSelect>
                 </td>
-                {(["tax_rate", "parafiscal_rate", "commission_rate"] as const).map((k) => (
-                  <td key={k} className="px-2 py-2"><Input inputMode="decimal" value={r[k] ?? ""} onChange={(e) => patch(b, k, e.target.value)} className="w-24 tabular" aria-label={`${k} ${b}`} placeholder={k === "commission_rate" ? "—" : undefined} /></td>
-                ))}
+                {cell(b, "tax_rate", "w-20", "à compl.")}
+                {cell(b, "evcat_rate", "w-16")}
+                {cell(b, "evcat_cap", "w-24", "—")}
+                <td className="px-1.5 py-2">
+                  <Input inputMode="decimal" value={String(rows[b].accessories ?? "")} onChange={(e) => patch(b, "accessories", e.target.value)} className="w-20 tabular" aria-label={`accessories ${b}`} placeholder="—" />
+                  {rows[b].per_vehicle && <p className="mt-1 text-[11px] text-muted-foreground">par véhicule</p>}
+                </td>
+                {cell(b, "commission_rate", "w-20", "—")}
+                <td className="px-1.5 py-2"><Textarea rows={2} value={String(rows[b].note ?? "")} onChange={(e) => patch(b, "note", e.target.value)} className="min-h-0 w-64 text-xs" aria-label={`Remarque ${b}`} /></td>
               </tr>
             ))}
           </tbody>
@@ -687,9 +712,10 @@ function Timeline({ c }: { c: Contract }) {
           {c.base_amount != null && <><span className="text-muted-foreground">{c.base_label || "Base de calcul"}</span><span className="text-right tabular">{mad(c.base_amount)}</span></>}
           {c.rate && <><span className="text-muted-foreground">Taux</span><span className="text-right tabular">{c.rate}</span></>}
           <span className="text-muted-foreground">Prime nette</span><span className="text-right tabular">{mad(c.premium)}</span>
+          {!!c.evcat && <><span className="text-muted-foreground">EVCAT ({num(c.evcat_rate)} %)</span><span className="text-right tabular">{mad(c.evcat)}</span></>}
+          <span className="text-muted-foreground">Taxes{c.tax_rate != null ? ` (${num(c.tax_rate)} %)` : ""}</span><span className="text-right tabular">{c.taxes == null ? "à compléter" : mad(c.taxes)}</span>
           {!!c.accessories && <><span className="text-muted-foreground">Accessoires</span><span className="text-right tabular">{mad(c.accessories)}</span></>}
-          <span className="text-muted-foreground">Taxes ({num(c.tax_rate) || 0} % + {num(c.parafiscal_rate) || 0} %)</span><span className="text-right tabular">{mad(c.taxes)}</span>
-          <span className="font-medium">Prime TTC</span><span className="text-right font-medium tabular">{mad(c.ttc)}</span>
+          <span className="font-medium">Prime TTC</span><span className="text-right font-medium tabular">{c.ttc == null ? "—" : mad(c.ttc)}</span>
           {c.commission != null && <><span className="text-muted-foreground">Commission ({num(c.commission_rate)} %)</span><span className="text-right tabular">{mad(c.commission)}</span></>}
         </div>
       )}
