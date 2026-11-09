@@ -41,14 +41,24 @@ class RenderContext:
     signature: str
     target_blocks: dict[str, str]   # {"FIN": "texte…", ...}
     sector_blocks: dict[str, str]   # {"IND": "texte…", ...}
+    code: str | None = None         # V3.4 : textes choisis par la campagne (sinon : code de la fiche)
+
+    @property
+    def _code(self) -> str:
+        return (self.code if self.code is not None else self.contact.sequence_code or "").upper()
 
     @property
     def target_key(self) -> str:
-        return (self.contact.sequence_code or "").upper().partition("-")[0]
+        return self._code.partition("-")[0]
 
     @property
     def sector_key(self) -> str:
-        return (self.contact.sequence_code or "").upper().partition("-")[2]
+        return self._code.partition("-")[2]
+
+
+# V3.4 : texte générique (clé ALL) pour un contact sans fonction ou sans secteur. Vide : le
+# paragraphe est simplement retiré.
+GENERIC = "ALL"
 
 
 @dataclass
@@ -74,9 +84,11 @@ def _lookup(name: str, ctx: RenderContext, problems: list[str], depth: int) -> s
             return ""
         key, blocks, label = ((ctx.target_key, ctx.target_blocks, "cible") if name == "bloc_cible"
                               else (ctx.sector_key, ctx.sector_blocks, "secteur"))
-        if not key:
-            problems.append(f"Code séquence absent : impossible de choisir le bloc {label}")
-            return ""
+        if not key or key == GENERIC:
+            body = blocks.get(GENERIC, "")
+            if TODO_MARKER in body:
+                problems.append(f"Texte générique « {label} » pas encore rédigé (contient « {TODO_MARKER} »)")
+            return _render(body, ctx, problems, depth + 1) if body.strip() else ""
         if key not in blocks:
             problems.append(f"Bloc {label} « {key} » introuvable")
             return ""

@@ -257,7 +257,10 @@ def _send(s: Session, mb: Mailbox, enr: Enrollment, now, smtp_factory, imap_fact
     # 2) rendu (le même que l'aperçu)
     step = steps[enr.current_step - 1]
     chain = _thread_chain(s, enr)
-    ctx = ss.build_context(s, contact)
+    code = ss.enrollment_code(enr, camp, contact)  # V3.4 : textes de la campagne
+    if code and not enr.block_code:
+        enr.block_code = code  # fixé au 1er envoi : les relances gardent les mêmes textes
+    ctx = ss.build_context(s, contact, code)
     unsubscribe = ss.unsubscribe_for(s, seq)
     if chain:
         first_subject = chain[0].subject

@@ -195,7 +195,7 @@ def campaign_upcoming(cid: int, limit: int = 50, enrollment_id: int | None = Non
             remaining = steps[enr.current_step - 1:]
             if not remaining:
                 continue
-            ctx = ss.build_context(s, contact)
+            ctx = ss.build_context(s, contact, ss.enrollment_code(enr, camp, contact))
             chain = _thread_chain(s, enr)
             first_subject = chain[0].subject if chain else ss.compose_step(
                 ctx, steps[0], ss.variants_of(s, steps[0]), enr.variant_label, "", unsubscribe,
@@ -245,11 +245,36 @@ def campaign_detail(cid: int):
                          for r in stats.by_segment(s, camp.id)],
             "ab": {"rows": [{"key": r.key, "reached": r.reached, "replies": r.replies, "rate": r.rate} for r in ab_rows],
                    "too_small": ab_small, "min_sample": stats.AB_MIN_SAMPLE},
-            "candidates": candidates,
+            "candidates": candidates, "block_map": camp.block_map or {},
             "enrollments": [{"id": e.id, "status": e.status, "status_label": camp_svc.ENROLLMENT_LABELS[e.status],
                              "variant": e.variant_label, "step": e.current_step, "max_steps": e.max_steps, "next_due_at": iso(e.next_due_at),
                              "error": e.last_error, "contact": contact_ref(c)} for e, c in rows],
         }
+
+
+@router.put("/campaigns/{cid:int}/blocks")
+def campaign_blocks(cid: int, body: dict):
+    """V3.4 : textes de la campagne. {"target": {"FIN": "FIN2"}, "sector": {"IND": ["IND", "IND2"]}} :
+    pour une fonction (ou un secteur) de la fiche, le texte à envoyer à la place, ou un partage A/B.
+    Ne change que les 1ers emails pas encore partis (les relances gardent les textes déjà envoyés)."""
+    from app.models import ContentBlock
+    with get_session() as s:
+        camp = _camp(s, cid)
+        keys = {k: set(s.scalars(select(ContentBlock.key).where(ContentBlock.kind == k))) for k in ("target", "sector")}
+        clean: dict = {}
+        for kind in ("target", "sector"):
+            for src, val in ((body or {}).get(kind) or {}).items():
+                vals = [v for v in (val if isinstance(val, list) else [val]) if v]
+                vals = list(dict.fromkeys(str(v).upper() for v in vals))
+                if src.upper() not in keys[kind] or any(v not in keys[kind] for v in vals):
+                    raise HTTPException(422, {"errors": {kind: f"Texte inconnu : {src} → {', '.join(vals)}"}})
+                if not vals or vals == [src.upper()]:
+                    continue  # « selon la fiche » : rien à mémoriser
+                clean.setdefault(kind, {})[src.upper()] = vals if len(vals) > 1 else vals[0]
+        camp.block_map = clean or None
+        ss.assign_codes(s, camp)  # inscriptions dont le 1er email n'est pas encore parti
+        s.commit()
+        return {"block_map": camp.block_map or {}}
 
 
 @router.post("/campaigns/{cid:int}/{action}")

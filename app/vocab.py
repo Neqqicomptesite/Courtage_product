@@ -150,6 +150,54 @@ def remove_profile(session, block) -> None:
     n = profile_usage(session, block)
     if n:
         raise ProfileError(f"{n} contact(s) ont ce profil : changez d'abord leur fonction ou leur secteur.")
+    if campaigns_using_block(session, block):
+        raise ProfileError("Une campagne utilise ce texte : retirez-le d'abord de ses textes.")
     session.delete(block)
     session.flush()
     load_custom(session)
+
+
+# ------------------------------------------------------------------ variantes (V3.4)
+# « Finance 2 » : un autre texte pour la même fonction (ou le même secteur), pour tester des
+# emails différents sur des prospects semblables. Une variante est un texte à part entière
+# (clé FIN2, libellé « Finance & administration · variante 2 ») rattaché à son texte d'origine
+# (variant_of = FIN) : on peut la mettre sur la fiche d'un contact (FIN2-IND) ou la choisir
+# dans une campagne, qui l'applique sans toucher aux fiches.
+
+def root_key(block) -> str:
+    return block.variant_of or block.key
+
+
+def add_variant(session, block):
+    from sqlalchemy import select
+
+    from app.models import ContentBlock
+    if block.key == "ALL":
+        raise ProfileError("Le texte générique n'a pas de variante.")
+    root = root_key(block)
+    keys = set(session.scalars(select(ContentBlock.key).where(ContentBlock.kind == block.kind)))
+    n = 2
+    while f"{root}{n}" in keys or f"{root}{n}" in (set(TARGETS) | set(SECTORS)):
+        n += 1
+    table = _TB if block.kind == "target" else _SB  # libellés affichés dans « Textes personnalisés »
+    base_label = table.get(root) or block.label or root
+    v = ContentBlock(kind=block.kind, key=f"{root}{n}", label=f"{base_label} · variante {n}"[:120],
+                     body=block.body, variant_of=root)
+    session.add(v)
+    session.flush()
+    load_custom(session)
+    return v
+
+
+def campaigns_using_block(session, block) -> int:
+    from sqlalchemy import select
+
+    from app.models import Campaign
+    n = 0
+    for (m,) in session.execute(select(Campaign.block_map).where(Campaign.block_map.is_not(None))
+                                .execution_options(oddo_all=True)):
+        for v in ((m or {}).get(block.kind) or {}).values():
+            if block.key in (v if isinstance(v, list) else [v]):
+                n += 1
+                break
+    return n

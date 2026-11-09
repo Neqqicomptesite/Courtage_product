@@ -169,6 +169,7 @@ class ContentBlock(Base):
     key: Mapped[str] = mapped_column(String(20))
     body: Mapped[str] = mapped_column(Text, default="")
     label: Mapped[str | None] = mapped_column(String(120))  # V2.9 : fonction / secteur ajouté par Omar
+    variant_of: Mapped[str | None] = mapped_column(String(20))  # V3.4 : variante d'un texte (ex. FIN2 → FIN)
 
 
 class Sequence(Base):
@@ -228,6 +229,9 @@ class Campaign(Base):
     start_at: Mapped[datetime | None] = mapped_column(UTCDateTime)  # V2.5 : démarrage planifié (sinon : tout de suite)
     # V2.9 : campagne « à l'unité » d'une séquence (envois lancés depuis la boîte mail ou une fiche)
     direct: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # V3.4 : textes de la campagne. {"target": {"FIN": "FIN2" | ["FIN", "FIN2"]}, "sector": {...}} :
+    # remplace le texte de la fiche du contact (une liste = partage A/B entre les personnes).
+    block_map: Mapped[dict | None] = mapped_column(JSON)
 
 
 class Enrollment(Base):
@@ -252,6 +256,7 @@ class Enrollment(Base):
     last_error: Mapped[str | None] = mapped_column(Text)
     # V2.9 : emails personnalisés pour ce contact {"1": {"subject": …, "body": …}}
     overrides: Mapped[dict | None] = mapped_column(JSON)
+    block_code: Mapped[str | None] = mapped_column(String(30))  # V3.4 : textes envoyés (ex. FIN2-IND), fixés au 1er email
     # V2.24 (migration 0010) : n'envoyer que les N premiers emails (NULL = toute la séquence)
     max_steps: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)

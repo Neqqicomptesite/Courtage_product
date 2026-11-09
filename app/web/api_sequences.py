@@ -328,16 +328,45 @@ async def preview_send(sid: int, body: PreviewSendIn):
 
 # ------------------------------------------------------------------------ blocs
 
+GENERIC_LABELS = {"target": "Générique (sans fonction)", "sector": "Générique (sans secteur)"}
+
+
+def _block_json(s, b: ContentBlock, labels: dict) -> dict:
+    generic = b.key == render.GENERIC
+    return {"id": b.id, "kind": b.kind, "key": b.key, "body": b.body, "todo": render.TODO_MARKER in b.body,
+            "label": GENERIC_LABELS[b.kind] if generic else b.label or labels.get(b.key, b.key),
+            "custom": bool(b.label), "generic": generic, "variant_of": b.variant_of,
+            "used": vocab.profile_usage(s, b), "campaigns": vocab.campaigns_using_block(s, b)}
+
+
 @router.get("/blocks")
 def blocks():
     labels = {**TARGET_BLOCKS, **SECTOR_BLOCKS}
     order = list(TARGET_BLOCKS) + list(SECTOR_BLOCKS)
     with get_session() as s:
-        items = sorted(s.scalars(select(ContentBlock)),
-                       key=lambda b: (b.kind != "target", order.index(b.key) if b.key in order else 99))
-        return [{"id": b.id, "kind": b.kind, "key": b.key, "label": b.label or labels.get(b.key, b.key), "body": b.body,
-                 "todo": render.TODO_MARKER in b.body, "custom": bool(b.label),
-                 "used": vocab.profile_usage(s, b)} for b in items]
+        all_ = list(s.scalars(select(ContentBlock)))
+        roots = {b.key: i for i, b in enumerate(sorted(all_, key=lambda b: order.index(b.key) if b.key in order else 99))}
+
+        def rank(b: ContentBlock):  # variantes juste après leur texte d'origine, générique en dernier
+            root = b.variant_of or b.key
+            return (b.kind != "target", b.key == render.GENERIC, order.index(root) if root in order else 50 + roots.get(root, 0),
+                    b.variant_of is not None, b.id)
+        return [_block_json(s, b, labels) for b in sorted(all_, key=rank)]
+
+
+@router.post("/blocks/{bid:int}/variant")
+def block_variant(bid: int):
+    """V3.4 : une variante du texte (« Finance 2 »), à rédiger autrement pour tester."""
+    with get_session() as s:
+        b = s.get(ContentBlock, bid)
+        if b is None:
+            raise not_found("Texte")
+        try:
+            v = vocab.add_variant(s, b)
+        except vocab.ProfileError as exc:
+            raise HTTPException(422, {"errors": {"label": str(exc)}}) from None
+        s.commit()
+        return _block_json(s, v, {**TARGET_BLOCKS, **SECTOR_BLOCKS})
 
 
 class NewBlock(BaseModel):
@@ -355,7 +384,7 @@ def block_create(body: NewBlock):
             raise HTTPException(422, {"errors": {"label": str(exc)}}) from None
         s.commit()
         return {"id": b.id, "kind": b.kind, "key": b.key, "label": b.label, "body": b.body, "todo": True,
-                "custom": True, "used": 0}
+                "custom": True, "generic": False, "variant_of": None, "used": 0, "campaigns": 0}
 
 
 @router.delete("/blocks/{bid:int}")

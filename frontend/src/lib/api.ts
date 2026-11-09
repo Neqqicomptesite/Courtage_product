@@ -256,7 +256,10 @@ export type PreviewStep = {
   warnings: string[];
 };
 export type Preview = { contact: ContactRef | null; labels: string[]; variant: string | null; steps: PreviewStep[] };
-export type Block = { id: number; kind: "target" | "sector"; key: string; label: string; body: string; todo: boolean; custom: boolean; used: number };
+export type Block = { id: number; kind: "target" | "sector"; key: string; label: string; body: string; todo: boolean; custom: boolean; used: number;
+  generic?: boolean; variant_of?: string | null; campaigns?: number };
+/** V3.4 : textes d'une campagne : clé de la fiche → texte(s) envoyé(s) (liste = partage A/B). */
+export type BlockMap = { target?: Record<string, string | string[]>; sector?: Record<string, string | string[]> };
 export type SequenceTemplate = { subject: string; body: string; contact: ContactRef | null; attachments: Attachment[] };
 export type SequenceDraft = {
   sequence: { id: number; name: string; category: SequenceCategory };
@@ -287,6 +290,7 @@ export type CampaignListItem = {
 };
 export type Candidate = ContactRef & { excluded: string | null; other_campaigns: string[]; problems?: string[]; problem_count?: number };
 export type CampaignDetail = {
+  block_map: BlockMap;
   id: number;
   name: string;
   status: CampaignListItem["status"];
@@ -682,6 +686,8 @@ export const api = {
   previewSend: (id: number, contactId: number, variant: string) =>
     request<{ sent: number; to: string }>(`/api/sequences/${id}/preview/send`, { method: "POST", json: { contact_id: contactId, variant } }),
   blocks: () => request<Block[]>("/api/blocks"),
+  blockVariant: (id: number) => request<Block>(`/api/blocks/${id}/variant`, { method: "POST" }),
+  campaignBlocks: (id: number, map: BlockMap) => request<{ block_map: BlockMap }>(`/api/campaigns/${id}/blocks`, { method: "PUT", json: map }),
   blockSave: (id: number, body: string) => request<{ id: number; todo: boolean }>(`/api/blocks/${id}`, { method: "PUT", json: { body } }),
   blockCreate: (kind: Block["kind"], label: string) => request<Block>("/api/blocks", { method: "POST", json: { kind, label } }),
   blockDelete: (id: number) => request(`/api/blocks/${id}`, { method: "DELETE" }),

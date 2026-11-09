@@ -98,11 +98,57 @@ def preview_variant(contact: Contact, labels: list[str]) -> str:
     return sorted(labels)[h % len(labels)]
 
 
-def build_context(session: Session, contact: Contact) -> render.RenderContext:
+def build_context(session: Session, contact: Contact, code: str | None = None) -> render.RenderContext:
     mb = get_primary(session)
     target, sector = blocks(session)
     return render.RenderContext(contact=contact, signature=mb.signature if mb else "",
-                                target_blocks=target, sector_blocks=sector)
+                                target_blocks=target, sector_blocks=sector, code=code)
+
+
+def resolve_code(block_map: dict | None, contact_code: str | None, salt: int,
+                 counters: dict | None = None) -> str | None:
+    """V3.4 : textes envoyés à un contact dans une campagne. La campagne peut remplacer la
+    fonction et/ou le secteur de la fiche (« FIN » → « FIN2 »), ou partager entre plusieurs
+    variantes (liste : à tour de rôle avec `counters`, sinon d'après `salt`). None = code de la fiche."""
+    if not block_map:
+        return None
+    t, _, sct = (contact_code or "").upper().partition("-")
+
+    def pick(kind: str, key: str) -> str:
+        v = (block_map.get(kind) or {}).get(key or render.GENERIC)
+        if isinstance(v, list):
+            v = [x for x in v if x]
+            if not v:
+                return key
+            if counters is not None:
+                i = counters.get((kind, key), 0)
+                counters[(kind, key)] = i + 1
+                return v[i % len(v)]
+            return v[salt % len(v)]
+        return v or key
+    code = f"{pick('target', t)}-{pick('sector', sct)}"
+    return None if code == (contact_code or "").upper() or code == "-" else code
+
+
+def assign_codes(session: Session, camp) -> int:
+    """Fixe les textes des inscriptions dont le 1er email n'est pas encore parti, d'après les
+    textes de la campagne ; un partage A/B alterne les personnes (moitié / moitié)."""
+    from app.models import Enrollment, Message
+    sent = select(Message.enrollment_id).where(Message.direction == "out", Message.sent_at.is_not(None))
+    rows = session.execute(select(Enrollment, Contact).join(Contact, Contact.id == Enrollment.contact_id)
+                           .where(Enrollment.campaign_id == camp.id, Enrollment.id.not_in(sent))
+                           .order_by(Enrollment.id)).all()
+    counters: dict = {}
+    for enr, contact in rows:
+        enr.block_code = resolve_code(camp.block_map, contact.sequence_code, enr.id, counters)
+    return len(rows)
+
+
+def enrollment_code(enr, camp, contact: Contact) -> str | None:
+    """Le code fixé à l'inscription (1er email), sinon celui que donne la campagne."""
+    if getattr(enr, "block_code", None):
+        return enr.block_code
+    return resolve_code(getattr(camp, "block_map", None), contact.sequence_code, enr.id or 0)
 
 
 @dataclass

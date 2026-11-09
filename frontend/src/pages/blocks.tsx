@@ -4,7 +4,7 @@
 // fonction et un secteur, on rédige les deux textes et on voit l'email assemblé en direct.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Briefcase, Check, Factory, Loader2, Mail, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Briefcase, Check, Copy, Factory, Loader2, Mail, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -74,7 +74,8 @@ function Header() {
     <PageHeader
       back={<Button variant="ghost" size="sm" className="-ml-2" asChild><Link to="/sequences"><ArrowLeft /> Séquences</Link></Button>}
       title="Textes personnalisés"
-      description={<>Chaque email de prospection contient <b>un texte selon la fonction</b> du contact et <b>un texte selon son secteur</b>. Choisissez un profil : vous rédigez ses deux textes et voyez l'email tel qu'il le recevra. Enregistrement automatique.</>}
+      description={<>Chaque email de prospection contient <b>un texte selon la fonction</b> du contact et <b>un texte selon son secteur</b>. Choisissez un profil : vous rédigez ses deux textes et voyez l'email tel qu'il le recevra. Enregistrement automatique.
+        <span className="mt-1 block">Pour tester un autre email sur des prospects semblables, créez une <b>variante</b> (ex. « Finance · variante 2 ») : mettez-la sur la fiche des contacts, ou choisissez-la dans une campagne. Les contacts sans fonction ou sans secteur reçoivent le texte <b>générique</b>.</span></>}
     />
   );
 }
@@ -90,6 +91,11 @@ function Workspace({ blocks }: { blocks: Block[] }) {
   const firstTodo = (l: Block[]) => (l.find((b) => b.todo) ?? l[0])?.id;
   const [tId, setTId] = useState<number | undefined>(() => firstTodo(targets));
   const [sId, setSId] = useState<number | undefined>(() => firstTodo(sectors));
+  useEffect(() => {
+    const open = (e: Event) => { const b = (e as CustomEvent<Block>).detail; if (b.kind === "target") setTId(b.id); else setSId(b.id); };
+    window.addEventListener("block-added", open);
+    return () => window.removeEventListener("block-added", open);
+  }, []);
   const t = targets.find((b) => b.id === tId);
   const s = sectors.find((b) => b.id === sId);
   const isTodo = (b: Block) => (texts[b.id] ?? "").includes(TODO) || !(texts[b.id] ?? "").trim();
@@ -125,8 +131,8 @@ function Picker({ icon: Icon, title, kind, items, value, onChange, isTodo, tone 
       </h2>
       <div className="flex flex-wrap gap-1.5">
         {items.map((b) => (
-          <button key={b.id} onClick={() => onChange(b.id)}
-            className={cn("inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors",
+          <button key={b.id} onClick={() => onChange(b.id)} title={b.generic ? "Pour les contacts sans code (fonction ou secteur inconnu)" : b.variant_of ? `Variante de ${b.variant_of} (code ${b.key})` : `Code ${b.key}`}
+            className={cn("inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors", b.variant_of && "border-dashed", b.generic && "italic",
               value === b.id ? (tone === "primary" ? "border-primary bg-primary text-primary-foreground" : "border-success bg-success text-white") : "hover:bg-accent")}>
             {isTodo(b) ? <span className={cn("size-1.5 rounded-full", value === b.id ? "bg-white" : "bg-warning")} /> : <Check className="size-3.5" />}
             {b.label}
@@ -163,13 +169,14 @@ function Editor({ block, title, tone, value, onChange, onDeleted }: { block: Blo
       <div className="mb-2 flex items-center gap-2">
         <span className="text-sm font-medium">{title}</span>
         {block.custom && (
-          <button title={block.used ? `${block.used} contact(s) ont ce profil : impossible de supprimer` : "Supprimer ce texte"} disabled={block.used > 0}
+          <button title={block.used ? `${block.used} contact(s) ont ce profil : impossible de supprimer` : block.campaigns ? "Une campagne utilise ce texte : impossible de supprimer" : "Supprimer ce texte"} disabled={block.used > 0 || (block.campaigns ?? 0) > 0}
             className="rounded p-1 text-muted-foreground hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40"
             onClick={async () => {
               try { await api.blockDelete(block.id); pending.current = null; qc.setQueryData<Block[]>(["blocks"], (l) => l?.filter((b) => b.id !== block.id)); qc.invalidateQueries({ queryKey: ["sequences"] }); onDeleted(); toast.success("Supprimé"); }
               catch (e) { toastError(e, "Suppression impossible"); }
             }}><Trash2 className="size-3.5" /></button>
         )}
+        {!block.generic && <VariantButton block={block} />}
         <span className="ml-auto text-xs text-muted-foreground">
           {save.isPending ? <Loader2 className="size-3.5 animate-spin" /> : dirty ? "…" : todo ? <Badge variant="warning">À rédiger</Badge>
             : <span className="inline-flex items-center gap-1 text-success"><Check className="size-3.5" />Enregistré</span>}
@@ -183,6 +190,31 @@ function Editor({ block, title, tone, value, onChange, onDeleted }: { block: Blo
           timer.current = window.setTimeout(() => { pending.current = null; save.mutate(v); }, 800);
         }} />
     </Card>
+  );
+}
+
+/** V3.4 : crée « … · variante N » (copie du texte, à réécrire) et l'ouvre. */
+function VariantButton({ block }: { block: Block }) {
+  const qc = useQueryClient();
+  const add = useMutation({
+    mutationFn: () => api.blockVariant(block.id),
+    onSuccess: (b) => {
+      qc.setQueryData<Block[]>(["blocks"], (l) => {
+        if (!l) return l;
+        const root = b.variant_of ?? b.key;
+        const last = l.reduce((i, x, n) => (x.kind === b.kind && (x.key === root || x.variant_of === root) ? n : i), -1);
+        return [...l.slice(0, last + 1), b, ...l.slice(last + 1)];
+      });
+      window.dispatchEvent(new CustomEvent("block-added", { detail: b }));
+      toast.success(`Variante « ${b.label} » créée`, { description: `Code ${b.key} : réécrivez son texte. Choisissez-la ensuite sur la fiche des contacts ou dans une campagne.` });
+    },
+    onError: (e) => toastError(e),
+  });
+  return (
+    <button type="button" className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+      onClick={() => add.mutate()} disabled={add.isPending} title="Un autre texte pour la même fonction / le même secteur, pour tester">
+      {add.isPending ? <Loader2 className="size-3 animate-spin" /> : <Copy className="size-3" />} Créer une variante
+    </button>
   );
 }
 

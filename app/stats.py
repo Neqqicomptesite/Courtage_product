@@ -146,7 +146,8 @@ def _grouped(s: Session, group_col, campaign_id: int | None, base_ids=None) -> l
 
 def by_segment(s: Session, campaign_id: int | None = None) -> list[SegmentRow]:
     """Tableau par segment cible × secteur, c'est-à-dire par code séquence (§6.8)."""
-    return _grouped(s, Contact.sequence_code, campaign_id)
+    # V3.4 : par textes réellement envoyés (variante choisie par la campagne), sinon code de la fiche
+    return _grouped(s, func.coalesce(Enrollment.block_code, Contact.sequence_code), campaign_id)
 
 
 def ab_test(s: Session, campaign_id: int | None = None) -> tuple[list[SegmentRow], bool]:

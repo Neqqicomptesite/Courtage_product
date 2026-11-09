@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle, ArrowLeft, ArrowRight, CalendarCheck, CalendarClock, CheckCircle2, Download, Filter, ListOrdered, Loader2, MoreHorizontal,
-  Eye, Pause, Play, Rocket, Search, Send, ShieldCheck, SkipForward, Trash2, UserMinus, Users,
+  Eye, FileText, Pause, Play, Rocket, Search, Send, ShieldCheck, SkipForward, Trash2, UserMinus, Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -20,7 +20,7 @@ import { Progress } from "@/components/ui/progress";
 import { NativeSelect } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { api, type Activation, type CampaignDetail, type Indicators, type SequenceCategory } from "@/lib/api";
+import { api, type Activation, type Block, type BlockMap, type CampaignDetail, type Indicators, type SequenceCategory } from "@/lib/api";
 import { CATEGORIES } from "@/pages/sequences";
 import { formatDayTime, fullName, lot, pct } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -490,6 +490,74 @@ function UpcomingEmails({ campaignId }: { campaignId: number }) {
   );
 }
 
+/** V3.4 : textes de la campagne. Pour une fonction ou un secteur qui a des variantes, la campagne
+ * peut envoyer une variante à la place du texte de la fiche, ou partager à parts égales entre
+ * plusieurs (test). Rien de coché = selon la fiche du contact. */
+function CampaignTexts({ camp }: { camp: CampaignDetail }) {
+  const qc = useQueryClient();
+  const { data: blocks } = useQuery({ queryKey: ["blocks"], queryFn: api.blocks, staleTime: 60_000 });
+  const [map, setMap] = useState<BlockMap>(camp.block_map ?? {});
+  useEffect(() => setMap(camp.block_map ?? {}), [camp.block_map]);
+  const save = useMutation({
+    mutationFn: (m: BlockMap) => api.campaignBlocks(camp.id, m),
+    onSuccess: (r) => { setMap(r.block_map); qc.invalidateQueries({ queryKey: ["campaign", camp.id] }); qc.invalidateQueries({ queryKey: ["campaign-upcoming", camp.id] }); toast.success("Textes de la campagne enregistrés"); },
+    onError: (e) => toastError(e),
+  });
+  const groups = useMemo(() => {
+    const out: { kind: "target" | "sector"; root: Block; options: Block[] }[] = [];
+    for (const b of blocks ?? []) {
+      if (b.variant_of || b.generic) continue;
+      const variants = (blocks ?? []).filter((x) => x.kind === b.kind && x.variant_of === b.key);
+      if (variants.length) out.push({ kind: b.kind, root: b, options: [b, ...variants] });
+    }
+    return out;
+  }, [blocks]);
+  if (!blocks || groups.length === 0) return null;
+  const chosen = (kind: "target" | "sector", root: string): string[] => {
+    const v = map[kind]?.[root];
+    return v ? (Array.isArray(v) ? v : [v]) : [];
+  };
+  const toggle = (kind: "target" | "sector", root: string, key: string) => {
+    const cur = chosen(kind, root);
+    const order = groups.find((g) => g.kind === kind && g.root.key === root)?.options.map((o) => o.key) ?? [];
+    const next = (cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]).sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    const m: BlockMap = { ...map, [kind]: { ...(map[kind] ?? {}) } };
+    if (next.length) m[kind]![root] = next.length === 1 ? next[0] : next; else delete m[kind]![root];
+    setMap(m);
+    save.mutate(m);
+  };
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2"><FileText className="size-4 text-muted-foreground" />Textes de la campagne</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Rien de coché : chacun reçoit le texte de sa fiche. <b>Une case</b> : tous les contacts de cette fonction (ou de ce secteur) reçoivent ce texte.
+          <b> Plusieurs cases</b> : partage à parts égales, pour comparer les réponses dans « Taux de réponse ». Ne change que les 1ers emails pas encore partis.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {groups.map((g) => {
+          const sel = chosen(g.kind, g.root.key);
+          return (
+            <div key={`${g.kind}-${g.root.key}`} className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="w-full text-xs text-muted-foreground sm:w-56">{g.kind === "target" ? "Fonction" : "Secteur"} <b className="text-foreground">{g.root.label}</b> sur la fiche</span>
+              {g.options.map((o) => (
+                <button key={o.key} type="button" disabled={save.isPending} onClick={() => toggle(g.kind, g.root.key, o.key)}
+                  className={cn("rounded-full border px-3 py-1 transition-colors", sel.includes(o.key) ? "border-primary bg-primary text-primary-foreground" : "hover:bg-accent", o.variant_of && "border-dashed")}>
+                  {o.variant_of ? o.label.replace(`${g.root.label} · `, "") : "Texte d'origine"} <code className="ml-1 text-[11px] opacity-70">{o.key}</code>
+                </button>
+              ))}
+              <span className="text-xs text-muted-foreground">
+                {sel.length === 0 ? "selon la fiche" : sel.length === 1 ? `→ tous reçoivent ${sel[0]}` : `→ partage ${sel.join(" / ")}`}
+              </span>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
 /** V3.3.6 : les emails déjà partis (clic sur « Emails envoyés »), un clic ouvre l'aperçu. */
 function SentEmails({ campaignId }: { campaignId: number }) {
   const { data, isLoading } = useQuery({ queryKey: ["campaign-sent", campaignId], queryFn: () => api.campaignSent(campaignId), refetchInterval: 30_000 });
@@ -607,6 +675,8 @@ export function CampaignDetailPage() {
             </div>
           </div>
         ) : (
+          <div className="space-y-6">
+          <CampaignTexts camp={data} />
           <Card>
             <CardHeader><CardTitle>{data.candidates.filter((c) => !c.excluded).length} contacts seront inscrits</CardTitle></CardHeader>
             <CardContent className="divide-y p-0">
@@ -619,6 +689,7 @@ export function CampaignDetailPage() {
               ))}
             </CardContent>
           </Card>
+          </div>
         )
       ) : (
         <div className="space-y-6">
@@ -629,6 +700,7 @@ export function CampaignDetailPage() {
             <Outcomes i={data.indicators} running={(data.counts.scheduled ?? 0) + (data.counts.waiting ?? 0) + (data.counts.sending ?? 0)} />
           </div>
           {(data.segments.length > 1 || data.ab.rows.length > 0) && <Breakdown data={data} />}
+          {data.status !== "finished" && !data.direct && <CampaignTexts camp={data} />}
           <Card id="campaign-people" className="scroll-mt-4">
             <div className="flex flex-wrap items-center gap-1 border-b p-2">
               {VIEWS.map((v) => {

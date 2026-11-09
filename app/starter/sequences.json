@@ -1,5 +1,5 @@
 {
- "version": 4,
+ "version": 5,
  "remove_sequences": [
   "Prospection PME – 3 étapes",
   "PME",
@@ -8,7 +8,8 @@
  "target_blocks": {
   "FIN": "En tant que responsable des finances de {{ entreprise | \"votre entreprise\" }}, vous suivez de près le coût de vos assurances. Nous vous proposons une revue gratuite de vos contrats en cours. Nous comparons vos garanties et vos primes avec ce que proposent les principales compagnies du marché, et nous vous indiquons clairement ce qui peut être amélioré, sans engagement.",
   "RH": "La couverture de vos salariés (santé, prévoyance, retraite) est un vrai levier de fidélisation, à condition qu'elle reste lisible et au bon prix. En tant que courtier, nous mettons ces contrats en concurrence auprès de plusieurs compagnies. Nous accompagnons aussi vos équipes au quotidien : adhésions, remboursements, départs.",
-  "DIR": "Dans une PME, les assurances sont souvent réparties entre plusieurs contrats et plusieurs interlocuteurs. Nous vous proposons un bilan global des assurances de {{ entreprise | \"votre entreprise\" }} et des vôtres en tant que dirigeant. Ensuite, vous n'avez plus qu'un seul interlocuteur pour tout : contrats, renouvellements et sinistres."
+  "DIR": "Dans une PME, les assurances sont souvent réparties entre plusieurs contrats et plusieurs interlocuteurs. Nous vous proposons un bilan global des assurances de {{ entreprise | \"votre entreprise\" }} et des vôtres en tant que dirigeant. Ensuite, vous n'avez plus qu'un seul interlocuteur pour tout : contrats, renouvellements et sinistres.",
+  "ALL": "Nous aidons les entreprises à payer le juste prix pour des assurances qui les protègent vraiment : nous comparons gratuitement vos contrats aux offres de plusieurs compagnies, et nous vous disons clairement ce qui peut être amélioré."
  },
  "sector_blocks": {
   "IND": "Dans l'industrie, un arrêt de production après un incendie ou une panne majeure coûte souvent plus cher que les dégâts eux-mêmes. Nous vérifions notamment votre multirisque industrielle, le bris de machine, votre responsabilité civile et votre couverture accidents du travail.",
@@ -17,7 +18,8 @@
   "COM": "Dans le commerce et la distribution, vos stocks et vos points de vente concentrent l'essentiel du risque. Nous examinons votre multirisque (stocks, locaux, pertes d'exploitation), votre responsabilité civile et, le cas échéant, votre flotte de véhicules.",
   "TRA": "Dans le transport et la logistique, chaque véhicule immobilisé et chaque marchandise endommagée pèsent directement sur vos marges. Nous examinons votre flotte automobile, l'assurance des marchandises transportées et la couverture accidents du travail de vos chauffeurs et de vos équipes.",
   "AGRO": "Dans l'agroalimentaire, un incident sur un site ou sur un produit peut avoir des conséquences lourdes. Nous vérifions notamment votre multirisque industrielle, votre responsabilité civile produits et votre couverture accidents du travail.",
-  "SANTE": "Dans la santé et la pharmacie, la responsabilité professionnelle et la responsabilité du fait des produits sont au cœur des enjeux. Nous examinons ces garanties, ainsi que votre multirisque et la complémentaire santé de vos équipes."
+  "SANTE": "Dans la santé et la pharmacie, la responsabilité professionnelle et la responsabilité du fait des produits sont au cœur des enjeux. Nous examinons ces garanties, ainsi que votre multirisque et la complémentaire santé de vos équipes.",
+  "ALL": "Quel que soit votre secteur, nous vérifions en priorité les garanties qui protègent votre activité : responsabilité civile, multirisque et couverture de vos équipes."
  },
  "sequences": [
   {

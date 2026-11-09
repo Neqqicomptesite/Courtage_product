@@ -275,7 +275,7 @@ def _cell_value(cell: Cell, fieldname: str) -> str | None:
 
 def check_sequence_code(code: str | None) -> str | None:
     if not code:
-        return "Code séquence manquant"
+        return "Sans code séquence : il recevra les textes génériques"
     target, _, sector = code.upper().partition("-")
     if target not in TARGET_BLOCKS or sector not in SECTOR_BLOCKS:
         return f"Code séquence « {code} » non reconnu (attendu CIBLE-SECTEUR, ex. FIN-IND)"

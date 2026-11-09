@@ -207,6 +207,8 @@ def activate(s: Session, camp: Campaign, include_overlapping: bool, now: datetim
                          current_step=1, next_due_at=first_due, status="scheduled"))
     camp.status = "active"
     camp.activated_at = camp.activated_at or now
+    s.flush()
+    ss.assign_codes(s, camp)  # V3.4 : textes de la campagne (variantes, partage A/B équilibré)
     s.add(EventLog(level="warning" if not report.test_mode else "info", entity="campaign", entity_id=camp.id,
                    text=f"Campagne « {camp.name} » activée : {len(report.eligible)} contact(s)"
                         + (" (mode test)" if report.test_mode else " – ENVOIS RÉELS")

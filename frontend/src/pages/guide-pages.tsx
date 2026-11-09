@@ -201,6 +201,8 @@ const SECTIONS: Section[] = [
       <H2>Textes personnalisés (prospection)</H2>
       <Shot img="rubrique-textes.png" alt="Textes personnalisés : un texte par fonction et un par secteur, l'email assemblé à droite" />
       <P>Séquences → <B>Textes personnalisés</B>. Chaque email de prospection contient un paragraphe selon la <B>fonction</B> du contact et un selon son <B>secteur</B> (le « code séquence », ex. FIN-IND). Choisissez un profil : vous voyez l'email assemblé à droite.</P>
+      <P><B>Variantes</B> : « Créer une variante » sur un texte en fait une copie à réécrire (ex. « Finance & administration · variante 2 », code FIN2). Deux façons de l'utiliser : la choisir comme fonction sur la <B>fiche</B> des contacts (code FIN2-IND), ou dans une <B>campagne</B>, carte « Textes de la campagne » : un texte pour tous, ou plusieurs cochés pour un partage à parts égales. Comparez ensuite les réponses dans « Taux de réponse ».</P>
+      <P><B>Contacts sans code</B> (fonction ou secteur inconnu) : ils reçoivent les textes <B>génériques</B>, à rédiger comme les autres. Vide, le paragraphe est simplement retiré.</P>
     </> },
   { slug: "campagnes", title: "Campagnes", icon: Rocket, keywords: "groupe prospection lancer pause retirer suivi exporter à l'unité",
     lead: "Écrire à un groupe, suivre, mettre en pause.",

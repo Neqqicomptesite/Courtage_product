@@ -77,8 +77,14 @@ def test_missing_or_unwritten_blocks_are_reported():
     assert "Bloc secteur « SANTE » introuvable" in r.problems
     r = render.render("{{ bloc_cible }}", _ctx(target={"FIN": "À RÉDIGER – trame"}))
     assert any("pas encore rédigé" in p for p in r.problems)
-    r = render.render("{{ bloc_cible }}", _ctx(_contact(sequence_code=None)))
-    assert any("Code séquence absent" in p for p in r.problems)
+    # V3.4 : sans code, le texte générique (clé ALL) ; sans texte générique, le paragraphe est retiré
+    r = render.render("A\n\n{{ bloc_cible }}\n\nB", _ctx(_contact(sequence_code=None)))
+    assert r.problems == [] and r.text == "A\n\nB"
+    r = render.render("{{ bloc_cible }} {{ bloc_secteur }}", _ctx(_contact(sequence_code=None),
+                                                                 target={"ALL": "Générique cible."}, sector={"ALL": "Générique secteur."}))
+    assert r.problems == [] and r.text == "Générique cible. Générique secteur."
+    r = render.render("{{ bloc_secteur }}", _ctx(_contact(sequence_code="FIN-"), sector={"ALL": "Tous secteurs."}))
+    assert r.text == "Tous secteurs."
 
 
 def test_empty_block_does_not_leave_big_gaps():
