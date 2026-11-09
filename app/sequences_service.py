@@ -58,7 +58,10 @@ def create_sequence(session: Session, name: str, n_steps: int = 3) -> Sequence:
 
 
 def campaigns_using(session: Session, seq: Sequence) -> int:
-    return session.scalar(select(func.count(Campaign.id)).where(Campaign.sequence_id == seq.id)) or 0
+    """Campagnes qui utilisent ce modèle, celles des collègues comprises (V3.3.3) : un modèle
+    commun utilisé par Hamza ne doit pas pouvoir être supprimé ou décalé par quelqu'un d'autre."""
+    return session.scalar(select(func.count(Campaign.id)).where(Campaign.sequence_id == seq.id)
+                          .execution_options(oddo_all=True)) or 0
 
 
 def renumber(session: Session, seq: Sequence) -> None:

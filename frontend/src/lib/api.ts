@@ -240,7 +240,8 @@ export type SequenceData = { id: number; name: string; category: SequenceCategor
 export type SequenceFull = SequenceData & { variables: string[]; custom_fields: string[] };
 export type SequenceList = {
   todo_blocks: string[];
-  items: { id: number; name: string; category: SequenceCategory; branch?: string | null; steps: number; campaigns: number; created_at: string; total_days: number }[];
+  items: { id: number; name: string; category: SequenceCategory; branch?: string | null; steps: number; campaigns: number; created_at: string; total_days: number;
+    shared?: boolean; editable?: boolean }[];
   categories: Option[];
 };
 export type PreviewStep = {
@@ -605,6 +606,7 @@ export const api = {
   sequenceCreate: (name: string, category: SequenceCategory = "prospection", steps = 3) =>
     request<{ id: number }>("/api/sequences", { method: "POST", json: { name, category, steps } }),
   sequenceDuplicate: (id: number) => request<{ id: number }>(`/api/sequences/${id}/duplicate`, { method: "POST" }),
+  sequenceShare: (id: number) => request<SequenceData>(`/api/sequences/${id}/share`, { method: "POST" }),
   sequence: (id: number) => request<SequenceFull>(`/api/sequences/${id}`),
   sequenceSave: (id: number, name: string, steps: StepData[], category?: SequenceCategory, branch?: string | null) =>
     request<SequenceData>(`/api/sequences/${id}`, {

@@ -99,12 +99,13 @@ def test_second_avenant_is_really_sent(client, world):  # noqa: F811
     client.post(f"/api/sequences/{seq['G1']}/send", json={"contact_ids": [g], "overrides": ov2}, headers=ORIGIN)
     with get_session() as s:
         from app.scheduling import SendWindow
-        now = SendWindow.from_settings(s).next_open(max(e.next_due_at for e in s.scalars(select(Enrollment))) + timedelta(minutes=1))
+        window = SendWindow.from_settings(s)
+        now = window.next_open(max(e.next_due_at for e in s.scalars(select(Enrollment))) + timedelta(minutes=1))
     log = []
     for _ in range(6):
         r = engine.tick(now=now, sync=False)
         log.append((now, r.action, r.message if hasattr(r, "message") else ""))
-        now += timedelta(minutes=30)
+        now = window.next_open(now + timedelta(minutes=30))  # indépendant de l'heure du test
     from tests.test_m4_engine import _subject
     assert [a for _, a, _ in log].count("sent") == 2
     subjects = [_subject(x.data) for x in world["smtp"].messages]
@@ -127,10 +128,11 @@ def _two_dossiers_sent(client, world):  # noqa: F811
     client.post(f"/api/sequences/{seq['G1']}/send", json={"contact_ids": [g], "overrides": OV}, headers=ORIGIN)
     client.post(f"/api/sequences/{seq['G1']}/send", json={"contact_ids": [g], "overrides": ov2}, headers=ORIGIN)
     with get_session() as s:
-        now = SendWindow.from_settings(s).next_open(max(e.next_due_at for e in s.scalars(select(Enrollment))) + timedelta(minutes=1))
+        window = SendWindow.from_settings(s)
+        now = window.next_open(max(e.next_due_at for e in s.scalars(select(Enrollment))) + timedelta(minutes=1))
     for _ in range(6):
         engine.tick(now=now, sync=False)
-        now += timedelta(minutes=30)
+        now = window.next_open(now + timedelta(minutes=30))  # indépendant de l'heure du test
     with get_session() as s:
         out = {m.subject: (m.message_id, m.enrollment_id) for m in s.scalars(select(Message).where(Message.direction == "out"))}
     a = next(v for k, v in out.items() if "40.1" in k)
@@ -199,10 +201,11 @@ def test_same_request_to_several_companies_fields_filled_once(client, world):  #
     r = client.post(f"/api/sequences/{seq['S1']}/send", json={"contact_ids": ids, "fills": fills}, headers=ORIGIN).json()
     assert len(r["sent"]) == 2, r
     with get_session() as s:
-        now = SendWindow.from_settings(s).next_open(max(e.next_due_at for e in s.scalars(select(Enrollment))) + timedelta(minutes=1))
+        window = SendWindow.from_settings(s)
+        now = window.next_open(max(e.next_due_at for e in s.scalars(select(Enrollment))) + timedelta(minutes=1))
     for _ in range(4):
         engine.tick(now=now, sync=False)
-        now += timedelta(minutes=30)
+        now = window.next_open(now + timedelta(minutes=30))  # saute la pause de midi : test indépendant de l'heure
     with get_session() as s:
         out = {m.contact_id: m for m in s.scalars(select(Message).where(Message.direction == "out"))}
     assert set(out) == set(ids)

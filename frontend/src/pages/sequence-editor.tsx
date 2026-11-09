@@ -9,6 +9,7 @@ import { toast } from "sonner";
 
 import { ConfirmDialog, toastError, useDebounced } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
+import { SERVER_MODE } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -126,6 +127,7 @@ function Editor({ initial }: { initial: SequenceFull }) {
         <Button variant="ghost" size="icon" asChild><Link to="/sequences" aria-label="Retour"><ArrowLeft /></Link></Button>
         <input value={name} onChange={(e) => { setName(e.target.value); touch(); }} aria-label="Nom de la séquence"
           className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-xl font-semibold tracking-tight outline-none transition-colors hover:border-border focus:border-ring" />
+        {initial.shared === false && SERVER_MODE && <Badge variant="info" className="font-normal" title="Vos collègues ne la voient pas">Perso · visible par vous seul</Badge>}
         <SaveIndicator state={state} />
       </div>
       <div className="flex flex-wrap items-center gap-2 text-sm">

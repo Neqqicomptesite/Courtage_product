@@ -272,7 +272,7 @@ const SECTIONS: Section[] = [
       <H2>Qui voit quoi</H2>
       <Table head={["", "Visible par"]} rows={[
         ["Vos emails, campagnes, réponses, rappels, journal", "Vous seul"],
-        ["Vos modèles personnels (créés ou dupliqués par vous)", "Vous seul"],
+        ["Vos séquences et modèles personnels (créés ou dupliqués par vous, badge « Perso »)", "Vous seul, même l'administrateur ne les voit pas"],
         ["Contacts, compagnies, liste d'exclusion", "Toute l'équipe"],
         ["Modèles communs (S1, P1, G1…) et textes communs", "Toute l'équipe ; modifiables par l'administrateur seulement"],
       ]} />
@@ -281,6 +281,7 @@ const SECTIONS: Section[] = [
         <><B>Pas de réservation</B> : chacun peut écrire à n'importe quel prospect, même si un collègue lui parle déjà. La fiche indique « Suivi par » le premier qui lui a écrit, pour savoir à qui en parler.</>,
         <>Les <B>compagnies d'assurance</B> (gestionnaires, souscripteurs) sont communes : plusieurs collègues peuvent leur écrire.</>,
         <>Un modèle commun ne vous convient pas ? <B>Dupliquez-le</B> : la copie est à vous, modifiable, invisible des autres.</>,
+        <>Administrateur : menu « … » d'une de vos séquences → <B>Partager avec l'équipe</B> pour la rendre commune (badge « Équipe »).</>,
         <>Effacer un contact suivi par un collègue, supprimer une compagnie ou retirer une exclusion : réservé à l'administrateur.</>,
         <>Le domaine email du cabinet est partagé par toute l'équipe : respectez les plafonds d'envoi et le mode test tant que vous débutez.</>,
       ]} />

@@ -364,3 +364,28 @@ def test_contact_owner_shown_filtered_and_assigned_by_admin(server, omar_data): 
     # libérer
     server.post("/api/contacts/owner", json={"contact_ids": [free_id], "owner_id": None}, headers=o)
     assert server.get(f"/api/contacts/{free_id}", headers=h).json()["owner"] is None
+
+
+def test_new_sequence_is_personal_and_admin_can_share(server, omar_data):  # noqa: F811
+    """V3.3.3 : une séquence créée par un employé n'apparaît que chez lui ; l'administrateur peut
+    rendre commune une des siennes ; un modèle commun utilisé par un collègue ne se supprime pas."""
+    h, o = H("hamza@oddo.ma"), H("omar@oddo.ma")
+    names = lambda who: {q["name"]: q for q in server.get("/api/sequences", headers=who).json()["items"]}
+    sid = server.post("/api/sequences", json={"name": "Prospection Hamza", "category": "prospection"}, headers=h).json()["id"]
+    assert names(h)["Prospection Hamza"]["shared"] is False and names(h)["Prospection Hamza"]["editable"] is True
+    assert "Prospection Hamza" not in names(o)                       # même l'administrateur ne la voit pas
+    assert server.get(f"/api/sequences/{sid}", headers=o).status_code == 404
+    assert server.post(f"/api/sequences/{sid}/share", headers=h).status_code in (403, 404)  # un employé ne partage pas
+    # la séquence perso d'Omar (admin) : invisible pour Hamza, puis partagée
+    seq_o = omar_data["seq"]
+    assert seq_o not in {q["id"] for q in server.get("/api/sequences", headers=h).json()["items"]}
+    assert server.post(f"/api/sequences/{seq_o}/share", headers=o).json()["shared"] is True
+    shared = {q["id"]: q for q in server.get("/api/sequences", headers=h).json()["items"]}[seq_o]
+    assert shared["shared"] is True and shared["editable"] is False
+    # Hamza l'utilise dans une campagne : Omar ne peut plus la supprimer ni en retirer une étape
+    with get_session() as s, s.begin():
+        mb_h = s.query(Mailbox).filter_by(email="hamza@oddo.ma").one()
+        s.add(Campaign(name="Campagne Hamza", mailbox_id=mb_h.id, sequence_id=seq_o, status="draft"))
+        s.query(Campaign).filter_by(id=omar_data["camp"]).delete()
+    r = server.delete(f"/api/sequences/{seq_o}", headers=o)
+    assert r.status_code == 400 and "collègue" in r.json()["detail"]

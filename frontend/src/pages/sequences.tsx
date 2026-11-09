@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, Copy, FileText, ListOrdered, MoreHorizontal, Pencil, Plus, Send, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowRight, Copy, FileText, ListOrdered, Lock, MoreHorizontal, Pencil, Plus, Send, Trash2, Users } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, type SequenceCategory } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useMe } from "@/pages/login";
 
 export const CATEGORIES: { value: SequenceCategory; label: string; hint: string }[] = [
   { value: "prospection", label: "Prospection", hint: "Pour les prospects uniquement : clients, assureurs et partenaires ne la reçoivent jamais." },
@@ -51,6 +52,16 @@ export function SequencesPage() {
   const create = useMutation({
     mutationFn: () => api.sequenceCreate(name.trim() || "Nouvelle séquence", newType, single ? 1 : 3),
     onSuccess: ({ id }) => navigate(`/sequences/${id}`),
+    onError: (e) => toastError(e),
+  });
+  // V3 : une séquence créée par un employé n'est visible que par lui ; l'administrateur peut
+  // rendre commune une des siennes.
+  const me = useMe();
+  const team = !!me?.server_mode;
+  const [toShare, setToShare] = useState<number | null>(null);
+  const share = useMutation({
+    mutationFn: api.sequenceShare,
+    onSuccess: () => { toast.success("Séquence partagée : toute l'équipe la voit maintenant"); qc.invalidateQueries({ queryKey: ["sequences"] }); },
     onError: (e) => toastError(e),
   });
   const duplicate = useMutation({
@@ -132,8 +143,11 @@ export function SequencesPage() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onSelect={() => duplicate.mutate(q.id)}><Copy /> Dupliquer</DropdownMenuItem>
+                    {team && me?.role === "admin" && q.shared === false && q.editable && (
+                      <DropdownMenuItem onSelect={() => setToShare(q.id)}><Users /> Partager avec l'équipe</DropdownMenuItem>
+                    )}
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem destructive disabled={q.campaigns > 0} onSelect={() => setToDelete(q)}><Trash2 /> Supprimer</DropdownMenuItem>
+                    <DropdownMenuItem destructive disabled={q.campaigns > 0 || q.editable === false} onSelect={() => setToDelete(q)}><Trash2 /> Supprimer</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -147,6 +161,9 @@ export function SequencesPage() {
                 ))}
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                {team && (q.shared
+                  ? <Badge variant="outline" className="font-normal" title="Modèle commun à toute l'équipe"><Users className="size-3" /> Équipe</Badge>
+                  : <Badge variant="info" className="font-normal" title="Vos collègues ne la voient pas"><Lock className="size-3" /> Perso</Badge>)}
                 <Badge variant="secondary">{q.steps} email{q.steps > 1 ? "s" : ""}</Badge>
                 <Badge variant="secondary">{q.total_days} jours</Badge>
                 {q.campaigns > 0 ? <Badge variant="info">{q.campaigns} campagne{q.campaigns > 1 ? "s" : ""}</Badge> : <span>Pas encore utilisée</span>}
@@ -189,6 +206,7 @@ export function SequencesPage() {
                 ? "Un modèle à réutiliser : Boîte mail → Nouveau message → Modèles. Des relances peuvent s'ajouter plus tard."
                 : "3 emails : J0, puis relances à J+3 et J+7 jours ouvrés si pas de réponse. Tout se modifie ensuite."}</p>
             </div>
+            {team && <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Lock className="size-3.5" /> Visible par vous seul : vos collègues ne la verront pas.</p>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setCreating(false)}>Annuler</Button>
               <Button type="submit" disabled={create.isPending}>Créer et rédiger</Button>
@@ -196,6 +214,11 @@ export function SequencesPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog open={toShare !== null} onOpenChange={(o) => !o && setToShare(null)}
+        title="Partager avec l'équipe ?" confirmLabel="Partager"
+        description="Toute l'équipe verra cette séquence et pourra l'utiliser. Vous seul (administrateur) pourrez encore la modifier. Ce partage ne se retire pas : pour une version perso, dupliquez-la."
+        onConfirm={() => { if (toShare !== null) share.mutate(toShare); setToShare(null); }} />
 
       <ConfirmDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)} destructive
         title={`Supprimer « ${toDelete?.name} » ?`} description="La séquence et ses étapes seront supprimées définitivement."

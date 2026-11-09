@@ -58,6 +58,7 @@ def _sequence_json(s, seq: Sequence) -> dict:
 
 @router.get("/sequences")
 def sequences():
+    from app.current import is_admin, user_id
     with get_session() as s:
         todo = sorted(b.key for b in s.scalars(select(ContentBlock)) if render.TODO_MARKER in b.body)
         # V3 : comptes groupés en 2 requêtes (au lieu de 3 par séquence ; la base est à distance)
@@ -68,6 +69,8 @@ def sequences():
             {"id": q.id, "name": q.name, "category": q.category, "branch": q.branch, "steps": steps.get(q.id, (0, 0))[0],
              "campaigns": used.get(q.id, 0),
              "created_at": iso(q.created_at),
+             # V3 : modèle commun (owner vide) ou personnel, visible par son auteur seulement
+             "shared": q.owner_id is None, "editable": is_admin() or q.owner_id == user_id(),
              "total_days": steps.get(q.id, (0, 0))[1]}
             for q in s.scalars(select(Sequence).order_by(Sequence.created_at))],
             "categories": [{"value": k, "label": v} for k, v in CATEGORIES.items()]}
@@ -108,6 +111,19 @@ def sequence_duplicate(sid: int):
                 s.add(StepAttachment(step_id=n.id, attachment_id=a.id))
         s.commit()
         return {"id": copy.id}
+
+
+@router.post("/sequences/{sid:int}/share")
+def sequence_share(sid: int):
+    """V3.3.3 : l'administrateur rend commun un de SES modèles personnels (toute l'équipe le voit)."""
+    from app.current import is_admin, user_id
+    with get_session() as s:
+        seq = _seq(s, sid)
+        if not is_admin() or seq.owner_id != user_id():
+            raise HTTPException(403, "Seul l'administrateur peut partager un de ses modèles avec l'équipe.")
+        seq.owner_id = None
+        s.commit()
+        return _sequence_json(s, seq)
 
 
 @router.get("/sequences/{sid:int}")
@@ -229,7 +245,7 @@ def sequence_delete(sid: int):
     with get_session() as s:
         seq = _seq_editable(s, sid)
         if ss.campaigns_using(s, seq):
-            raise HTTPException(400, "Séquence utilisée par une campagne : suppression impossible.")
+            raise HTTPException(400, "Séquence utilisée par une campagne (la vôtre ou celle d'un collègue) : suppression impossible.")
         s.delete(seq)  # étapes et variantes supprimées par la base (ON DELETE CASCADE), comme en V1
         s.commit()
     return {"ok": True}
