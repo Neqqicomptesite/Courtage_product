@@ -325,6 +325,7 @@ export type Reply = {
   full: string | null;
   received_at: string;
   classification: string | null;
+  seen: boolean;
   callback_on: string | null;
   note: string | null;
   return_date: string | null;
@@ -645,6 +646,8 @@ export const api = {
   replyNote: (id: number, note: string) => request(`/api/replies/${id}/note`, { method: "PUT", json: { note } }),
   attach: (id: number, contactId: number) => request(`/api/replies/${id}/attach`, { method: "POST", json: { contact_id: contactId } }),
   dismiss: (id: number) => request(`/api/replies/${id}/dismiss`, { method: "POST" }),
+  repliesSeen: (ids: number[] | null, seen = true) =>
+    request<{ ok: boolean; count: number }>(`/api/replies/seen`, { method: "POST", json: { ids, seen } }),
 
   journal: (f: { entity?: string; level?: string; q?: string }) => request<Journal>(`/api/journal${qs(f)}`),
 

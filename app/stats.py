@@ -161,10 +161,10 @@ def ab_test(s: Session, campaign_id: int | None = None) -> tuple[list[SegmentRow
 
 
 def unclassified_count(s: Session) -> int:
-    """Compteur du menu « Réponses » : vraies réponses et STOP pas encore classés."""
+    """Compteur du menu « Réponses » : vraies réponses et STOP ni classés ni marqués comme lus."""
     return s.scalar(select(func.count(Message.id)).where(
         Message.direction == "in", Message.kind.in_(("reply", "unsubscribe")),
-        Message.classification.is_(None))) or 0
+        Message.classification.is_(None), Message.seen_at.is_(None))) or 0
 
 
 # ------------------------------------------------- sans réponse depuis N jours ouvrés (V2.2)

@@ -50,7 +50,7 @@ def activity(days: int = 30):
 def _reply(m: Message, c: Contact) -> dict:
     return {"id": m.id, "kind": m.kind, "subject": m.subject, "text": m.body_text,
             "full": m.body_full if m.body_full and m.body_full != m.body_text else None,
-            "received_at": iso(m.received_at), "classification": m.classification,
+            "received_at": iso(m.received_at), "classification": m.classification, "seen": m.seen_at is not None,
             "callback_on": iso(m.callback_on), "note": m.note, "return_date": m.return_date,
             "test_mode": m.test_mode, "contact": contact_ref(c),
             "message_id": m.message_id, "references": (m.references_header or "").split()}
@@ -93,6 +93,20 @@ def classify(mid: int, body: ClassifyIn):
 
 class NoteIn(BaseModel):
     note: str
+
+
+class SeenIn(BaseModel):
+    ids: list[int] | None = None   # absent : toutes les réponses non classées encore à traiter
+    seen: bool = True
+
+
+@router.post("/replies/seen")
+def replies_seen(body: SeenIn):
+    """« Marquer comme lu » : la réponse quitte « Non classées » et la notification, sans classement."""
+    with get_session() as s:
+        n = rs.mark_seen(s, body.ids, body.seen, utcnow())
+        s.commit()
+        return {"ok": True, "count": n}
 
 
 @router.put("/replies/{mid:int}/note")

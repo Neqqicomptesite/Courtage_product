@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Check, Inbox, Keyboard, Link2, Mail, Phone, RefreshCw, UserSearch, X } from "lucide-react";
+import { CalendarClock, Check, CheckCheck, Inbox, Keyboard, Link2, Mail, MailOpen, Phone, RefreshCw, UserSearch, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -68,6 +68,27 @@ export function RepliesPage() {
     },
     onError: (e) => toastError(e),
   });
+  // « Marquer comme lu » : la réponse quitte « Non classées » et la notification, sans être classée.
+  const seen = useMutation({
+    mutationFn: ({ ids, value }: { ids: number[] | null; value: boolean }) => api.repliesSeen(ids, value),
+    onSuccess: (res, { ids, value }) => {
+      if (ids === null) toast.success(res.count ? `${res.count} réponse(s) marquée(s) comme lue(s)` : "Rien à marquer");
+      else toast.success(value ? "Marquée comme lue : retrouvez-la dans « Lues, non classées »" : "Remise dans « Non classées »");
+      if (ids && ids.length === 1 && (filter === "unclassified" || filter === "seen")) {
+        const idx = items.findIndex((x) => x.id === ids[0]);
+        setSelectedId(items[idx + 1]?.id ?? items[idx - 1]?.id ?? null);
+      }
+      qc.invalidateQueries({ queryKey: ["replies"] });
+      qc.invalidateQueries({ queryKey: ["status"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+    onError: (e) => toastError(e),
+  });
+  const toggleSeen = useCallback((r: Reply) => {
+    if (!r.classification) seen.mutate({ ids: [r.id], value: !r.seen });
+  }, [seen]);
+
   const doClassify = useCallback((r: Reply, cls: string) => {
     if (cls === "later") setLaterFor(r);
     else classify.mutate({ r, cls });
@@ -81,12 +102,13 @@ export function RepliesPage() {
       const idx = items.findIndex((x) => x.id === selected?.id);
       if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); setSelectedId(items[Math.min(idx + 1, items.length - 1)]?.id ?? null); }
       if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); setSelectedId(items[Math.max(idx - 1, 0)]?.id ?? null); }
+      if (selected && (e.key === "l" || e.key === "L")) { e.preventDefault(); toggleSeen(selected); }
       const n = Number(e.key);
       if (selected && n >= 1 && n <= (data?.classes.length ?? 0)) doClassify(selected, data!.classes[n - 1].key);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [items, selected, data, doClassify, laterFor]);
+  }, [items, selected, data, doClassify, laterFor, toggleSeen]);
 
   return (
     <>
@@ -96,7 +118,7 @@ export function RepliesPage() {
 
       {data && data.unmatched.length > 0 && <Unmatched items={data.unmatched} />}
 
-      <div className="mb-4 flex gap-1.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible">
+      <div className="mb-4 flex items-center gap-1.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible">
         {data?.filters.map((f) => (
           <button key={f.key} onClick={() => setParams(f.key === "unclassified" ? {} : { f: f.key })}
             className={cn("inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors",
@@ -105,6 +127,10 @@ export function RepliesPage() {
             <span className={cn("rounded-full px-1.5 text-xs tabular", filter === f.key ? "bg-primary-foreground/20" : "bg-muted text-muted-foreground")}>{f.count}</span>
           </button>
         ))}
+        {filter === "unclassified" && items.some((r) => !r.classification && !r.seen) && (
+          <Button variant="ghost" size="sm" className="ml-auto shrink-0" disabled={seen.isPending}
+            onClick={() => seen.mutate({ ids: null, value: true })}><CheckCheck /> Tout marquer comme lu</Button>
+        )}
       </div>
 
       {!data ? <Skeleton className="h-[480px] rounded-xl" /> : items.length === 0 ? (
@@ -119,8 +145,8 @@ export function RepliesPage() {
                 <button key={r.id} onClick={() => setSelectedId(r.id)}
                   className={cn("block w-full px-4 py-3 text-left transition-colors", selected?.id === r.id ? "bg-accent/70" : "hover:bg-accent/30")}>
                   <div className="flex items-center gap-2">
-                    {!r.classification && <span className="size-2 shrink-0 rounded-full bg-primary" />}
-                    <span className={cn("truncate text-sm", !r.classification && "font-semibold")}>{fullName(r.contact)}</span>
+                    {!r.classification && !r.seen && <span className="size-2 shrink-0 rounded-full bg-primary" />}
+                    <span className={cn("truncate text-sm", !r.classification && !r.seen && "font-semibold")}>{fullName(r.contact)}</span>
                     <span className="ml-auto shrink-0 text-xs text-muted-foreground">{relativeTime(r.received_at)}</span>
                   </div>
                   <p className="truncate text-xs text-muted-foreground">{r.contact.company}</p>
@@ -134,13 +160,15 @@ export function RepliesPage() {
               );
             })}
           </div>
-          {selected && <Reader key={selected.id} r={selected} classes={data.classes} onClassify={doClassify} pending={classify.isPending} />}
+          {selected && <Reader key={selected.id} r={selected} classes={data.classes} onClassify={doClassify} pending={classify.isPending}
+            onToggleSeen={toggleSeen} seenPending={seen.isPending} />}
         </Card>
       )}
 
       <p className="mt-3 hidden items-center gap-2 text-xs text-muted-foreground lg:flex">
         <Keyboard className="size-3.5" /> <kbd className="rounded border px-1">J</kbd>/<kbd className="rounded border px-1">K</kbd> réponse suivante / précédente ·
-        <kbd className="rounded border px-1">1</kbd>–<kbd className="rounded border px-1">6</kbd> classer
+        <kbd className="rounded border px-1">1</kbd>–<kbd className="rounded border px-1">6</kbd> classer ·
+        <kbd className="rounded border px-1">L</kbd> marquer comme lu
       </p>
 
       <LaterDialog reply={laterFor} onClose={() => setLaterFor(null)}
@@ -149,7 +177,10 @@ export function RepliesPage() {
   );
 }
 
-function Reader({ r, classes, onClassify, pending }: { r: Reply; classes: Replies["classes"]; onClassify: (r: Reply, c: string) => void; pending: boolean }) {
+function Reader({ r, classes, onClassify, pending, onToggleSeen, seenPending }: {
+  r: Reply; classes: Replies["classes"]; onClassify: (r: Reply, c: string) => void; pending: boolean;
+  onToggleSeen: (r: Reply) => void; seenPending: boolean;
+}) {
   const [note, setNote] = useState(r.note ?? "");
   const [full, setFull] = useState(false);
   const save = useMutation({ mutationFn: (n: string) => api.replyNote(r.id, n), onError: (e) => toastError(e) });
@@ -165,7 +196,13 @@ function Reader({ r, classes, onClassify, pending }: { r: Reply; classes: Replie
           <Link to={`/contacts?open=${r.contact.id}`} className="font-medium hover:text-primary">{fullName(r.contact)}</Link>
           <p className="truncate text-sm text-muted-foreground">{r.contact.company} · {r.contact.email}</p>
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
+          {!r.classification && (
+            <Button variant="outline" size="sm" disabled={seenPending} onClick={() => onToggleSeen(r)}
+              title={r.seen ? "La remettre dans « Non classées »" : "Enlever la notification sans classer la réponse"}>
+              {r.seen ? <><Mail /> Marquer non lu</> : <><MailOpen /> Marquer comme lu</>}
+            </Button>
+          )}
           {r.contact.phone && <Button variant="outline" size="sm" asChild><a href={`tel:${r.contact.phone}`}><Phone /> Appeler</a></Button>}
           <Button variant="outline" size="sm" onClick={() => openComposer({
             to: r.contact.email, subject: replySubject(r.subject), inReplyTo: r.message_id,
@@ -191,7 +228,7 @@ function Reader({ r, classes, onClassify, pending }: { r: Reply; classes: Replie
         </label>
       </div>
       <div className="border-t p-4">
-        <p className="mb-2 text-xs font-medium text-muted-foreground">Classer cette réponse</p>
+        <p className="mb-2 text-xs font-medium text-muted-foreground">Classer cette réponse{!r.classification && r.seen && " (lue, pas encore classée)"}</p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {classes.map((c, i) => (
             <button key={c.key} disabled={pending} onClick={() => onClassify(r, c.key)}

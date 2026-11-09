@@ -291,6 +291,7 @@ class Message(Base):
     callback_on: Mapped[date | None] = mapped_column(Date)                 # « À rappeler plus tard » : quand
     suggested_contact_id: Mapped[int | None] = mapped_column(Integer)      # réponse non rattachée : piste
     classified_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    seen_at: Mapped[datetime | None] = mapped_column(UTCDateTime)  # « Marquer comme lu » sans classer (V3.3.2)
     attachments: Mapped[list | None] = mapped_column(JSON)  # V2.8 : noms des pièces jointes envoyées
     raw_headers: Mapped[str | None] = mapped_column(Text)
 

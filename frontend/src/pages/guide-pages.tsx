@@ -346,7 +346,7 @@ const USE_CASES: UseCase[] = [
       { title: "Traitez « À répondre »", img: "matinee-2.png", alt: "Un email ouvert : Répondre, Archiver, Rappel, Envoyer une séquence",
         text: <>Boîte mail → <B>Boîte de réception</B> pour les nouveaux emails, puis l'onglet <B>À répondre</B> pour ceux qui attendent depuis 3 jours ouvrés ou plus. Pour chaque email : <B>Répondre</B> (1), puis <B>Archiver</B> (2) une fois traité. Pas le temps aujourd'hui ? <B>Rappel</B> (3) pour y revenir à une date. La demande appelle un suivi (un client veut un avenant) ? <B>Envoyer une séquence</B> (4).</> },
       { title: "Classez les réponses aux campagnes", img: "reponse-1.png", alt: "Une réponse et les boutons de classement",
-        text: <>Onglet <B>Réponses aux campagnes</B> : répondez (1), puis classez d'un clic ou d'une touche de 1 à 6 (2). Les relances de la personne sont déjà arrêtées (<CaseLink to="reponse">détail</CaseLink>).</> },
+        text: <>Onglet <B>Réponses aux campagnes</B> : répondez (1), puis classez d'un clic ou d'une touche de 1 à 6 (2). <B>Marquer comme lu</B> enlève la notification sans classer. Les relances de la personne sont déjà arrêtées (<CaseLink to="reponse">détail</CaseLink>).</> },
       { title: "Videz la cloche", img: "matinee-4.png", alt: "La cloche des notifications",
         text: <>La cloche, en haut à droite, rassemble ce qui est à faire : rappels du jour, réponses à trier, personnes sans réponse depuis 3 jours ouvrés. Une ligne ouvre le bon écran ; « Tout marquer comme vu » vide la pastille.</> },
     ],
@@ -579,7 +579,7 @@ const USE_CASES: UseCase[] = [
     steps: [
       { title: "Répondez-lui", img: "reponse-1.png", alt: "Une réponse : Répondre et les boutons de classement",
         text: <>Boîte mail → <B>Réponses aux campagnes</B> → sa réponse → <B>Répondre</B> (1). Ajoutez au besoin une note privée.</> },
-      { title: "Classez sa réponse", text: <>Un clic ou une touche de 1 à 6 (2) : <B>Intéressé</B>, <B>À rappeler plus tard</B>, <B>Pas intéressé</B>, <B>Absent</B>, <B>Mauvais contact</B>, <B>Désinscription</B>. Le classement nourrit les statistiques des campagnes.</> },
+      { title: "Classez sa réponse", text: <>Un clic ou une touche de 1 à 6 (2) : <B>Intéressé</B>, <B>À rappeler plus tard</B>, <B>Pas intéressé</B>, <B>Absent</B>, <B>Mauvais contact</B>, <B>Désinscription</B>. Le classement nourrit les statistiques des campagnes. Pas le temps de classer ? <B>Marquer comme lu</B> (touche L) enlève la notification ; la réponse attend sous <B>Lues, non classées</B>.</> },
       { title: "« À rappeler plus tard » : choisissez la date", img: "reponse-2.png", alt: "Rappeler quand : date et Programmer le rappel",
         text: <>Une date proposée ou la vôtre, puis <B>Programmer le rappel</B> : il apparaîtra sur le tableau de bord ce jour-là.</> },
       { title: "La suite", text: <>Un rendez-vous obtenu ? Après l'échange : <CaseLink to="rendez-vous">P2</CaseLink>. Il demande une proposition ? <CaseLink to="cotation">Consultez les compagnies</CaseLink>.</> },

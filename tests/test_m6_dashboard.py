@@ -234,3 +234,37 @@ def test_export_global_and_campaign_open_in_excel(client, dataset):
         dates = [row[4] for row in replies[1:]]
         assert all(isinstance(d, datetime) and d.tzinfo is None for d in dates)  # heure du Maroc, sans fuseau
         assert dates[0].hour == 10
+
+
+def test_mark_reply_as_read_without_classifying(client, dataset):
+    """« Marquer comme lu » (V3.3.2) : la réponse quitte « Non classées », le compteur et la
+    notification, sans être classée ; on la retrouve sous « Lues, non classées » et « Toutes »."""
+    mid = _msg_id(1, dataset)
+    data = client.get("/api/replies").json()
+    assert [i["id"] for i in data["items"]] == [mid] and data["items"][0]["seen"] is False
+    assert any(n["type"] == "replies" for n in client.get("/api/notifications").json()["items"])
+
+    r = client.post("/api/replies/seen", json={"ids": [mid]}, headers=ORIGIN)
+    assert r.json() == {"ok": True, "count": 1}
+    with get_session() as s:
+        m = s.get(Message, mid)
+        assert m.seen_at is not None and m.classification is None
+        assert stats.unclassified_count(s) == 0
+    assert client.get("/api/replies").json()["items"] == []
+    seen = client.get("/api/replies?f=seen").json()
+    assert [i["id"] for i in seen["items"]] == [mid] and seen["items"][0]["seen"] is True
+    assert mid in [i["id"] for i in client.get("/api/replies?f=all").json()["items"]]
+    assert {f["key"]: f["count"] for f in seen["filters"]}["unclassified"] == 0
+    assert not any(n["type"] == "replies" for n in client.get("/api/notifications").json()["items"])
+    assert "Prénom1" not in client.get("/replies").text  # ancienne page : même règle
+
+    # Remettre en « non lu », puis « tout marquer comme lu »
+    client.post("/api/replies/seen", json={"ids": [mid], "seen": False}, headers=ORIGIN)
+    with get_session() as s:
+        assert stats.unclassified_count(s) == 1
+    assert client.post("/api/replies/seen", json={}, headers=ORIGIN).json()["count"] == 1
+    # Classer ensuite reste possible ; une réponse déjà classée n'est pas touchée par « lu »
+    client.post(f"/api/replies/{mid}/classify", json={"classification": "interested"}, headers=ORIGIN)
+    assert client.get("/api/replies?f=seen").json()["items"] == []
+    c0 = _msg_id(0, dataset)
+    assert client.post("/api/replies/seen", json={"ids": [c0]}, headers=ORIGIN).json()["count"] == 0

@@ -19,17 +19,37 @@ CLASSES = {
     "unsubscribe": "Désinscription",
 }
 LISTED_KINDS = ("reply", "unsubscribe", "auto_reply")
-FILTERS = {"unclassified": "Non classées", "all": "Toutes", **CLASSES}
+# « Non classées » = à traiter. Une réponse marquée comme lue en sort (et ne compte plus dans la
+# notification) sans être classée : on la retrouve sous « Lues, non classées » et dans « Toutes ».
+FILTERS = {"unclassified": "Non classées", "seen": "Lues, non classées", "all": "Toutes", **CLASSES}
 
 
 def listing(s: Session, flt: str = "unclassified") -> list[tuple[Message, Contact]]:
     q = (select(Message, Contact).join(Contact, Contact.id == Message.contact_id)
          .where(Message.direction == "in", Message.kind.in_(LISTED_KINDS)))
     if flt == "unclassified":
-        q = q.where(Message.classification.is_(None))
+        q = q.where(Message.classification.is_(None), Message.seen_at.is_(None))
+    elif flt == "seen":
+        q = q.where(Message.classification.is_(None), Message.seen_at.is_not(None))
     elif flt in CLASSES:
         q = q.where(Message.classification == flt)
     return list(s.execute(q.order_by(Message.received_at.desc())))
+
+
+def mark_seen(s: Session, ids: list[int] | None, seen: bool, now) -> int:
+    """Marque comme lues (ou non lues) des réponses sans les classer. ids=None : toutes les
+    réponses non classées encore à traiter. Renvoie le nombre de réponses modifiées."""
+    q = select(Message).where(Message.direction == "in", Message.kind.in_(LISTED_KINDS),
+                              Message.classification.is_(None))
+    if ids is None:
+        q = q.where(Message.seen_at.is_(None))
+    else:
+        q = q.where(Message.id.in_(ids))
+    n = 0
+    for m in s.scalars(q):
+        m.seen_at = now if seen else None
+        n += 1
+    return n
 
 
 class ClassificationError(ValueError):
