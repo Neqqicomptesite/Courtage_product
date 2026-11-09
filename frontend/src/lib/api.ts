@@ -446,17 +446,23 @@ export type QuotePerson = { id: number; email: string; name: string; department:
 export type QuoteRow = {
   id: number; branch: string; status: InsurerStatus; recipients: string[]; sent_at: string | null; replied_at: string | null;
   reminders_sent: number; offer_premium: number | null; offer_rate: string | null; notes: string; last_message_id: string | null;
-  sent_by_name: string | null;
+  next_followup_at: string | null; auto_followups: boolean; sent_by_name: string | null;
 };
-export type QuoteCompany = { company_id: number; company: string; logo: string | null; contacts: QuotePerson[]; rows: QuoteRow[] };
+export type QuoteCompany = { company_id: number; company: string; logo: string | null; contacts: QuotePerson[]; rows: QuoteRow[];
+  next_followup_at: string | null; auto_followups: boolean };
+export type QuoteMail = { id: number; direction: "out" | "in"; title: string; ts: string; subject: string | null; body: string | null;
+  to: string[] | null; cc: string[] | null; from: string | null; attachments: ({ name: string; index: number } | string)[];
+  auto: boolean | null; test_mode: boolean | null; insurer_id: number | null; folder: string | null; uid: number | null; mine: boolean };
+export type QuoteCompanyEmails = { company_id: number; items: QuoteMail[]; auto_followups: boolean; signature: string;
+  upcoming: { n: number; at: string; insurer_ids: number[]; branches: string[]; to: string[]; subject: string; body: string }[] };
+export type QuotePreview = { from_name: string; from_email: string; to: string[]; cc: string; subject: string; body: string;
+  test_mode: boolean; attachments: string[] };
 export type QuoteFileRow = Attachment & { file_id: number; kind: QuoteFileKind; label: string; insurer_id: number | null; created_at: string };
 export type QuoteReminder = { id: number; title: string; kind: ReminderKind; due_on: string; due_time: string | null; done: boolean;
   notes: string; mine: boolean; user_name: string | null };
 export type QuoteEventRow = {
   id: number; kind: "created" | "stage" | "note" | "fields" | "email_out" | "email_in" | "file" | "insurer" | "edit";
-  text: string; insurer_id: number | null; user_name: string | null; ts: string; mine: boolean;
-  data: null | { subject?: string; body?: string; from?: string; to?: string[]; folder?: string; uid?: number;
-    attachments?: ({ name: string; index: number } | string)[]; auto_reply?: boolean; test_mode?: boolean; insurer_ids?: number[] };
+  text: string; insurer_id: number | null; company_id: number | null; user_name: string | null; ts: string;
 };
 export type QuoteDetail = QuoteSummary & {
   fields: Record<string, string>; notes: string; current_insurer: string | null; current_rate: string | null; closed_at: string | null;
@@ -682,6 +688,11 @@ export const api = {
   quoteDraft: (id: number, body: { insurer_ids: number[]; to?: string[] }) => request<QuoteDraft>(`/api/quotes/${id}/draft`, { method: "POST", json: body }),
   quoteSend: (id: number, body: { insurer_ids: number[]; to: string[]; cc?: string; subject: string; body: string; attachment_ids: number[]; force?: boolean }) =>
     request<QuoteDetail>(`/api/quotes/${id}/send`, { method: "POST", json: body }),
+  quotePreview: (id: number, body: { to: string[]; cc?: string; subject: string; body: string; attachment_names?: string[] }) =>
+    request<QuotePreview>(`/api/quotes/${id}/preview`, { method: "POST", json: body }),
+  quoteCompanyEmails: (id: number, companyId: number) => request<QuoteCompanyEmails>(`/api/quotes/${id}/companies/${companyId}/emails`),
+  quoteFollowups: (id: number, companyId: number, enabled: boolean) =>
+    request<QuoteDetail>(`/api/quotes/${id}/companies/${companyId}/followups`, { method: "POST", json: { enabled } }),
   quoteSendAll: (id: number, company_ids?: number[]) =>
     request<{ report: SendAllReport; quote: QuoteDetail }>(`/api/quotes/${id}/send-all`, { method: "POST", json: { company_ids } }),
   quoteReminder: (id: number, body: { title: string; due_on: string; due_time?: string | null; kind?: ReminderKind; notes?: string }) =>

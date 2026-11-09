@@ -14,7 +14,7 @@ import random
 from collections import Counter
 from datetime import timedelta
 
-from sqlalchemy import select
+from sqlalchemy import update, select
 
 from app import engine
 from app.db import get_session
@@ -48,6 +48,10 @@ def test_soak_six_weeks_with_failures(world):  # noqa: F811
     now, end = START, START + timedelta(days=42)
     with get_session() as s:
         window = SendWindow.from_settings(s)
+        # les inscriptions datent du début de la simulation, pas de l'horloge réelle : sinon, le jour où
+        # la simulation traverse la date réelle, une réponse simulée paraît antérieure à l'inscription
+        s.execute(update(Enrollment).values(created_at=START))
+        s.commit()
     ticks = 0
     while now < end and ticks < 20000:
         ticks += 1

@@ -2,6 +2,7 @@
 compagnies (email commun ou par branche, plusieurs destinataires, envoi à toutes), relances,
 réponse rattachée, étapes (offres partielles / toutes reçues), renégociation, rappels,
 documents, cloisonnement par cabinet."""
+from datetime import datetime, timedelta
 from email.message import EmailMessage
 from email.utils import format_datetime
 
@@ -36,7 +37,8 @@ def _setup():
                     department="souscription"),
             Contact(email="sante@alpha-assurance.ma", first_name="Rachid", company_id=ins1.id, kind="insurer",
                     department="souscription"),
-            Contact(email="cotations@beta-assurances.ma", first_name="Youssef", company_id=ins2.id, kind="insurer"),
+            Contact(email="cotations@beta-assurances.ma", first_name="Youssef", company_id=ins2.id, kind="insurer",
+                    department="souscription"),
         ])
         s.commit()
         return client_co.id, ins1.id, ins2.id
@@ -80,7 +82,8 @@ def test_single_branch_flow(client, world):  # noqa: F811
 
     # brouillon : liste des interlocuteurs (souscription d'abord), date d'effet vide → ligne retirée
     d = client.post(f"/api/quotes/{case['id']}/draft", json={"insurer_ids": [alpha["id"]]}, headers=O).json()
-    assert [o["department"] for o in d["options"]][:2] == ["souscription", "souscription"]
+    assert {o["department"] for o in d["options"]} == {"souscription"}   # seulement le service souscription
+    assert "gestion@alpha-assurance.ma" not in [o["email"] for o in d["options"]]
     assert d["subject"] == "Demande de cotation Prévoyance (AMC / DIM) – Atlas Logistique"
     assert "Bonjour Nadia" in d["body"] and "Effectif : 42 salariés" in d["body"] and "6 500 000 MAD" in d["body"]
     assert "Date d'effet" not in d["body"] and d["missing"] == [] and d["kind"] == "request"
@@ -101,10 +104,12 @@ def test_single_branch_flow(client, world):  # noqa: F811
     assert alpha["status"] == "sent" and case["stage"] == "consulting"
     assert alpha["recipients"] == ["souscription@alpha-assurance.ma", "sante@alpha-assurance.ma"]
     assert len(world["smtp"].messages) == 1
+    # relance automatique programmée à 4 jours ouvrés (plus de rappel manuel dans l'agenda)
+    nxt = _rows(case, "Assurance Alpha")[0]["next_followup_at"]
     with get_session() as s:
-        rem = s.scalars(select(Reminder).where(Reminder.quote_case_id == case["id"])).one()
-        assert rem.due_on == SendWindow.from_settings(s).add_days(to_local(utcnow()).date(), 4, True)
-        assert rem.kind == "quote" and rem.done_at is None and settings_store.get(s, "quote_followup_days") == 4
+        assert settings_store.get(s, "quote_followup_days") == 4
+        assert to_local(datetime.fromisoformat(nxt)).date() >= SendWindow.from_settings(s).add_days(to_local(utcnow()).date(), 4, True)
+        assert s.scalars(select(Reminder).where(Reminder.quote_case_id == case["id"])).all() == []
         out_id = s.scalars(select(QuoteEvent.message_id).where(QuoteEvent.kind == "email_out")).one()
 
     # réponse dans le fil : rattachée, rappel clos, pas deux fois
@@ -112,15 +117,16 @@ def test_single_branch_flow(client, world):  # noqa: F811
     assert imap_sync.sync().counts.get("quote_reply") == 1
     case = client.get(f"/api/quotes/{case['id']}").json()
     assert _rows(case, "Assurance Alpha")[0]["status"] == "replied"
-    ev = next(e for e in case["events"] if e["kind"] == "email_in")
-    assert ev["data"]["attachments"][0]["name"] == "Offre Alpha.pdf" and ev["mine"]
-    with get_session() as s:
-        assert s.scalars(select(Reminder).where(Reminder.quote_case_id == case["id"])).one().done_at is not None
+    assert _rows(case, "Assurance Alpha")[0]["next_followup_at"] is None      # relances arrêtées
+    assert any(e["text"] == "Réponse de Assurance Alpha" for e in case["events"])
+    mails = client.get(f"/api/quotes/{case['id']}/companies/{ins1}/emails").json()
+    ev = next(m for m in mails["items"] if m["direction"] == "in")
+    assert ev["attachments"][0]["name"] == "Offre Alpha.pdf" and ev["mine"] and mails["upcoming"] == []
     assert imap_sync.sync().counts.get("quote_reply") is None
 
     # la pièce jointe rangée comme offre → « Offres partielles » (Beta n'a pas encore répondu)
     case = client.post(f"/api/quotes/{case['id']}/files/from-mail", headers=O, json={
-        "folder": ev["data"]["folder"], "uid": ev["data"]["uid"], "index": ev["data"]["attachments"][0]["index"],
+        "folder": ev["folder"], "uid": ev["uid"], "index": ev["attachments"][0]["index"],
         "kind": "offer", "insurer_id": alpha["id"]}).json()
     assert case["files"][0]["kind"] == "offer" and _rows(case, "Assurance Alpha")[0]["status"] == "offer"
     assert case["stage"] == "partial"
@@ -151,9 +157,10 @@ def test_single_branch_flow(client, world):  # noqa: F811
     assert client.patch(f"/api/quotes/{case['id']}", json={"stage": "lost"}, headers=O).status_code == 422
     case = client.patch(f"/api/quotes/{case['id']}", json={"stage": "lost", "lost_reason": "Prix"}, headers=O).json()
     assert case["stage"] == "lost" and case["closed_at"]
-    items = client.get("/api/reminders").json()
-    items = items.get("items", items) if isinstance(items, dict) else items
-    assert any(i.get("quote_case_id") == case["id"] for i in items)
+    # historique : seulement les faits métier, en phrases courtes
+    texts = [e["text"] for e in case["events"]]
+    assert "Offre reçue de Assurance Alpha" in texts and "Refus de Beta Assurances" in texts
+    assert not any(e["kind"] in ("fields", "edit", "file") for e in case["events"])
 
 
 def test_multi_branch_common_or_separate_emails(client, world):  # noqa: F811
@@ -173,7 +180,7 @@ def test_multi_branch_common_or_separate_emails(client, world):  # noqa: F811
     # email commun aux deux branches
     d = client.post(f"/api/quotes/{case['id']}/draft", json={"insurer_ids": [r["id"] for r in alpha]}, headers=O).json()
     assert d["subject"] == "Demande de cotation Accidents du travail / Prévoyance – Atlas Logistique"
-    assert "— Accidents du travail —" in d["body"] and "— Prévoyance —" in d["body"]
+    assert "\n\nAccidents du travail\n" in d["body"] and "\n\nPrévoyance\n" in d["body"] and "—" not in d["body"]
     assert d["body"].count("Bonjour") == 1 and "Formule : AMC" in d["body"] and d["missing"] == []
     case = client.post(f"/api/quotes/{case['id']}/send", json={**d, "insurer_ids": [r["id"] for r in alpha]}, headers=O).json()
     assert {r["status"] for r in _rows(case, "Assurance Alpha")} == {"sent"}
@@ -189,7 +196,7 @@ def test_multi_branch_common_or_separate_emails(client, world):  # noqa: F811
     # Beta : un email par branche, à des personnes différentes
     beta = _rows(case, "Beta Assurances")
     at = client.post(f"/api/quotes/{case['id']}/draft", json={"insurer_ids": [beta[0]["id"]]}, headers=O).json()
-    assert at["subject"].startswith("Demande de cotation Accidents du travail –") and "— " not in at["body"]
+    assert at["subject"].startswith("Demande de cotation Accidents du travail –") and "Prévoyance" not in at["body"]
     case = client.post(f"/api/quotes/{case['id']}/send", headers=O, json={**at, "to": ["at@beta.test"], "insurer_ids": [beta[0]["id"]]}).json()
     rows = _rows(case, "Beta Assurances")
     assert rows[0]["status"] == "sent" and rows[0]["recipients"] == ["at@beta.test"] and rows[1]["status"] == "to_send"
@@ -262,7 +269,7 @@ def test_reply_to_dossier_also_stops_running_sequence(client, world):  # noqa: F
         s.commit()
         enr_id = enr.id
     case = client.post("/api/quotes", json={"branch": "Flotte", "company_id": client_co, "insurer_ids": [ins1],
-                                            "fields": {"activite": "x", "nb_vehicules": "3", "garanties": "TR"}}, headers=O).json()
+                                            "fields": {"activite": "x", "nb_vehicules": "3"}}, headers=O).json()
     row = _rows(case, "Assurance Alpha")[0]
     d = client.post(f"/api/quotes/{case['id']}/draft", json={"insurer_ids": [row["id"]]}, headers=O).json()
     assert client.post(f"/api/quotes/{case['id']}/send", json={**d, "insurer_ids": [row["id"]]}, headers=O).status_code == 200
@@ -275,3 +282,73 @@ def test_reply_to_dossier_also_stops_running_sequence(client, world):  # noqa: F
         assert s.get(Enrollment, enr_id).status not in ("waiting", "scheduled")   # relances arrêtées
     case = client.get(f"/api/quotes/{case['id']}").json()
     assert _rows(case, "Assurance Alpha")[0]["status"] == "replied"
+
+
+def test_automatic_followups_preview_and_cancel(client, world):  # noqa: F811
+    from app import quotes
+    client_co, ins1, ins2 = _setup()
+    case = client.post("/api/quotes", headers=O, json={"branch": "Flotte", "company_id": client_co, "insurer_ids": [ins1, ins2],
+                                                         "fields": {"activite": "Transport", "nb_vehicules": "12"}}).json()
+    a, b = _rows(case, "Assurance Alpha")[0], _rows(case, "Beta Assurances")[0]
+    d = client.post(f"/api/quotes/{case['id']}/draft", json={"insurer_ids": [a["id"]]}, headers=O).json()
+
+    # aperçu : l'email tel qu'il partira, signature comprise
+    pv = client.post(f"/api/quotes/{case['id']}/preview", json={"to": d["to"], "subject": d["subject"], "body": d["body"]}, headers=O).json()
+    assert pv["subject"] == d["subject"] and pv["body"].startswith(d["body"]) and pv["from_email"]
+
+    case = client.post(f"/api/quotes/{case['id']}/send-all", json={}, headers=O).json()["quote"]
+    a = _rows(case, "Assurance Alpha")[0]
+    # les deux demandes partent à quelques millisecondes d'écart : on se place à la plus tardive
+    first = max(datetime.fromisoformat(r["next_followup_at"]) for c in case["companies"] for r in c["rows"])
+    sent0 = len(world["smtp"].messages)
+
+    # la page de la compagnie montre les 2 relances prévues, avec leur texte
+    up = client.get(f"/api/quotes/{case['id']}/companies/{ins1}/emails").json()["upcoming"]
+    assert [u["n"] for u in up] == [1, 2] and up[0]["at"] == a["next_followup_at"] and "revenir vers vous" in up[0]["body"]
+    assert up[0]["subject"].startswith("Re: ")
+
+    # rien avant l'heure ; à l'heure : relance 1 (Alpha et Beta), dans le même fil
+    assert quotes.run_due_followups(now=datetime.fromisoformat(a["next_followup_at"]) - timedelta(minutes=5)) == 0
+    assert quotes.run_due_followups(now=first) == 2
+    assert len(world["smtp"].messages) == sent0 + 2 and "In-Reply-To:" in world["smtp"].messages[-1].data.decode()
+    case = client.get(f"/api/quotes/{case['id']}").json()
+    a, b = _rows(case, "Assurance Alpha")[0], _rows(case, "Beta Assurances")[0]
+    assert a["status"] == "reminded" and a["reminders_sent"] == 1 and a["next_followup_at"]
+    assert any(e["text"].startswith("Relance 1 envoyée à Assurance Alpha – automatique") for e in case["events"])
+
+    # Beta fait une offre : ses relances s'arrêtent ; Alpha : on annule à la main
+    case = client.patch(f"/api/quotes/{case['id']}/insurers/{b['id']}", json={"status": "offer"}, headers=O).json()
+    assert _rows(case, "Beta Assurances")[0]["next_followup_at"] is None
+    second = datetime.fromisoformat(_rows(case, "Assurance Alpha")[0]["next_followup_at"])
+    case = client.post(f"/api/quotes/{case['id']}/companies/{ins1}/followups", json={"enabled": False}, headers=O).json()
+    assert _rows(case, "Assurance Alpha")[0]["next_followup_at"] is None
+    assert quotes.run_due_followups(now=second) == 0
+
+    # réactivées : relance 2 à l'heure prévue, puis plus rien et un rappel « appeler »
+    case = client.post(f"/api/quotes/{case['id']}/companies/{ins1}/followups", json={"enabled": True}, headers=O).json()
+    again = datetime.fromisoformat(_rows(case, "Assurance Alpha")[0]["next_followup_at"])
+    assert quotes.run_due_followups(now=again) == 1
+    case = client.get(f"/api/quotes/{case['id']}").json()
+    a = _rows(case, "Assurance Alpha")[0]
+    assert a["reminders_sent"] == 2 and a["next_followup_at"] is None
+    with get_session() as s:
+        r = s.scalars(select(Reminder).where(Reminder.quote_case_id == case["id"])).all()
+        assert any("Pas de réponse de Assurance Alpha après 2 relances" in x.title for x in r)
+
+    # dossier clos : plus aucune relance
+    c2 = client.post("/api/quotes", headers=O, json={"branch": "Flotte", "company_id": client_co, "insurer_ids": [ins2],
+                                                      "fields": {"activite": "x", "nb_vehicules": "1"}}).json()
+    c2 = client.post(f"/api/quotes/{c2['id']}/send-all", json={}, headers=O).json()["quote"]
+    nxt = datetime.fromisoformat(_rows(c2, "Beta Assurances")[0]["next_followup_at"])
+    client.patch(f"/api/quotes/{c2['id']}", json={"stage": "lost", "lost_reason": "Prix"}, headers=O)
+    assert quotes.run_due_followups(now=nxt) == 0
+
+
+def test_flotte_template_without_guarantees_line(client, world):  # noqa: F811
+    client_co, ins1, _ = _setup()
+    c = client.post("/api/quotes", headers=O, json={"branch": "Flotte", "company_id": client_co, "insurer_ids": [ins1],
+                                                     "fields": {"activite": "Transport", "nb_vehicules": "12"}}).json()
+    assert c["missing_labels"] == []
+    d = client.post(f"/api/quotes/{c['id']}/draft", json={"insurer_ids": [_rows(c, "Assurance Alpha")[0]["id"]]}, headers=O).json()
+    assert "Garanties souhaitées :" not in d["body"] and "sinistralité" not in d["body"]
+    assert "garanties souhaitées par véhicule" in d["body"] and d["missing"] == []

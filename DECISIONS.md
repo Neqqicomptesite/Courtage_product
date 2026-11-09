@@ -528,3 +528,22 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
      elle n'avait été appliquée sur aucun serveur.
 291. **Groupe de boutons dans un formulaire** : FieldGroup (sans <label> englobant), sinon un
      clic n'importe où dans le bloc actionnait le premier bouton ou décochait la première case.
+292. **Relances automatiques des demandes de cotation (09/11, choix d'Omar)** : comme une
+     campagne, relance 1 puis relance 2 (étapes 2 et 3 du modèle de la branche), N jours ouvrés
+     après chaque envoi (quote_followup_days, 4), dans les plages d'envoi, depuis la boîte de
+     l'employé qui a envoyé la demande (tâche planifiée par employé). Arrêtées par une réponse
+     dans le fil, une offre, un refus, « à renégocier », un dossier gagné / perdu, ou à la main
+     (« Annuler », réactivables). Après la 2e relance sans réponse : rappel « appeler ».
+     Les demandes envoyées avant cette version ne sont pas relancées d'office (« Programmer »).
+     Migration 0015 (quote_insurer.next_followup_at, auto_followups).
+293. **Aperçu avant envoi** (l'email tel qu'il partira, signature comprise) et **vue des emails
+     d'une compagnie** (envoyés, reçus, relances prévues avec date et texte).
+294. **Historique réduit aux faits métier** (demande / relance envoyée, réponse, offre reçue,
+     refus, à renégocier, étapes, notes), une ligne chacun ; destinataires des demandes limités
+     au service « souscription » de la compagnie (choix d'Omar) ; modèle Flotte : sans
+     « Garanties souhaitées » (garanties par véhicule, dans la liste du parc) ni la phrase sur la
+     sinistralité (texte remplacé sur les serveurs seulement s'il n'a pas été retouché) ;
+     titres de branches sans tirets dans l'email commun.
+295. **Test d'endurance** (test_v220_soak) : les inscriptions sont datées du début de la
+     simulation. Avec l'horloge réelle, le jour où la simulation traverse la date du jour, une
+     réponse simulée paraissait antérieure à l'inscription (artefact de test, pas un défaut).

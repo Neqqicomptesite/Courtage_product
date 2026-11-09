@@ -60,7 +60,8 @@ def people():
 def insurer_companies():
     """Compagnies d'assurance de la base, pour choisir qui consulter."""
     with get_session() as s:
-        counts = dict(s.execute(select(Contact.company_id, func.count(Contact.id)).where(Contact.company_id.is_not(None))
+        counts = dict(s.execute(select(Contact.company_id, func.count(Contact.id))  # interlocuteurs « souscription »
+                                .where(Contact.company_id.is_not(None), Contact.department == "souscription")
                                 .group_by(Contact.company_id)).all())
         return {"items": [{"id": c.id, "name": c.name, "contacts": counts.get(c.id, 0),
                            "logo": f"/api/companies/{c.id}/logo?v={c.logo}" if c.logo else None}
@@ -207,6 +208,30 @@ def send_all(cid: int, body: dict | None = None):
         report = quotes.send_all(s, case, [int(x) for x in ids] if ids else None)
         s.commit()
         return {"report": report, "quote": quotes.detail_json(s, case)}
+
+
+@router.post("/{cid:int}/preview")
+def preview(cid: int, body: dict):
+    """L'email tel qu'il partira (signature comprise), avant l'envoi."""
+    with get_session() as s:
+        _case(s, cid)
+        return quotes.preview(s, body)
+
+
+@router.get("/{cid:int}/companies/{company_id:int}/emails")
+def company_emails(cid: int, company_id: int):
+    with get_session() as s:
+        return quotes.company_emails(s, _case(s, cid), company_id)
+
+
+@router.post("/{cid:int}/companies/{company_id:int}/followups")
+def company_followups(cid: int, company_id: int, body: dict):
+    """Annuler (enabled=false) ou réactiver les relances automatiques d'une compagnie."""
+    with get_session() as s:
+        case = _case(s, cid)
+        quotes.set_auto_followups(s, case, company_id, bool(body.get("enabled")))
+        s.commit()
+        return quotes.detail_json(s, case)
 
 
 @router.post("/{cid:int}/reminders")

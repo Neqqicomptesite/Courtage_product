@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from email import message_from_bytes, policy
 from functools import lru_cache
 
@@ -303,6 +303,7 @@ def set_stage(s: Session, case: QuoteCase, stage: str, lost_reason: str | None =
     case.closed_at = utcnow() if stage in ("won", "lost") else None
     if stage in ("won", "lost"):
         _close_reminders(s, case)
+        _stop_followups(s.scalars(select(QuoteInsurer).where(QuoteInsurer.case_id == case.id)))
     event(s, case, "stage", f"{STAGE_LABELS[before]} → {STAGE_LABELS[stage]}"
           + (f" ({case.lost_reason})" if stage == "lost" else ""), data={"from": before, "to": stage})
 
@@ -327,11 +328,10 @@ def _sync_offer_stage(s: Session, case: QuoteCase) -> None:
 # --------------------------------------------------------------------------- compagnies
 
 def company_contacts(s: Session, company_id: int) -> list[Contact]:
-    """Les interlocuteurs d'une compagnie, service souscription d'abord."""
-    order = {"souscription": 0, "production": 1}
-    people = list(s.scalars(select(Contact).where(Contact.company_id == company_id,
-                                                  Contact.global_status != "do_not_contact").order_by(Contact.id)))
-    return sorted(people, key=lambda c: order.get(c.department or "", 2))
+    """Les destinataires possibles d'une demande : les interlocuteurs de la compagnie marqués
+    « souscription » (choix d'Omar). Une autre adresse peut toujours être tapée à la main."""
+    return list(s.scalars(select(Contact).where(Contact.company_id == company_id, Contact.department == "souscription",
+                                                Contact.global_status != "do_not_contact").order_by(Contact.id)))
 
 
 def default_contact(s: Session, company_id: int) -> Contact | None:
@@ -437,7 +437,7 @@ def _combine(case: QuoteCase, bodies: dict[str, str]) -> str:
         end = next((i for i, p in enumerate(ps) if p.lower().startswith(("bien cordialement", "cordialement"))), len(ps))
         detail = [p for p in ps[:end] if not p.lower().startswith(("bonjour", "merci")) and case.client_name not in p
                   and f"[{CLIENT_PLACEHOLDER}]" not in p]
-        parts.append(f"— {b} —\n" + "\n\n".join(detail) if detail else f"— {b} —")
+        parts.append(f"{b}\n" + "\n\n".join(detail) if detail else b)
     parts.append(ask)
     parts += first[closing_idx:] or ["Bien cordialement,"]
     return "\n\n".join(parts)
@@ -451,7 +451,7 @@ def _recipient_contacts(s: Session, emails: list[str]) -> list[Contact]:
     return out
 
 
-def draft(s: Session, case: QuoteCase, rows: list[QuoteInsurer], to: list[str] | None = None) -> dict:
+def draft(s: Session, case: QuoteCase, rows: list[QuoteInsurer], to: list[str] | None = None, ahead: int = 0) -> dict:
     """Email prêt à relire pour une compagnie : demande (une ou plusieurs branches), relance ou
     renégociation (dans le même fil)."""
     comp = s.get(Company, rows[0].company_id)
@@ -469,7 +469,7 @@ def draft(s: Session, case: QuoteCase, rows: list[QuoteInsurer], to: list[str] |
             body = fill(_render_vars(RENEGOTIATE_BODY.replace("{branches}", ", ".join(names)), greet), case, names[0])
         else:
             steps = template_steps(s, names[0])
-            idx = min(1 + lead.reminders_sent, len(steps) - 1) if len(steps) > 1 else 0
+            idx = min(1 + lead.reminders_sent + ahead, len(steps) - 1) if len(steps) > 1 else 0
             body = fill(_render_vars(steps[idx][1], greet), case, names[0])
         kind = "renegotiate" if reneg else "followup"
     else:
@@ -497,7 +497,8 @@ def draft(s: Session, case: QuoteCase, rows: list[QuoteInsurer], to: list[str] |
                                                  "kind": f.kind, "checked": f.kind == "client"} for f, a in files]}
 
 
-def send(s: Session, case: QuoteCase, rows: list[QuoteInsurer], body: dict, smtp_factory=None, imap_factory=None) -> list[QuoteInsurer]:
+def send(s: Session, case: QuoteCase, rows: list[QuoteInsurer], body: dict, smtp_factory=None, imap_factory=None,
+         now: datetime | None = None, auto: bool = False) -> list[QuoteInsurer]:
     from app import manual_mail
     d = manual_mail.draft_from(body)
     left = render.placeholders(d.subject + "\n" + d.body)
@@ -507,9 +508,9 @@ def send(s: Session, case: QuoteCase, rows: list[QuoteInsurer], body: dict, smtp
     if followup:
         d.in_reply_to = rows[0].last_message_id
         d.references = [rows[0].last_message_id]
-    out = manual_mail.send(s, d, smtp_factory=smtp_factory, imap_factory=imap_factory)  # commit inclus
+    now = now or utcnow()
+    out = manual_mail.send(s, d, now=now, smtp_factory=smtp_factory, imap_factory=imap_factory)  # commit inclus
     comp = s.get(Company, rows[0].company_id)
-    now = utcnow()
     people = _recipient_contacts(s, d.to)
     for r in rows:
         if followup:
@@ -522,15 +523,19 @@ def send(s: Session, case: QuoteCase, rows: list[QuoteInsurer], body: dict, smtp
         if people and people[0].id:
             r.contact_id = people[0].id
     reneg = followup and all(r.status == "renegotiate" for r in rows)
-    what = "Renégociation" if reneg else "Relance" if followup else "Demande de cotation"
-    event(s, case, "email_out", f"{what} envoyée à {comp.name if comp else ''}"
-          + (f" – {', '.join(r.branch for r in rows)}" if len(branches_of(case)) > 1 else "")
-          + f" ({', '.join(d.to)})" + (" – mode test" if out.test_mode else ""), rows[0],
+    what = ("Renégociation" if reneg else f"Relance {rows[0].reminders_sent}" if followup else "Demande") + " envoyée à " + (comp.name if comp else "")
+    event(s, case, "email_out", what + (f" ({', '.join(r.branch for r in rows)})" if len(branches_of(case)) > 1 else "")
+          + (" – automatique" if auto else "") + (" – mode test" if out.test_mode else ""), rows[0],
           data={"subject": d.subject, "body": d.body[:6000], "to": d.to, "cc": d.cc, "attachments": out.attachments or [],
-                "test_mode": out.test_mode, "insurer_ids": [r.id for r in rows], "branches": [r.branch for r in rows]},
+                "test_mode": out.test_mode, "insurer_ids": [r.id for r in rows], "branches": [r.branch for r in rows],
+                "auto": auto, "company_id": rows[0].company_id},
           message_id=out.message_id)
     _close_reminders(s, case, rows[0].company_id)
-    _schedule_followup(s, case, rows, comp)
+    if reneg:
+        for r in rows:
+            r.next_followup_at = None
+    else:
+        _plan_followups(s, case, rows, comp, now)
     _advance(s, case, "consulting")
     s.commit()
     return rows
@@ -567,15 +572,138 @@ def send_all(s: Session, case: QuoteCase, company_ids: list[int] | None = None, 
     return report
 
 
-def _schedule_followup(s: Session, case: QuoteCase, rows: list[QuoteInsurer], comp: Company | None) -> Reminder:
+MAX_AUTO_FOLLOWUPS = 2  # relance 1 puis relance 2 (étapes 2 et 3 du modèle de la branche)
+
+
+def _followup_at(s: Session, base: datetime, days: int) -> datetime:
+    """N jours ouvrés après `base`, à la même heure si elle est dans les plages d'envoi, sinon à
+    la prochaine ouverture (jours fériés et week-ends exclus)."""
     from app.scheduling import SendWindow
+    w = SendWindow.from_settings(s)
+    local = to_local(base)
+    day = w.add_days(local.date(), days, True)
+    when = datetime.combine(day, local.time().replace(second=0, microsecond=0), tzinfo=local.tzinfo)
+    return w.next_open(when.astimezone(base.tzinfo))
+
+
+def followup_plan(s: Session, rows: list[QuoteInsurer]) -> list[datetime]:
+    """Dates des relances automatiques encore prévues pour ce fil (la prochaine, puis la suivante)."""
+    lead = rows[0]
+    if lead.next_followup_at is None:
+        return []
+    left = MAX_AUTO_FOLLOWUPS - lead.reminders_sent
     days = int(settings_store.get(s, "quote_followup_days") or 4)
-    due = SendWindow.from_settings(s).add_days(to_local(utcnow()).date(), days, True)
-    r = Reminder(kind="quote", title=f"Relancer {comp.name if comp else 'la compagnie'} · {case.client_name} ({case.ref})"[:255],
-                 notes=f"Dossier {case.ref} – {', '.join(x.branch for x in rows)}. Sans réponse : relance proposée depuis le dossier.",
-                 due_on=due, company_id=rows[0].company_id, user_id=user_id(), quote_case_id=case.id)
-    s.add(r)
-    return r
+    out = [lead.next_followup_at]
+    while len(out) < left:
+        out.append(_followup_at(s, out[-1], days))
+    return out
+
+
+def _plan_followups(s: Session, case: QuoteCase, rows: list[QuoteInsurer], comp: Company | None, now: datetime) -> None:
+    """Après un envoi : prochaine relance automatique dans N jours ouvrés (réglage du cabinet,
+    4 par défaut). Après la dernière relance sans réponse : un rappel « appeler » dans l'Agenda."""
+    days = int(settings_store.get(s, "quote_followup_days") or 4)
+    lead = rows[0]
+    if lead.auto_followups and lead.reminders_sent < MAX_AUTO_FOLLOWUPS:
+        at = _followup_at(s, now, days)
+        for r in rows:
+            r.next_followup_at = at
+        return
+    for r in rows:
+        r.next_followup_at = None
+    if lead.reminders_sent >= MAX_AUTO_FOLLOWUPS:
+        s.add(Reminder(kind="quote", title=f"Pas de réponse de {comp.name if comp else 'la compagnie'} après {MAX_AUTO_FOLLOWUPS} relances : appeler"
+                                           f" · {case.client_name} ({case.ref})"[:255],
+                       notes=f"Dossier {case.ref} – {', '.join(x.branch for x in rows)}.",
+                       due_on=to_local(_followup_at(s, now, days)).date(), company_id=lead.company_id, user_id=user_id(),
+                       quote_case_id=case.id))
+
+
+def _stop_followups(rows) -> None:
+    for r in rows:
+        r.next_followup_at = None
+
+
+def thread_rows(s: Session, qi: QuoteInsurer) -> list[QuoteInsurer]:
+    """Les lignes parties dans le même email que `qi` (même compagnie, même fil)."""
+    if not qi.last_message_id:
+        return [qi]
+    return list(s.scalars(select(QuoteInsurer).where(QuoteInsurer.case_id == qi.case_id, QuoteInsurer.company_id == qi.company_id,
+                                                     QuoteInsurer.last_message_id == qi.last_message_id).order_by(QuoteInsurer.id)))
+
+
+def set_auto_followups(s: Session, case: QuoteCase, company_id: int, enabled: bool) -> None:
+    """Annuler / réactiver les relances automatiques d'une compagnie (tous ses fils en attente)."""
+    from app.scheduling import SendWindow
+    comp = s.get(Company, company_id)
+    rows = list(s.scalars(select(QuoteInsurer).where(QuoteInsurer.case_id == case.id, QuoteInsurer.company_id == company_id)))
+    for r in rows:
+        r.auto_followups = enabled
+    if enabled:
+        _close_reminders(s, case, company_id)  # anciens rappels « Relancer » : remplacés par les relances automatiques
+        days = int(settings_store.get(s, "quote_followup_days") or 4)
+        done: set[str] = set()
+        for r in rows:
+            if r.status in ("sent", "reminded") and r.last_message_id and r.last_message_id not in done \
+                    and r.reminders_sent < MAX_AUTO_FOLLOWUPS:
+                done.add(r.last_message_id)
+                base = max(r.sent_at or utcnow(), utcnow() - timedelta(days=days * 2))
+                at = max(_followup_at(s, base, days), SendWindow.from_settings(s).next_open(utcnow()))
+                for x in thread_rows(s, r):
+                    x.next_followup_at = at
+    else:
+        _stop_followups(rows)
+    event(s, case, "note", f"Relances automatiques {'réactivées' if enabled else 'annulées'} pour {comp.name if comp else 'la compagnie'}")
+
+
+def run_due_followups(now: datetime | None = None, smtp_factory=None, imap_factory=None) -> int:
+    """Tâche planifiée (chaque minute, pour l'employé en cours) : envoie les relances
+    automatiques arrivées à échéance, depuis la boîte de l'employé qui a envoyé la demande.
+    Arrêtées dès que la compagnie répond, fait une offre, refuse, ou que le dossier est clos."""
+    from app import manual_mail
+    from app.db import get_session
+    from app.scheduling import SendWindow
+    now = now or utcnow()
+    sent = 0
+    with get_session() as s:
+        if not SendWindow.from_settings(s).is_open(now):
+            return 0
+        me = user_id()
+        q = select(QuoteInsurer).where(QuoteInsurer.next_followup_at.is_not(None), QuoteInsurer.next_followup_at <= now,
+                                       QuoteInsurer.status.in_(("sent", "reminded")), QuoteInsurer.auto_followups.is_(True),
+                                       QuoteInsurer.sent_by == me if me is not None else QuoteInsurer.sent_by.is_(None))
+        groups: dict[tuple, list[int]] = {}
+        for r in s.scalars(q.order_by(QuoteInsurer.id)):
+            groups.setdefault((r.case_id, r.company_id, r.last_message_id), []).append(r.id)
+        for (case_id, _cid, _mid), ids in groups.items():
+            case = s.get(QuoteCase, case_id)
+            rows = [s.get(QuoteInsurer, i) for i in ids]
+            if case is None or case.stage in ("won", "lost"):
+                _stop_followups(rows)
+                s.commit()
+                continue
+            d = draft(s, case, rows)
+            if not d["to"] or d["missing"]:
+                _stop_followups(rows)
+                event(s, case, "note", f"Relance automatique non envoyée à {d['company']} : "
+                      + ("aucun destinataire." if not d["to"] else "champ à compléter dans le modèle de relance."))
+                s.commit()
+                continue
+            try:
+                send(s, case, rows, {"to": d["to"], "subject": d["subject"], "body": d["body"], "attachment_ids": []},
+                     smtp_factory=smtp_factory, imap_factory=imap_factory, now=now, auto=True)
+                sent += 1
+            except manual_mail.SendRefused as exc:
+                s.rollback()
+                rows = [s.get(QuoteInsurer, i) for i in ids]
+                if exc.confirm:  # adresse sur la liste d'exclusion : on n'insiste pas
+                    _stop_followups(rows)
+                    event(s, case, "note", f"Relance automatique arrêtée pour {d['company']} : adresse sur la liste d'exclusion.")
+                else:            # boîte injoignable… : nouvel essai dans une heure
+                    for r in rows:
+                        r.next_followup_at = now + timedelta(hours=1)
+                s.commit()
+    return sent
 
 
 def _close_reminders(s: Session, case: QuoteCase, company_id: int | None = None) -> int:
@@ -609,9 +737,14 @@ def set_insurer(s: Session, case: QuoteCase, qi: QuoteInsurer, data: dict) -> Qu
         if st in ("replied",) + ANSWERED:
             qi.replied_at = qi.replied_at or utcnow()
             _close_reminders(s, case, qi.company_id)
+            _stop_followups(thread_rows(s, qi))
         multi = len(branches_of(case)) > 1
-        event(s, case, "insurer", f"{comp.name if comp else 'Compagnie'}{f' ({qi.branch})' if multi else ''} : {INSURER_LABELS[st]}"
-              + (f" – {_fmt_number(qi.offer_premium)} MAD" if st in OFFER_STATUSES and qi.offer_premium else ""), qi)
+        name = comp.name if comp else "la compagnie"
+        text = {"offer": f"Offre reçue de {name}", "declined": f"Refus de {name}", "renegotiate": f"Offre de {name} à renégocier",
+                "replied": f"Réponse de {name}"}.get(st, f"{name} : {INSURER_LABELS[st]}")
+        event(s, case, "insurer", text + (f" ({qi.branch})" if multi else "")
+              + (f" – {_fmt_number(qi.offer_premium)} MAD" if st in OFFER_STATUSES and qi.offer_premium else ""), qi,
+              data={"status": st})
         if st in ANSWERED:
             _sync_offer_stage(s, case)
     return qi
@@ -705,16 +838,18 @@ def on_inbound(s: Session, mailbox_id: int, a, raw: bytes, folder: str | None, u
         pass
     comp = s.get(Company, rows[0].company_id)
     auto = a.kind == "auto_reply"
-    event(s, case, "email_in", f"{'Réponse automatique' if auto else 'Réponse'} de {comp.name if comp else a.sender}"
-          f" ({a.sender})", rows[0], message_id=a.message_id,
+    event(s, case, "email_in", f"{'Réponse automatique' if auto else 'Réponse'} de {comp.name if comp else a.sender}",
+          rows[0], message_id=a.message_id,
           data={"subject": a.subject[:500], "body": (a.text or "")[:6000], "from": a.sender,
                 "received_at": a.received_at.isoformat() if a.received_at else None, "folder": folder, "uid": uid,
-                "mailbox_id": mailbox_id, "attachments": names, "auto_reply": auto, "insurer_ids": [r.id for r in rows]})
+                "mailbox_id": mailbox_id, "attachments": names, "auto_reply": auto, "insurer_ids": [r.id for r in rows],
+                "company_id": rows[0].company_id})
     if not auto:
         for r in rows:
             if r.status in ("sent", "reminded"):
                 r.status, r.replied_at = "replied", utcnow()
         _close_reminders(s, case, rows[0].company_id)
+        _stop_followups(rows)
     return True
 
 
@@ -804,15 +939,81 @@ def detail_json(s: Session, case: QuoteCase) -> dict:
                           "replied_at": qi.replied_at.isoformat() if qi.replied_at else None,
                           "reminders_sent": qi.reminders_sent, "offer_premium": qi.offer_premium,
                           "offer_rate": qi.offer_rate, "notes": qi.notes, "last_message_id": qi.last_message_id,
+                          "next_followup_at": qi.next_followup_at.isoformat() if qi.next_followup_at else None,
+                          "auto_followups": qi.auto_followups,
                           "sent_by_name": users.get(qi.sent_by) if qi.sent_by else None}
                          for qi in insurers if qi.company_id == cid],
+                "next_followup_at": min((qi.next_followup_at for qi in insurers if qi.company_id == cid and qi.next_followup_at),
+                                        default=None),
+                "auto_followups": all(qi.auto_followups for qi in insurers if qi.company_id == cid),
             } for cid in comp_ids],
             "files": [{**att_json(a), "file_id": f.id, "kind": f.kind, "label": f.label, "insurer_id": f.insurer_id,
                        "created_at": f.created_at.isoformat()} for f, a in files],
             "reminders": [{"id": r.id, "title": r.title, "kind": r.kind, "due_on": r.due_on.isoformat(), "due_time": r.due_time,
                            "done": r.done_at is not None, "notes": r.notes or "", "mine": r.user_id == me,
                            "user_name": users.get(r.user_id) if r.user_id else None} for r in reminders],
-            "events": [{"id": e.id, "kind": e.kind, "text": e.text, "data": e.data, "insurer_id": e.insurer_id,
-                        "user_name": users.get(e.user_id) if e.user_id else None, "ts": e.ts.isoformat(),
-                        "mine": bool(e.data and my_box is not None and e.data.get("mailbox_id") == my_box)}
-                       for e in events[:200]]}
+            # historique : seulement les faits « métier » (demandes, réponses, offres, étapes, notes)
+            "events": [{"id": e.id, "kind": e.kind, "text": e.text, "insurer_id": e.insurer_id,
+                        "company_id": _event_company(e, insurers),
+                        "user_name": users.get(e.user_id) if e.user_id else None, "ts": e.ts.isoformat()}
+                       for e in events if _business(e)][:100]}
+
+
+def _business(e: QuoteEvent) -> bool:
+    if e.kind in ("created", "stage", "note", "email_out", "email_in"):
+        return True
+    return e.kind == "insurer" and bool(e.data and e.data.get("status"))
+
+
+def _event_company(e: QuoteEvent, insurers: list[QuoteInsurer]) -> int | None:
+    if e.data and e.data.get("company_id"):
+        return e.data["company_id"]
+    return next((qi.company_id for qi in insurers if qi.id == e.insurer_id), None)
+
+
+def company_emails(s: Session, case: QuoteCase, company_id: int) -> dict:
+    """Les emails échangés avec une compagnie pour ce dossier (envoyés et reçus, en entier) et les
+    relances automatiques encore prévues (date + texte exact qui partira)."""
+    from app.mailbox_service import get_primary
+    rows = list(s.scalars(select(QuoteInsurer).where(QuoteInsurer.case_id == case.id, QuoteInsurer.company_id == company_id)
+                          .order_by(QuoteInsurer.id)))
+    ids = {r.id for r in rows}
+    mb = get_primary(s)
+    my_box = mb.id if mb else None
+    items = []
+    for e in s.scalars(select(QuoteEvent).where(QuoteEvent.case_id == case.id, QuoteEvent.kind.in_(("email_out", "email_in")))
+                       .order_by(QuoteEvent.ts, QuoteEvent.id)):
+        d = e.data or {}
+        if d.get("company_id") != company_id and not (set(d.get("insurer_ids") or [e.insurer_id]) & ids):
+            continue
+        items.append({"id": e.id, "direction": "out" if e.kind == "email_out" else "in", "title": e.text, "ts": e.ts.isoformat(),
+                      "subject": d.get("subject"), "body": d.get("body"), "to": d.get("to"), "cc": d.get("cc"), "from": d.get("from"),
+                      "attachments": d.get("attachments") or [], "auto": d.get("auto"), "test_mode": d.get("test_mode"),
+                      "insurer_id": e.insurer_id, "folder": d.get("folder"), "uid": d.get("uid"),
+                      "mine": bool(my_box is not None and d.get("mailbox_id") == my_box)})
+    upcoming = []
+    seen: set[str] = set()
+    for r in rows:
+        if not r.next_followup_at or r.last_message_id in seen:
+            continue
+        seen.add(r.last_message_id)
+        group = thread_rows(s, r)
+        for k, at in enumerate(followup_plan(s, group)):
+            d = draft(s, case, group, ahead=k)
+            upcoming.append({"n": group[0].reminders_sent + k + 1, "at": at.isoformat(), "insurer_ids": [x.id for x in group],
+                             "branches": [x.branch for x in group], "to": d["to"], "subject": d["subject"], "body": d["body"]})
+    return {"company_id": company_id, "items": items, "upcoming": upcoming,
+            "auto_followups": all(r.auto_followups for r in rows), "signature": (mb.signature or "").strip() if mb else ""}
+
+
+def preview(s: Session, body: dict) -> dict:
+    """L'email tel que la compagnie le recevra : expéditeur, destinataires, objet, texte + signature."""
+    from app import settings_store as st
+    from app.mailbox_service import get_primary
+    mb = get_primary(s)
+    text = str(body.get("body") or "")
+    if body.get("signature", True) and mb and (mb.signature or "").strip():
+        text = f"{text}\n\n{mb.signature.strip()}"
+    return {"from_name": mb.display_name if mb else "", "from_email": mb.email if mb else "",
+            "to": body.get("to") or [], "cc": body.get("cc") or "", "subject": str(body.get("subject") or ""), "body": text,
+            "test_mode": bool(st.get(s, "test_mode")), "attachments": body.get("attachment_names") or []}

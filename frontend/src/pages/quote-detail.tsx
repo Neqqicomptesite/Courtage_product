@@ -3,10 +3,11 @@
 // client, conditions actuelles, offres), rappels, historique.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle, ArrowDownLeft, ArrowLeft, ArrowUpRight, Bell, Building2, CalendarPlus, Check, CheckCircle2, Circle, ExternalLink,
+  AlertTriangle, ArrowDownLeft, Clock, ArrowLeft, ArrowUpRight, Bell, Building2, CalendarPlus, Check, CheckCircle2, Circle, ExternalLink,
   FileText, Inbox, MailPlus, MessageSquarePlus, MoreHorizontal, Paperclip, Plus, RotateCw, Send, SendHorizontal, StickyNote, Trash2,
   Trophy, Upload, X, XCircle,
 } from "lucide-react";
+import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -24,7 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
   api, ApiError, type BranchField, type InsurerStatus, type QuoteCompany, type QuoteDetail, type QuoteEventRow, type QuoteFileKind,
-  type QuoteRow, type QuoteStage, type SendAllReport,
+  type QuoteMail, type QuotePreview, type QuoteRow, type QuoteStage, type SendAllReport,
 } from "@/lib/api";
 import { formatDayTime, relativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -49,6 +50,7 @@ export function QuoteDetailPage() {
   const del = useMutation({ mutationFn: () => api.quoteDelete(id), onSuccess: () => { qc.invalidateQueries({ queryKey: ["quotes"] }); navigate("/quotes"); }, onError: (e) => toastError(e) });
   const [lost, setLost] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [emailsFor, setEmailsFor] = useState<number | null>(null);
 
   if (!data) return <Skeleton className="h-[32rem] rounded-xl" />;
   const goStage = (s: QuoteStage) => (s === "lost" ? setLost(true) : update.mutate({ stage: s }));
@@ -79,9 +81,9 @@ export function QuoteDetailPage() {
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
         <div className="min-w-0 space-y-6">
-          <InsurersCard q={data} onChange={set} />
+          <InsurersCard q={data} onChange={set} onEmails={setEmailsFor} />
           <BranchFormCard q={data} onChange={set} />
-          <HistoryCard q={data} onChange={set} />
+          <HistoryCard q={data} onChange={set} onEmails={setEmailsFor} />
         </div>
         <div className="min-w-0 space-y-6">
           <InfoCard q={data} save={(b) => update.mutate(b)} />
@@ -91,6 +93,7 @@ export function QuoteDetailPage() {
         </div>
       </div>
 
+      <CompanyEmailsDialog q={data} companyId={emailsFor} onClose={() => setEmailsFor(null)} onChange={set} />
       <LostDialog quote={lost ? data : null} onClose={() => setLost(false)} onConfirm={(r) => { setLost(false); update.mutate({ stage: "lost", lost_reason: r }); }} />
       <ConfirmDialog open={deleting} onOpenChange={setDeleting} title="Supprimer ce dossier ?" destructive confirmLabel="Supprimer"
         description="Le dossier, son historique et ses rappels sont supprimés. Les emails déjà envoyés restent dans votre boîte."
@@ -125,7 +128,7 @@ function StageStepper({ stage, onPick }: { stage: QuoteStage; onPick: (s: QuoteS
 
 type MailTarget = { company: QuoteCompany; ids: number[] };
 
-function InsurersCard({ q, onChange }: { q: QuoteDetail; onChange: (d: QuoteDetail) => void }) {
+function InsurersCard({ q, onChange, onEmails }: { q: QuoteDetail; onChange: (d: QuoteDetail) => void; onEmails: (companyId: number) => void }) {
   const [adding, setAdding] = useState(false);
   const [mail, setMail] = useState<MailTarget | null>(null);
   const [all, setAll] = useState(false);
@@ -149,7 +152,7 @@ function InsurersCard({ q, onChange }: { q: QuoteDetail; onChange: (d: QuoteDeta
           </div>
         ) : (
           <ul className="divide-y border-t">
-            {q.companies.map((c) => <CompanyItem key={c.company_id} q={q} c={c} multi={multi} onChange={onChange} onMail={setMail} />)}
+            {q.companies.map((c) => <CompanyItem key={c.company_id} q={q} c={c} multi={multi} onChange={onChange} onMail={setMail} onEmails={onEmails} />)}
           </ul>
         )}
       </CardContent>
@@ -160,9 +163,10 @@ function InsurersCard({ q, onChange }: { q: QuoteDetail; onChange: (d: QuoteDeta
   );
 }
 
-function CompanyItem({ q, c, multi, onChange, onMail }: {
-  q: QuoteDetail; c: QuoteCompany; multi: boolean; onChange: (d: QuoteDetail) => void; onMail: (t: MailTarget) => void;
+function CompanyItem({ q, c, multi, onChange, onMail, onEmails }: {
+  q: QuoteDetail; c: QuoteCompany; multi: boolean; onChange: (d: QuoteDetail) => void; onMail: (t: MailTarget) => void; onEmails: (companyId: number) => void;
 }) {
+  const auto = useMutation({ mutationFn: (enabled: boolean) => api.quoteFollowups(q.id, c.company_id, enabled), onSuccess: onChange, onError: (e) => toastError(e) });
   const patch = useMutation({
     mutationFn: ({ iid, body }: { iid: number; body: Parameters<typeof api.quoteInsurerUpdate>[2] }) => api.quoteInsurerUpdate(q.id, iid, body),
     onSuccess: onChange, onError: (e) => toastError(e),
@@ -179,14 +183,16 @@ function CompanyItem({ q, c, multi, onChange, onMail }: {
         <div className="flex min-w-[14rem] flex-1 items-center gap-3">
           <Logo name={c.company} kind="insurer" src={c.logo} className="size-9" />
           <div className="min-w-0 flex-1">
-            <p className="flex flex-wrap items-center gap-2 font-medium">{c.company}
+            <p className="flex flex-wrap items-center gap-2 font-medium">
+              <button className="hover:text-primary hover:underline" onClick={() => onEmails(c.company_id)} title="Voir les emails avec cette compagnie">{c.company}</button>
               {!multi && <Badge variant={INSURER[c.rows[0].status].variant}>{INSURER[c.rows[0].status].label}</Badge>}</p>
             <p className="truncate text-xs text-muted-foreground">
               {recipients.length ? recipients.join(", ") : c.contacts.length ? `${c.contacts[0].name} · ${c.contacts[0].email}`
-                : <span className="text-warning">Aucun interlocuteur : ajoutez une personne à la fiche de la compagnie</span>}
+                : <span className="text-warning">Aucun interlocuteur « souscription » : marquez-en un dans la fiche de la compagnie</span>}
               {!multi && c.rows[0].sent_at && ` · envoyé ${relativeTime(c.rows[0].sent_at)}`}
               {!multi && c.rows[0].reminders_sent > 0 && ` · ${c.rows[0].reminders_sent} relance${c.rows[0].reminders_sent > 1 ? "s" : ""}`}
             </p>
+            <FollowupLine c={c} onEmails={() => onEmails(c.company_id)} onToggle={(v) => auto.mutate(v)} />
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
@@ -203,6 +209,7 @@ function CompanyItem({ q, c, multi, onChange, onMail }: {
                   <DropdownMenuItem key={s} onSelect={() => patch.mutate({ iid: c.rows[0].id, body: { status: s } })}>Marquer « {INSURER[s].label} »</DropdownMenuItem>
                 ))}
               </>}
+              {c.rows.some((r) => r.status !== "to_send") && <DropdownMenuItem onSelect={() => onEmails(c.company_id)}><Inbox /> Emails et relances prévues</DropdownMenuItem>}
               <DropdownMenuItem asChild><Link to={`/companies/${c.company_id}`}><Building2 /> Fiche de la compagnie</Link></DropdownMenuItem>
               {!multi && c.rows[0].status === "to_send" && <><DropdownMenuSeparator /><DropdownMenuItem destructive onSelect={() => remove.mutate(c.rows[0].id)}><Trash2 /> Retirer du dossier</DropdownMenuItem></>}
             </DropdownMenuContent>
@@ -322,7 +329,7 @@ function RecipientPicker({ options, value, onChange }: { options: { email: strin
             {o.department && <span className={cn("text-xs", o.department === "souscription" ? "font-medium text-primary" : "text-muted-foreground")}>{o.department}</span>}
           </label>
         ))}
-        {options.length === 0 && <p className="px-3 py-2 text-xs text-muted-foreground">Aucun contact enregistré pour cette compagnie.</p>}
+        {options.length === 0 && <p className="px-3 py-2 text-xs text-muted-foreground">Aucun interlocuteur « souscription » pour cette compagnie : marquez-en un dans sa fiche (service Souscription), ou tapez une adresse ci-dessous.</p>}
       </div>
       {others.map((e) => (
         <span key={e} className="mr-1.5 inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs">{e}
@@ -349,6 +356,14 @@ function ConsultDialog({ q, target, onClose, onChange }: { q: QuoteDetail; targe
   const [cc, setCc] = useState(""); const [subject, setSubject] = useState(""); const [body, setBody] = useState("");
   const [atts, setAtts] = useState<number[]>([]);
   const [confirm, setConfirm] = useState<string | null>(null);
+  const [tab, setTab] = useState<"edit" | "preview">("edit");
+  useEffect(() => { if (target) setTab("edit"); }, [target]);
+  const attNames = (draft?.attachments ?? []).filter((a) => atts.includes(a.id)).map((a) => a.name);
+  const { data: pv, isFetching: pvLoading } = useQuery({
+    queryKey: ["quote-preview", q.id, to?.join(","), cc, subject, body, attNames.join("|")],
+    queryFn: () => api.quotePreview(q.id, { to: to ?? [], cc, subject, body, attachment_names: attNames }),
+    enabled: !!target && tab === "preview", gcTime: 0,
+  });
   useEffect(() => {
     if (!draft) return;
     setSubject(draft.subject); setBody(draft.body); setAtts(draft.attachments.filter((a) => a.checked).map((a) => a.id));
@@ -365,7 +380,7 @@ function ConsultDialog({ q, target, onClose, onChange }: { q: QuoteDetail; targe
     onSuccess: (d) => {
       onChange(d);
       toast.success(draft?.kind === "request" ? "Demande de cotation envoyée" : draft?.kind === "renegotiate" ? "Demande de renégociation envoyée" : "Relance envoyée",
-        { description: `À ${(to ?? []).join(", ")}. Relance proposée dans l'Agenda si pas de réponse.` });
+        { description: draft?.kind === "renegotiate" ? `À ${(to ?? []).join(", ")}.` : `À ${(to ?? []).join(", ")}. Sans réponse, relance automatique prévue (visible sur la compagnie).` });
       onClose();
     },
     onError: (e) => {
@@ -381,7 +396,26 @@ function ConsultDialog({ q, target, onClose, onChange }: { q: QuoteDetail; targe
           <DialogTitle>{title} · {target?.company.company}</DialogTitle>
           <DialogDescription>Préparée avec {ids.length > 1 ? "les modèles des branches" : "le modèle de la branche"} et la fiche du dossier. Relisez, puis envoyez depuis votre boîte.</DialogDescription>
         </DialogHeader>
-        {!draft ? <Skeleton className="h-96" /> : (
+        {draft && (
+          <div className="flex gap-1 rounded-lg bg-muted p-1">
+            {([["edit", "Modifier"], ["preview", "Aperçu"]] as const).map(([k, l]) => (
+              <button key={k} onClick={() => setTab(k)} className={cn("flex-1 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+                tab === k ? "bg-card shadow-sm" : "text-muted-foreground hover:text-foreground")}>{l}</button>
+            ))}
+          </div>
+        )}
+        {draft && tab === "preview" && (
+          <div className="space-y-3">
+            {!pv ? <Skeleton className="h-96" /> : <MailPreview pv={pv} loading={pvLoading} />}
+            <DialogFooter className="pt-2">
+              <Button variant="outline" onClick={() => setTab("edit")}>Modifier</Button>
+              <Button disabled={!(to ?? []).length || left.length > 0 || send.isPending || isFetching} onClick={() => send.mutate(false)}>
+                {send.isPending ? <RotateCw className="animate-spin" /> : <Send />} Envoyer
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+        {!draft ? <Skeleton className="h-96" /> : tab === "edit" && (
           <div className={cn("space-y-3", isFetching && "opacity-60")}>
             {choosable.length > 1 && (
               <FieldGroup label="Branches dans cet email" hint={ids.length > 1 ? "Un seul email pour ces branches. Décochez pour envoyer une branche à part (à d'autres personnes, par exemple)." : "Cochez plusieurs branches pour un email commun."}>
@@ -420,8 +454,12 @@ function ConsultDialog({ q, target, onClose, onChange }: { q: QuoteDetail; targe
                 ))}
               </div>
             )}
+            {draft.kind !== "renegotiate" && (
+              <p className="text-xs text-muted-foreground">Sans réponse : relance automatique {q.companies.length ? "4 jours ouvrés après l'envoi, puis une seconde" : ""} dans la même conversation, arrêtées dès que la compagnie répond, fait une offre ou refuse. Annulables depuis la compagnie.</p>
+            )}
             <DialogFooter className="pt-2">
               <Button variant="outline" onClick={onClose}>Annuler</Button>
+              <Button variant="outline" disabled={!(to ?? []).length} onClick={() => setTab("preview")}>Aperçu</Button>
               <Button disabled={!(to ?? []).length || left.length > 0 || send.isPending || isFetching} onClick={() => send.mutate(false)}>
                 {send.isPending ? <RotateCw className="animate-spin" /> : <Send />} Envoyer
               </Button>
@@ -789,9 +827,11 @@ function NotesCard({ q }: { q: QuoteDetail }) {
 
 /* ------------------------------------------------------------------ historique */
 
-function HistoryCard({ q, onChange }: { q: QuoteDetail; onChange: (d: QuoteDetail) => void }) {
+function HistoryCard({ q, onChange, onEmails }: { q: QuoteDetail; onChange: (d: QuoteDetail) => void; onEmails: (companyId: number) => void }) {
   const [note, setNote] = useState("");
+  const [all, setAll] = useState(false);
   const add = useMutation({ mutationFn: () => api.quoteNote(q.id, note), onSuccess: (d) => { onChange(d); setNote(""); }, onError: (e) => toastError(e) });
+  const shown = all ? q.events : q.events.slice(0, 12);
   return (
     <Card>
       <CardHeader><CardTitle>Historique</CardTitle></CardHeader>
@@ -800,9 +840,24 @@ function HistoryCard({ q, onChange }: { q: QuoteDetail; onChange: (d: QuoteDetai
           <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ajouter une note (appel, échange…)" aria-label="Note" />
           <Button type="submit" variant="outline" disabled={!note.trim() || add.isPending}><MessageSquarePlus /> Noter</Button>
         </form>
-        <ol className="relative space-y-4 border-l pl-5">
-          {q.events.map((e) => <EventItem key={e.id} e={e} q={q} onChange={onChange} />)}
+        <ol className="space-y-2.5">
+          {shown.map((e) => {
+            const Icon = EVENT_ICON[e.kind];
+            const mail = (e.kind === "email_out" || e.kind === "email_in") && e.company_id;
+            return (
+              <li key={e.id} className="flex items-start gap-2.5 text-sm">
+                <Icon className={cn("mt-0.5 size-4 shrink-0", e.kind === "email_in" || (e.kind === "insurer" && e.text.startsWith("Offre")) ? "text-brand"
+                  : e.kind === "note" ? "text-warning" : "text-muted-foreground")} />
+                <div className="min-w-0 flex-1">
+                  {mail ? <button className="text-left hover:text-primary hover:underline" onClick={() => onEmails(e.company_id!)}>{e.text}</button>
+                    : <span className={cn(e.kind === "note" && "whitespace-pre-wrap")}>{e.text}</span>}
+                  <span className="ml-2 whitespace-nowrap text-xs text-muted-foreground">{formatDayTime(e.ts)}{e.kind === "note" && e.user_name ? ` · ${e.user_name}` : ""}</span>
+                </div>
+              </li>
+            );
+          })}
         </ol>
+        {q.events.length > 12 && <button className="text-xs text-primary hover:underline" onClick={() => setAll(!all)}>{all ? "Voir moins" : `Tout voir (${q.events.length})`}</button>}
       </CardContent>
     </Card>
   );
@@ -813,48 +868,142 @@ const EVENT_ICON: Record<QuoteEventRow["kind"], typeof Send> = {
   file: Paperclip, insurer: Building2, edit: FileText,
 };
 
-function EventItem({ e, q, onChange }: { e: QuoteEventRow; q: QuoteDetail; onChange: (d: QuoteDetail) => void }) {
-  const [open, setOpen] = useState(false);
-  const Icon = EVENT_ICON[e.kind];
-  const store = useMutation({
-    mutationFn: (index: number) => api.quoteFileFromMail(q.id, { folder: e.data!.folder!, uid: e.data!.uid!, index, kind: "offer", insurer_id: e.insurer_id }),
-    onSuccess: (d) => { onChange(d); toast.success("Rangé dans les offres du dossier"); }, onError: (err) => toastError(err),
-  });
-  const email = e.kind === "email_in" || e.kind === "email_out";
-  const stored = new Set(q.files.map((f) => f.name));
+/** « Relance 1 automatique le 13/11 à 10:20 » sous le nom de la compagnie (ou annulées / à programmer). */
+function FollowupLine({ c, onEmails, onToggle }: { c: QuoteCompany; onEmails: () => void; onToggle: (enabled: boolean) => void }) {
+  const waiting = c.rows.filter((r) => (r.status === "sent" || r.status === "reminded") && r.reminders_sent < 2);
+  if (!waiting.length) return null;
+  if (c.next_followup_at) {
+    const n = Math.min(...c.rows.filter((r) => r.next_followup_at).map((r) => r.reminders_sent)) + 1;
+    return (
+      <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs">
+        <button onClick={onEmails} className="inline-flex items-center gap-1 text-primary hover:underline"><Clock className="size-3" />
+          Relance {n} automatique le {formatDayTime(c.next_followup_at)}</button>
+        <button onClick={() => onToggle(false)} className="text-muted-foreground hover:text-destructive hover:underline">Annuler</button>
+      </p>
+    );
+  }
   return (
-    <li className="relative">
-      <span className={cn("absolute -left-[1.85rem] top-0 flex size-6 items-center justify-center rounded-full border bg-card",
-        e.kind === "email_in" ? "text-brand" : e.kind === "note" ? "text-warning" : "text-muted-foreground")}><Icon className="size-3.5" /></span>
-      <p className={cn("text-sm", e.kind === "note" && "whitespace-pre-wrap rounded-md bg-muted/60 px-3 py-2")}>{e.text}</p>
-      {email && e.data?.subject && (
-        <div className="mt-1.5 rounded-md border px-3 py-2 text-sm">
-          <button className="w-full text-left font-medium hover:text-primary" onClick={() => setOpen(!open)}>{e.data.subject}</button>
-          {open && e.data.body && <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{e.data.body}</p>}
-          {e.kind === "email_in" && (e.data.attachments?.length ?? 0) > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {e.data.attachments!.map((a) => {
-                const name = typeof a === "string" ? a : a.name;
-                const can = typeof a !== "string" && e.mine && e.data?.uid != null;
-                return (
-                  <span key={name} className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs">
-                    <Paperclip className="size-3" />{name}
-                    {stored.has(name) ? <Check className="size-3 text-success" /> : can && (
-                      <button className="font-medium text-primary hover:underline" disabled={store.isPending} onClick={() => store.mutate((a as { index: number }).index)}>Ranger comme offre</button>
-                    )}
-                  </span>
-                );
-              })}
-            </div>
-          )}
-          {e.kind === "email_in" && e.mine && e.data.uid != null && (
-            <Link to={`/inbox?folder=${encodeURIComponent(e.data.folder ?? "INBOX")}&uid=${e.data.uid}`} className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline">
-              <Inbox className="size-3" /> Ouvrir dans la boîte mail <ExternalLink className="size-3" />
-            </Link>
-          )}
+    <p className="mt-0.5 text-xs text-muted-foreground">
+      {c.auto_followups ? "Relances automatiques non programmées" : "Relances automatiques annulées"} ·{" "}
+      <button onClick={() => onToggle(true)} className="text-primary hover:underline">{c.auto_followups ? "Programmer" : "Réactiver"}</button>
+    </p>
+  );
+}
+
+/** L'email tel que la compagnie le recevra. */
+function MailPreview({ pv, loading }: { pv: QuotePreview; loading?: boolean }) {
+  return (
+    <div className={cn("overflow-hidden rounded-lg border bg-card text-sm", loading && "opacity-60")}>
+      {pv.test_mode && <p className="bg-warning/15 px-4 py-1.5 text-xs text-warning">Mode test : l'email partira vers votre propre adresse, pas vers la compagnie.</p>}
+      <div className="space-y-0.5 border-b bg-muted/40 px-4 py-3 text-xs">
+        <p><span className="text-muted-foreground">De :</span> {pv.from_name} &lt;{pv.from_email}&gt;</p>
+        <p><span className="text-muted-foreground">À :</span> {pv.to.join(", ")}</p>
+        {pv.cc && <p><span className="text-muted-foreground">Cc :</span> {pv.cc}</p>}
+        <p className="pt-1 text-sm font-semibold">{pv.subject}</p>
+      </div>
+      <div className="max-h-[55vh] overflow-y-auto whitespace-pre-wrap px-4 py-3 leading-relaxed">{pv.body}</div>
+      {pv.attachments.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 border-t px-4 py-2.5">
+          {pv.attachments.map((n) => <span key={n} className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs"><Paperclip className="size-3" />{n}</span>)}
         </div>
       )}
-      <p className="mt-1 text-xs text-muted-foreground">{formatDayTime(e.ts)}{e.user_name && ` · ${e.user_name}`}</p>
-    </li>
+    </div>
+  );
+}
+
+/** Les emails échangés avec une compagnie (envoyés, reçus) et les relances automatiques prévues. */
+function CompanyEmailsDialog({ q, companyId, onClose, onChange }: { q: QuoteDetail; companyId: number | null; onClose: () => void; onChange: (d: QuoteDetail) => void }) {
+  const qc = useQueryClient();
+  const company = q.companies.find((c) => c.company_id === companyId) ?? null;
+  const { data } = useQuery({ queryKey: ["quote-emails", q.id, companyId, q.updated_at], queryFn: () => api.quoteCompanyEmails(q.id, companyId!), enabled: companyId != null });
+  const [mail, setMail] = useState<MailTarget | null>(null);
+  const toggle = useMutation({
+    mutationFn: (enabled: boolean) => api.quoteFollowups(q.id, companyId!, enabled),
+    onSuccess: (d) => { onChange(d); qc.invalidateQueries({ queryKey: ["quote-emails", q.id, companyId] }); }, onError: (e) => toastError(e),
+  });
+  const store = useMutation({
+    mutationFn: ({ m, index }: { m: QuoteMail; index: number }) => api.quoteFileFromMail(q.id, { folder: m.folder!, uid: m.uid!, index, kind: "offer", insurer_id: m.insurer_id }),
+    onSuccess: (d) => { onChange(d); toast.success("Rangé dans les offres du dossier"); }, onError: (err) => toastError(err),
+  });
+  const stored = new Set(q.files.map((f) => f.name));
+  return (
+    <Dialog open={companyId != null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent side="right" className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{company?.company ?? "Compagnie"} · emails du dossier</DialogTitle>
+          <DialogDescription>Les emails envoyés et reçus pour ce dossier, et les relances automatiques prévues.</DialogDescription>
+        </DialogHeader>
+        {!data ? <Skeleton className="h-96" /> : (
+          <div className="space-y-5">
+            {data.upcoming.length > 0 && (
+              <section className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold">Relances prévues</p>
+                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => toggle.mutate(false)}>Annuler les relances</Button>
+                </div>
+                {data.upcoming.map((u) => (
+                  <MailItem key={u.n} title={`Relance ${u.n} · le ${formatDayTime(u.at)}`} tone="planned" subject={u.subject} body={u.body}
+                    meta={`À ${u.to.join(", ")}${q.branches.length > 1 ? ` · ${u.branches.join(", ")}` : ""}`}
+                    action={u.n === data.upcoming[0].n && company ? <Button size="sm" variant="outline" onClick={() => setMail({ company, ids: u.insurer_ids })}><Send /> Envoyer maintenant (modifiable)</Button> : null} />
+                ))}
+              </section>
+            )}
+            {!data.upcoming.length && !data.auto_followups && company?.rows.some((r) => r.status === "sent" || r.status === "reminded") && (
+              <p className="flex items-center justify-between rounded-md bg-muted/60 px-3 py-2 text-sm">Relances automatiques annulées.
+                <Button size="sm" variant="outline" onClick={() => toggle.mutate(true)}>Réactiver</Button></p>
+            )}
+            <section className="space-y-2">
+              <p className="text-sm font-semibold">Échanges</p>
+              {data.items.length === 0 && <p className="text-sm text-muted-foreground">Aucun email pour l'instant.</p>}
+              {[...data.items].reverse().map((m) => (
+                <MailItem key={m.id} title={m.title} tone={m.direction} subject={m.subject ?? ""} body={m.body ?? ""}
+                  meta={`${formatDayTime(m.ts)} · ${m.direction === "out" ? `À ${(m.to ?? []).join(", ")}` : `De ${m.from ?? ""}`}${m.test_mode ? " · mode test" : ""}`}
+                  extra={m.attachments.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {m.attachments.map((a) => {
+                        const name = typeof a === "string" ? a : a.name;
+                        const can = m.direction === "in" && typeof a !== "string" && m.mine && m.uid != null;
+                        return (
+                          <span key={name} className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs"><Paperclip className="size-3" />{name}
+                            {stored.has(name) ? <Check className="size-3 text-success" /> : can && (
+                              <button className="font-medium text-primary hover:underline" disabled={store.isPending} onClick={() => store.mutate({ m, index: (a as { index: number }).index })}>Ranger comme offre</button>)}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                  action={m.direction === "in" && m.mine && m.uid != null ? (
+                    <Link to={`/inbox?folder=${encodeURIComponent(m.folder ?? "INBOX")}&uid=${m.uid}`} className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                      <Inbox className="size-3" /> Ouvrir dans la boîte mail <ExternalLink className="size-3" /></Link>) : null} />
+              ))}
+            </section>
+          </div>
+        )}
+        <ConsultDialog q={q} target={mail} onClose={() => setMail(null)} onChange={(d) => { onChange(d); qc.invalidateQueries({ queryKey: ["quote-emails", q.id, companyId] }); }} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MailItem({ title, tone, subject, body, meta, extra, action }: {
+  title: string; tone: "out" | "in" | "planned"; subject: string; body: string; meta: string; extra?: React.ReactNode; action?: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(tone === "planned");
+  const Icon = tone === "in" ? ArrowDownLeft : tone === "planned" ? Clock : Send;
+  return (
+    <div className={cn("rounded-lg border px-3 py-2.5 text-sm", tone === "planned" && "border-dashed bg-muted/30")}>
+      <button className="flex w-full items-start gap-2 text-left" onClick={() => setOpen(!open)}>
+        <Icon className={cn("mt-0.5 size-4 shrink-0", tone === "in" ? "text-brand" : tone === "planned" ? "text-primary" : "text-muted-foreground")} />
+        <span className="min-w-0 flex-1"><span className="font-medium">{title}</span><span className="block truncate text-xs text-muted-foreground">{meta}</span></span>
+      </button>
+      {open && (
+        <div className="mt-2 pl-6">
+          <p className="font-medium">{subject}</p>
+          <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{body}</p>
+        </div>
+      )}
+      {extra && <div className="pl-6">{extra}</div>}
+      {action && <div className="mt-2 pl-6">{action}</div>}
+    </div>
   );
 }

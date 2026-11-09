@@ -171,7 +171,9 @@ def test_starter_text_fix_applies_only_if_untouched(db):
         c10.body_template = c10.body_template + "\\nMon ajout."                 # C10 retouché à la main
         r = starter_data.apply_sequences(s)
         s.commit()
-        assert r["texts_updated"] == 1
+        assert r["texts_updated"] == len(data["replace_texts"]) - 1   # tous sauf C10, retouché à la main
+        c1 = s.scalars(select(Step).join(Sequence).where(Sequence.name.like("C1 %"))).one().body_template
+        assert "[Garanties souhaitées]" not in c1 and "sinistralité" not in c1
         c8 = s.scalars(select(Step).join(Sequence).where(Sequence.name.like("C8%"))).one().body_template
         assert "Objets de valeur" not in c8 and "Valeur du contenu" in c8
         assert "Maître d'ouvrage" in s.scalars(select(Step).join(Sequence).where(Sequence.name.like("C10%"))).one().body_template

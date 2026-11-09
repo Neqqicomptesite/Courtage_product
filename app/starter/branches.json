@@ -17,12 +17,6 @@
      "placeholder": "Nombre de véhicules"
     },
     {
-     "key": "garanties",
-     "label": "Garanties souhaitées",
-     "placeholder": "Garanties souhaitées",
-     "hint": "Tous risques, tiers, bris de glace…"
-    },
-    {
      "key": "date_effet",
      "label": "Date d'effet souhaitée",
      "type": "date",
@@ -31,7 +25,7 @@
     }
    ],
    "docs": [
-    "Liste du parc (immatriculation, marque, usage, mise en circulation, valeur)",
+    "Liste du parc (immatriculation, marque, usage, mise en circulation, valeur, garanties souhaitées par véhicule)",
     "Relevé de sinistralité des 3 dernières années"
    ]
   },

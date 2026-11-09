@@ -463,6 +463,9 @@ class QuoteInsurer(Base):
     sent_by: Mapped[int | None] = mapped_column(ForeignKey("app_user.id", ondelete="SET NULL"))
     reminders_sent: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     last_message_id: Mapped[str | None] = mapped_column(String(255))  # pour relancer dans le même fil
+    # relances automatiques (comme une campagne) : prochaine relance prévue, désactivables
+    next_followup_at: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
+    auto_followups: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     first_subject: Mapped[str | None] = mapped_column(Text)
     replied_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     offer_premium: Mapped[int | None] = mapped_column(Integer)          # MAD par an

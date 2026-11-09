@@ -66,6 +66,9 @@ def start() -> None:
                 max_instances=1, coalesce=True)
     sch.add_job(_safe(for_each_user(digest.maybe_send), "récapitulatif"), "interval", seconds=60, id="digest",
                 name="récapitulatif quotidien", max_instances=1, coalesce=True)
+    from app import quotes  # dossiers de cotation : relances automatiques des compagnies
+    sch.add_job(_safe(for_each_user(quotes.run_due_followups), "relances des dossiers"), "interval", seconds=60,
+                id="quote_followups", name="relances des dossiers", max_instances=1, coalesce=True)
     from app.paths import is_server_mode
     # V2.20 : vérifiée toutes les heures (faite si la dernière a plus de 20 h), même si le PC est éteint le soir.
     # V3 : sur le serveur, la base PostgreSQL est sauvegardée par deploy/backup.sh (systemd).
