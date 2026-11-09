@@ -75,21 +75,25 @@ def _from_iso(v: str | None) -> datetime | None:
     return datetime.fromisoformat(v) if v else None
 
 
+def _sequence_sends(stmt, mb: Mailbox):
+    """Emails de séquence partis de cette boîte. V3.4.3 : y compris ceux d'une campagne supprimée
+    (ou d'un contact retiré) : le lien vers la campagne a disparu, la boîte est lue sur le message.
+    Les emails écrits à la main (boîte mail) n'ont pas d'étape et ne comptent pas, comme avant."""
+    return (stmt.outerjoin(Enrollment, Enrollment.id == Message.enrollment_id)
+            .outerjoin(Campaign, Campaign.id == Enrollment.campaign_id)
+            .where(Message.direction == "out", Message.step_position.is_not(None),
+                   func.coalesce(Campaign.mailbox_id, Message.mailbox_id) == mb.id))
+
+
 def _sent_query(mb: Mailbox):
-    return (select(func.count(Message.id))
-            .join(Enrollment, Enrollment.id == Message.enrollment_id)
-            .join(Campaign, Campaign.id == Enrollment.campaign_id)
-            .where(Message.direction == "out", Message.sent_at.is_not(None), Campaign.mailbox_id == mb.id))
+    return _sequence_sends(select(func.count(Message.id)), mb).where(Message.sent_at.is_not(None))
 
 
 def effective_daily_cap(s: Session, mb: Mailbox, now: datetime) -> int:
     """Plafond du jour, montée en charge comprise (§4)."""
     cap = mb.daily_cap
     if settings_store.get(s, "rampup_enabled"):
-        first = s.scalar(select(func.min(Message.sent_at))
-                         .join(Enrollment, Enrollment.id == Message.enrollment_id)
-                         .join(Campaign, Campaign.id == Enrollment.campaign_id)
-                         .where(Message.direction == "out", Campaign.mailbox_id == mb.id))
+        first = s.scalar(_sequence_sends(select(func.min(Message.sent_at)), mb))
         days = settings_store.get(s, "rampup_days")
         if first is None or (to_local(now).date() - to_local(first).date()).days < days:
             cap = min(cap, settings_store.get(s, "rampup_per_day"))

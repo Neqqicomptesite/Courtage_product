@@ -6,7 +6,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app import contacts_service as cs
@@ -214,6 +214,27 @@ def activate(s: Session, camp: Campaign, include_overlapping: bool, now: datetim
                         + (" (mode test)" if report.test_mode else " – ENVOIS RÉELS")
                         + (f", démarrage le {fmt_local(camp.start_at)}" if camp.start_at and camp.start_at > now else "")))
     return len(report.eligible)
+
+
+def delete(s: Session, camp: Campaign) -> int:
+    """Supprime une campagne, brouillon ou lancée (V3.4.3) ; renvoie le nombre d'emails déjà partis.
+    Les envois prévus disparaissent. Les emails partis et les réponses restent dans la boîte mail et
+    sur la fiche du contact, rattachés à la boîte d'envoi (ils comptent toujours dans le plafond du jour)."""
+    enr_ids = select(Enrollment.id).where(Enrollment.campaign_id == camp.id)
+    if s.scalar(select(func.count(Enrollment.id)).where(Enrollment.campaign_id == camp.id,
+                                                       Enrollment.status == "sending")):
+        raise ValueError("Un email de cette campagne part en ce moment : réessayez dans une minute.")
+    sent = s.scalar(select(func.count(Message.id)).where(Message.enrollment_id.in_(enr_ids),
+                                                         Message.direction == "out",
+                                                         Message.sent_at.is_not(None))) or 0
+    s.execute(update(Message).where(Message.enrollment_id.in_(enr_ids), Message.mailbox_id.is_(None))
+              .values(mailbox_id=camp.mailbox_id))
+    if camp.status != "draft":
+        s.add(EventLog(level="info", entity="campaign", entity_id=camp.id,
+                       text=f"Campagne « {camp.name} » supprimée"
+                            + (f" ({sent} email(s) déjà envoyé(s) conservé(s))" if sent else "")))
+    s.delete(camp)
+    return sent
 
 
 def has_sent(s: Session, camp: Campaign) -> bool:

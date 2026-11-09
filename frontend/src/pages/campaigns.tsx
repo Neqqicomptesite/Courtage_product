@@ -616,7 +616,7 @@ export function CampaignDetailPage() {
   const action = useMutation({
     mutationFn: (a: "pause" | "resume" | "delete") => api.campaignAction(id, a),
     onSuccess: (_, a) => {
-      if (a === "delete") return navigate("/campaigns");
+      if (a === "delete") { toast.success("Campagne supprimée"); qc.invalidateQueries(); return navigate("/campaigns"); }
       toast.success(a === "pause" ? "Campagne en pause : plus aucun envoi" : "Campagne reprise");
       refresh();
     },
@@ -657,10 +657,8 @@ export function CampaignDetailPage() {
           {data.status === "active" && <Button variant="outline" onClick={() => action.mutate("pause")}><Pause /> Mettre en pause</Button>}
           {data.status === "paused" && <Button onClick={() => action.mutate("resume")}><Play /> Reprendre</Button>}
           {["draft", "active", "paused"].includes(data.status) && !data.started && <Button variant="outline" onClick={() => setPlanning(true)}><CalendarClock /> Démarrage</Button>}
-          {data.status === "draft" && <>
-            <Button variant="outline" onClick={() => setConfirmDelete(true)}><Trash2 /> Supprimer</Button>
-            <Button variant="brand" onClick={() => setChecking(true)}><Rocket /> Vérifier et lancer</Button>
-          </>}
+          <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => setConfirmDelete(true)}><Trash2 /> Supprimer</Button>
+          {data.status === "draft" && <Button variant="brand" onClick={() => setChecking(true)}><Rocket /> Vérifier et lancer</Button>}
         </>}
       />
 
@@ -750,7 +748,15 @@ export function CampaignDetailPage() {
 
       <StartDialog open={planning} onOpenChange={setPlanning} campaignId={data.id} current={data.start_at} onDone={refresh} />
       <EnrollmentEmailsDialog campaignId={data.id} enrollment={peek} onClose={() => setPeek(null)} />
-      <ConfirmDialog open={confirmDelete} onOpenChange={setConfirmDelete} destructive title="Supprimer ce brouillon ?"
+      <ConfirmDialog open={confirmDelete} onOpenChange={setConfirmDelete} destructive pending={action.isPending}
+        title={data.status === "draft" ? "Supprimer ce brouillon ?" : "Supprimer cette campagne ?"}
+        description={data.status === "draft" ? undefined : <>
+          <p>Tous les emails pas encore partis sont annulés et la campagne disparaît de la liste. C'est définitif.</p>
+          <p className="mt-2">{data.indicators.sent_total > 0
+            ? <>Les {data.indicators.sent_total} email(s) déjà envoyé(s) et les réponses restent dans la boîte mail et sur la fiche de chaque contact.</>
+            : <>Aucun email n'est encore parti.</>}</p>
+          {data.status === "active" && <p className="mt-2 text-muted-foreground">Pour arrêter sans rien effacer, utilisez plutôt « Mettre en pause ».</p>}
+        </>}
         confirmLabel="Supprimer" onConfirm={() => action.mutate("delete")} />
     </>
   );

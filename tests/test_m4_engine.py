@@ -9,7 +9,7 @@ from email import message_from_bytes
 from email.header import decode_header, make_header
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app import campaigns_service as camp_svc
 from app import credentials, engine, settings_store
@@ -436,3 +436,52 @@ def test_campaign_pages_flow(client, world):
     assert "En pause" in r.text
     dash = client.get("/classique").text
     assert "Moteur d" in dash and "Envoyés aujourd" in dash
+
+
+def test_delete_launched_campaign_keeps_sent_mails_and_daily_cap(world):
+    """V3.4.3 : une campagne lancée peut être supprimée. Les envois prévus disparaissent ; les emails
+    partis restent (fiche, boîte) et comptent toujours dans le plafond du jour de la boîte."""
+    with get_session() as s:
+        s.scalars(select(Mailbox)).one().daily_cap = 2
+        s.commit()
+    _activate(world["campaign_id"])
+    _run(until=START + timedelta(hours=4))
+    sent = _sent_messages()
+    assert len(sent) == 2
+    with get_session() as s:  # un message ancien (avant V3) n'avait pas de boîte : elle est retrouvée
+        s.get(Message, sent[0].id).mailbox_id = None
+        s.commit()
+    now = START + timedelta(hours=4)
+    with get_session() as s:
+        mb = s.scalars(select(Mailbox)).one()
+        assert engine.counters(s, mb, now)["today"] == 2
+        camp = s.get(Campaign, world["campaign_id"])
+        camp.status = "active"
+        e = s.scalars(select(Enrollment).where(Enrollment.campaign_id == camp.id)).first()
+        e.status = "sending"
+        s.commit()
+    with get_session() as s:  # un email en train de partir : on attend
+        with pytest.raises(ValueError):
+            camp_svc.delete(s, s.get(Campaign, world["campaign_id"]))
+        s.rollback()
+        s.scalars(select(Enrollment).where(Enrollment.status == "sending")).first().status = "waiting"
+        s.commit()
+    with get_session() as s:
+        assert camp_svc.delete(s, s.get(Campaign, world["campaign_id"])) == 2
+        s.commit()
+    with get_session() as s:
+        assert s.get(Campaign, world["campaign_id"]) is None
+        assert s.scalar(select(func.count(Enrollment.id))) == 0
+        kept = list(s.scalars(select(Message).where(Message.direction == "out")))
+        assert len(kept) == 2 and all(m.enrollment_id is None and m.mailbox_id for m in kept)
+        mb = s.scalars(select(Mailbox)).one()
+        assert engine.counters(s, mb, now)["today"] == 2  # le plafond tient toujours
+        assert any("supprimée" in ev.text for ev in s.scalars(select(EventLog)))
+
+
+def test_delete_campaign_api(client, world):
+    _activate(world["campaign_id"])
+    r = client.post(f"/api/campaigns/{world['campaign_id']}/delete", headers=ORIGIN)
+    assert r.status_code == 200 and r.json()["ok"]
+    with get_session() as s:
+        assert s.get(Campaign, world["campaign_id"]) is None

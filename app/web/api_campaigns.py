@@ -285,10 +285,11 @@ def campaign_action(cid: int, action: str):
             camp_svc.pause(s, camp)
         elif action == "resume" and camp.status == "paused":
             camp_svc.resume(s, camp)
-        elif action == "delete":
-            if camp.status != "draft":
-                raise HTTPException(400, "Seul un brouillon peut être supprimé (mettez en pause sinon).")
-            s.delete(camp)
+        elif action == "delete":  # V3.4.3 : aussi une campagne lancée (les emails partis restent)
+            try:
+                camp_svc.delete(s, camp)
+            except ValueError as exc:
+                raise HTTPException(409, str(exc))
         else:
             raise HTTPException(400, "Action impossible dans l'état actuel de la campagne.")
         s.commit()
