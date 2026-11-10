@@ -137,7 +137,8 @@ def test_quotation_templates_by_branch_ready_at_first_open(client, db):
     items = client.get("/api/sequences").json()["items"]
     cot = {q["branch"]: q for q in items if q["category"] == "souscription" and q["branch"]}
     assert set(cot) == {"Flotte", "Accidents du travail", "Prévoyance", "Retraite", "RC professionnelle", "RC exploitation",
-                        "Multirisque", "Multirisque habitation", "Transport", "Tous risques chantier"}
+                        "Multirisque", "Multirisque habitation", "Transport", "Tous risques chantier",
+                        "Automobile", "Multirisque bureau", "RC décennale", "Assurance crédit"}  # V3.5.1
     at = client.get(f"/api/sequences/{cot['Accidents du travail']['id']}").json()
     body = at["steps"][0]["body"]
     assert "[Effectif]" in body and "[Masse salariale]" in body and "[Activité]" in body and at["shared"] is True

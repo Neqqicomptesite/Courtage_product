@@ -4,7 +4,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle, ArrowDownLeft, Clock, ArrowLeft, ArrowUpRight, Bell, Building2, CalendarPlus, Check, CheckCircle2, Circle, ExternalLink,
-  FileCheck2, FileText, Inbox, MailPlus, MessageSquarePlus, MoreHorizontal, Paperclip, Plus, RotateCw, Send, SendHorizontal, StickyNote, Trash2,
+  FileCheck2, FileText, Inbox, MailPlus, MessageSquarePlus, MoreHorizontal, Paperclip, Pencil, Plus, RotateCw, Send, SendHorizontal, StickyNote, Trash2,
   Trophy, Upload, X, XCircle,
 } from "lucide-react";
 import type React from "react";
@@ -41,6 +41,26 @@ const INSURER: Record<InsurerStatus, { label: string; variant: "secondary" | "in
 };
 const MARKS: InsurerStatus[] = ["replied", "offer", "renegotiate", "declined"];
 
+/** V3.5.1 : renommer le dossier (le nom du client tel qu'il apparaît ici et dans les demandes aux compagnies). */
+function DossierName({ name, saving, onSave }: { name: string; saving: boolean; onSave: (n: string) => Promise<unknown> }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(name);
+  if (!editing) return (
+    <span className="group inline-flex items-center gap-1.5">{name}
+      <button type="button" onClick={() => { setValue(name); setEditing(true); }} aria-label="Renommer le dossier" title="Renommer"
+        className="rounded-md p-1 text-muted-foreground opacity-60 transition hover:bg-accent hover:text-foreground group-hover:opacity-100"><Pencil className="size-4" /></button>
+    </span>
+  );
+  return (
+    <form className="inline-flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (value.trim()) void onSave(value.trim()).then(() => setEditing(false), () => undefined); }}>
+      <Input autoFocus value={value} onChange={(e) => setValue(e.target.value)} maxLength={255} aria-label="Nom du dossier"
+        className="h-9 w-[22rem] max-w-[60vw] text-base font-semibold" onKeyDown={(e) => { if (e.key === "Escape") setEditing(false); }} />
+      <Button size="sm" disabled={!value.trim() || saving}>Enregistrer</Button>
+      <Button size="sm" type="button" variant="ghost" onClick={() => setEditing(false)}>Annuler</Button>
+    </form>
+  );
+}
+
 export function QuoteDetailPage() {
   const id = Number(useParams().id);
   const qc = useQueryClient();
@@ -60,7 +80,8 @@ export function QuoteDetailPage() {
   return (
     <>
       <PageHeader back={<Button variant="ghost" size="sm" className="-ml-2" asChild><Link to="/quotes"><ArrowLeft /> Dossiers</Link></Button>}
-        title={<span className="flex flex-wrap items-center gap-x-3 gap-y-1">{data.client_name}<StageBadge stage={data.stage} /></span>}
+        title={<span className="flex flex-wrap items-center gap-x-3 gap-y-1"><DossierName name={data.client_name} saving={update.isPending}
+          onSave={(client_name) => update.mutateAsync({ client_name })} /><StageBadge stage={data.stage} /></span>}
         description={<span className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="font-medium text-foreground">{data.branch_label}</span><span className="tabular">{data.ref}</span>
           {data.owner_name && <span>Suivi par {data.owner_name}</span>}

@@ -597,3 +597,6 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
      retirer une personne ; pas deux séquences à la même personne (collègues compris, 90 jours sans
      réponse, forçable) ; rebonds visibles et nouvelle fiche avec la bonne adresse ; relance des
      sans-réponse d'une campagne ; renommer une campagne ; séquence commune repassée en perso ; colonne Email.
+301. **Repris d'ODDO V3.5.1 (10/11)** : branches de cotation Automobile, Multirisque bureau, RC décennale,
+     Assurance crédit (fiches, documents, modèles C11 à C14) ; renommer un dossier. Taxes et commissions de
+     ces branches pour les contrats : pas encore dans le tableau d'Omar (Assurance crédit ≈ « Crédit »).

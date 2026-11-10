@@ -1,5 +1,5 @@
 {
- "version": 5,
+ "version": 6,
  "remove_sequences": [
   "Prospection PME – 3 étapes",
   "PME",
@@ -600,6 +600,122 @@
      "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation tous risques chantier au profit de notre client [Nom du client].\n\nNature des travaux : [Nature des travaux]\nAdresse du chantier : [Adresse du chantier]\nMontant du marché : [Montant du marché] MAD\nDurée des travaux : [Durée]\nDate de démarrage : [Date de démarrage]\n\nMerci de nous adresser votre meilleure proposition (garanties, franchises, prime), ainsi que la liste des éléments complémentaires éventuellement nécessaires.\n\nBien cordialement,",
      "subjects": [
       "Demande de cotation Tous risques chantier – [Nom du client]"
+     ]
+    },
+    {
+     "delay_days": 3,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe me permets de revenir vers vous concernant la demande de cotation ci-dessous. Pourriez-vous m'indiquer quand nous pourrons recevoir votre proposition ?\n\nBien cordialement,"
+    },
+    {
+     "delay_days": 4,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe relance la demande de cotation ci-dessous : nous devons revenir vers notre client prochainement. Merci de m'indiquer si un élément complémentaire vous est nécessaire.\n\nBien cordialement,"
+    }
+   ]
+  },
+  {
+   "code": "C11",
+   "name": "C11 · Cotation Assurance automobile (1 véhicule)",
+   "category": "souscription",
+   "branch": "Automobile",
+   "steps": [
+    {
+     "delay_days": 0,
+     "business_days": true,
+     "same_thread": false,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation assurance automobile au profit de notre client [Nom du client].\n\nMarque et modèle : [Marque et modèle]\nImmatriculation : [Immatriculation]\nDate de mise en circulation : [Date de mise en circulation]\nValeur du véhicule : [Valeur du véhicule] MAD\nUsage : [Tourisme / Professionnel / Utilitaire]\nConducteur habituel (âge, date du permis) : [Conducteur habituel]\nGaranties souhaitées : [RC seule / RC + vol et incendie / Tous risques]\nDate d'effet souhaitée : [Date d'effet]\n\nMerci de nous adresser votre meilleure proposition (garanties, franchises, prime), ainsi que la liste des éléments complémentaires éventuellement nécessaires.\n\nBien cordialement,",
+     "subjects": [
+      "Demande de cotation Assurance automobile – [Nom du client]"
+     ]
+    },
+    {
+     "delay_days": 3,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe me permets de revenir vers vous concernant la demande de cotation ci-dessous. Pourriez-vous m'indiquer quand nous pourrons recevoir votre proposition ?\n\nBien cordialement,"
+    },
+    {
+     "delay_days": 4,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe relance la demande de cotation ci-dessous : nous devons revenir vers notre client prochainement. Merci de m'indiquer si un élément complémentaire vous est nécessaire.\n\nBien cordialement,"
+    }
+   ]
+  },
+  {
+   "code": "C12",
+   "name": "C12 · Cotation Multirisque bureau",
+   "category": "souscription",
+   "branch": "Multirisque bureau",
+   "steps": [
+    {
+     "delay_days": 0,
+     "business_days": true,
+     "same_thread": false,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation multirisque bureau au profit de notre client [Nom du client].\n\nActivité : [Activité]\nAdresse : [Adresse]\nSuperficie : [Superficie] m²\nValeur du contenu : [Valeur du contenu] MAD\nValeur du matériel informatique : [Valeur du matériel informatique] MAD\nStatut : [Propriétaire / Locataire]\nDate d'effet souhaitée : [Date d'effet]\n\nMerci de nous adresser votre meilleure proposition (garanties, franchises, prime), ainsi que la liste des éléments complémentaires éventuellement nécessaires.\n\nBien cordialement,",
+     "subjects": [
+      "Demande de cotation Multirisque bureau – [Nom du client]"
+     ]
+    },
+    {
+     "delay_days": 3,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe me permets de revenir vers vous concernant la demande de cotation ci-dessous. Pourriez-vous m'indiquer quand nous pourrons recevoir votre proposition ?\n\nBien cordialement,"
+    },
+    {
+     "delay_days": 4,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe relance la demande de cotation ci-dessous : nous devons revenir vers notre client prochainement. Merci de m'indiquer si un élément complémentaire vous est nécessaire.\n\nBien cordialement,"
+    }
+   ]
+  },
+  {
+   "code": "C13",
+   "name": "C13 · Cotation RC décennale",
+   "category": "souscription",
+   "branch": "RC décennale",
+   "steps": [
+    {
+     "delay_days": 0,
+     "business_days": true,
+     "same_thread": false,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation responsabilité civile décennale au profit de notre client [Nom du client].\n\nNature des travaux : [Nature des travaux]\nAdresse du chantier : [Adresse du chantier]\nMontant du marché : [Montant du marché] MAD\nMaître d'ouvrage : [Maître d'ouvrage]\nBureau de contrôle : [Bureau de contrôle]\nDate de démarrage : [Date de démarrage]\nDurée des travaux : [Durée]\n\nMerci de nous adresser votre meilleure proposition (garanties, franchises, prime), ainsi que la liste des éléments complémentaires éventuellement nécessaires.\n\nBien cordialement,",
+     "subjects": [
+      "Demande de cotation RC décennale – [Nom du client]"
+     ]
+    },
+    {
+     "delay_days": 3,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe me permets de revenir vers vous concernant la demande de cotation ci-dessous. Pourriez-vous m'indiquer quand nous pourrons recevoir votre proposition ?\n\nBien cordialement,"
+    },
+    {
+     "delay_days": 4,
+     "business_days": true,
+     "same_thread": true,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nJe relance la demande de cotation ci-dessous : nous devons revenir vers notre client prochainement. Merci de m'indiquer si un élément complémentaire vous est nécessaire.\n\nBien cordialement,"
+    }
+   ]
+  },
+  {
+   "code": "C14",
+   "name": "C14 · Cotation Assurance crédit",
+   "category": "souscription",
+   "branch": "Assurance crédit",
+   "steps": [
+    {
+     "delay_days": 0,
+     "business_days": true,
+     "same_thread": false,
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation assurance-crédit (couverture du risque d'impayés clients) au profit de notre client [Nom du client].\n\nActivité : [Activité]\nChiffre d'affaires annuel : [Chiffre d'affaires] MAD\nChiffre d'affaires réalisé à crédit : [Chiffre d'affaires réalisé à crédit] MAD\nNombre de clients (acheteurs) : [Nombre de clients (acheteurs)]\nDélais de paiement accordés : [Délais de paiement]\nRépartition Maroc / export : [Répartition Maroc / export]\nImpayés des 3 dernières années : [Impayés (3 ans)]\nDate d'effet souhaitée : [Date d'effet]\n\nMerci de nous adresser votre meilleure proposition (garanties, franchises, prime), ainsi que la liste des éléments complémentaires éventuellement nécessaires.\n\nBien cordialement,",
+     "subjects": [
+      "Demande de cotation Assurance crédit – [Nom du client]"
      ]
     },
     {

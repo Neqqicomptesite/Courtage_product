@@ -1,6 +1,6 @@
 {
  "_doc": "Fiches de renseignements par branche (dossiers de cotation). « placeholder » = texte entre crochets dans le modèle d'email de la branche ([Activité]…), rempli automatiquement avec la valeur du champ. « docs » = documents à demander au client. Le libellé de la branche doit être identique à celui des modèles (Séquences → Souscription). « optional » : champ facultatif ; vide, la ligne qui le contient est retirée de l'email.",
- "version": 2,
+ "version": 3,
  "branches": [
   {
    "name": "Flotte",
@@ -520,6 +520,233 @@
    "docs": [
     "Marché ou contrat de travaux",
     "Planning des travaux"
+   ]
+  },
+  {
+   "name": "Automobile",
+   "fields": [
+    {
+     "key": "marque_modele",
+     "label": "Marque et modèle",
+     "placeholder": "Marque et modèle"
+    },
+    {
+     "key": "immatriculation",
+     "label": "Immatriculation",
+     "placeholder": "Immatriculation"
+    },
+    {
+     "key": "date_circulation",
+     "label": "Date de mise en circulation",
+     "placeholder": "Date de mise en circulation",
+     "type": "date"
+    },
+    {
+     "key": "valeur_vehicule",
+     "label": "Valeur du véhicule",
+     "placeholder": "Valeur du véhicule",
+     "type": "number"
+    },
+    {
+     "key": "usage",
+     "label": "Usage",
+     "placeholder": "Tourisme / Professionnel / Utilitaire",
+     "type": "choice",
+     "options": [
+      "Tourisme (usage personnel)",
+      "Usage professionnel",
+      "Utilitaire (transport de marchandises)"
+     ]
+    },
+    {
+     "key": "conducteur",
+     "label": "Conducteur habituel (âge, date du permis)",
+     "placeholder": "Conducteur habituel"
+    },
+    {
+     "key": "garanties",
+     "label": "Garanties souhaitées",
+     "placeholder": "RC seule / RC + vol et incendie / Tous risques",
+     "type": "choice",
+     "options": [
+      "Responsabilité civile seule",
+      "RC + vol et incendie",
+      "Tous risques"
+     ]
+    },
+    {
+     "key": "date_effet",
+     "label": "Date d'effet souhaitée",
+     "type": "date",
+     "placeholder": "Date d'effet",
+     "optional": true
+    }
+   ],
+   "docs": [
+    "Carte grise",
+    "Permis de conduire du conducteur habituel",
+    "Attestation de l'assureur actuel (sinistres des dernières années)"
+   ]
+  },
+  {
+   "name": "Multirisque bureau",
+   "fields": [
+    {
+     "key": "activite",
+     "label": "Activité",
+     "placeholder": "Activité"
+    },
+    {
+     "key": "adresse",
+     "label": "Adresse",
+     "placeholder": "Adresse"
+    },
+    {
+     "key": "superficie",
+     "label": "Superficie",
+     "type": "number",
+     "unit": "m²",
+     "placeholder": "Superficie"
+    },
+    {
+     "key": "valeur_contenu",
+     "label": "Valeur du contenu",
+     "type": "number",
+     "unit": "MAD",
+     "placeholder": "Valeur du contenu"
+    },
+    {
+     "key": "valeur_informatique",
+     "label": "Valeur du matériel informatique",
+     "placeholder": "Valeur du matériel informatique",
+     "type": "number"
+    },
+    {
+     "key": "statut",
+     "label": "Statut",
+     "type": "choice",
+     "options": [
+      "Propriétaire",
+      "Locataire"
+     ],
+     "placeholder": "Propriétaire / Locataire"
+    },
+    {
+     "key": "date_effet",
+     "label": "Date d'effet souhaitée",
+     "type": "date",
+     "placeholder": "Date d'effet",
+     "optional": true
+    }
+   ],
+   "docs": [
+    "Inventaire du mobilier et du matériel informatique (si disponible)",
+    "Photos des locaux"
+   ]
+  },
+  {
+   "name": "RC décennale",
+   "fields": [
+    {
+     "key": "nature_travaux",
+     "label": "Nature des travaux",
+     "placeholder": "Nature des travaux"
+    },
+    {
+     "key": "adresse_chantier",
+     "label": "Adresse du chantier",
+     "placeholder": "Adresse du chantier"
+    },
+    {
+     "key": "montant_marche",
+     "label": "Montant du marché",
+     "type": "number",
+     "unit": "MAD",
+     "placeholder": "Montant du marché"
+    },
+    {
+     "key": "maitre_ouvrage",
+     "label": "Maître d'ouvrage",
+     "placeholder": "Maître d'ouvrage"
+    },
+    {
+     "key": "bureau_controle",
+     "label": "Bureau de contrôle",
+     "placeholder": "Bureau de contrôle"
+    },
+    {
+     "key": "date_demarrage",
+     "label": "Date de démarrage",
+     "type": "date",
+     "placeholder": "Date de démarrage"
+    },
+    {
+     "key": "duree",
+     "label": "Durée des travaux",
+     "placeholder": "Durée",
+     "hint": "Ex. 18 mois"
+    }
+   ],
+   "docs": [
+    "Marché ou contrat de travaux",
+    "Plans et descriptif de l'ouvrage",
+    "Convention ou rapport du bureau de contrôle"
+   ]
+  },
+  {
+   "name": "Assurance crédit",
+   "fields": [
+    {
+     "key": "activite",
+     "label": "Activité",
+     "placeholder": "Activité"
+    },
+    {
+     "key": "ca",
+     "label": "Chiffre d'affaires annuel",
+     "type": "number",
+     "unit": "MAD",
+     "placeholder": "Chiffre d'affaires"
+    },
+    {
+     "key": "ca_credit",
+     "label": "Chiffre d'affaires réalisé à crédit",
+     "placeholder": "Chiffre d'affaires réalisé à crédit",
+     "type": "number"
+    },
+    {
+     "key": "nb_clients",
+     "label": "Nombre de clients (acheteurs)",
+     "placeholder": "Nombre de clients (acheteurs)",
+     "type": "number"
+    },
+    {
+     "key": "delais",
+     "label": "Délais de paiement accordés",
+     "placeholder": "Délais de paiement"
+    },
+    {
+     "key": "repartition",
+     "label": "Répartition Maroc / export",
+     "placeholder": "Répartition Maroc / export"
+    },
+    {
+     "key": "impayes",
+     "label": "Impayés des 3 dernières années",
+     "placeholder": "Impayés (3 ans)"
+    },
+    {
+     "key": "date_effet",
+     "label": "Date d'effet souhaitée",
+     "type": "date",
+     "placeholder": "Date d'effet",
+     "optional": true
+    }
+   ],
+   "docs": [
+    "Balance âgée clients",
+    "Liste des principaux clients avec leurs encours",
+    "Historique des impayés des 3 dernières années"
    ]
   }
  ]

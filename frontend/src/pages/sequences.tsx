@@ -25,7 +25,8 @@ export const CATEGORIES: { value: SequenceCategory; label: string; hint: string 
 
 /** V3 : branches des demandes de cotation (sous-onglets de Souscription), dans cet ordre. */
 export const BRANCHES = ["Flotte", "Accidents du travail", "Prévoyance", "Retraite", "RC professionnelle", "RC exploitation",
-  "Multirisque", "Multirisque habitation", "Transport", "Tous risques chantier"];
+  "Multirisque", "Multirisque habitation", "Transport", "Tous risques chantier",
+  "Automobile", "Multirisque bureau", "RC décennale", "Assurance crédit"];  // V3.5.1
 
 export function SequencesPage() {
   const qc = useQueryClient();

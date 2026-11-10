@@ -23,7 +23,7 @@ def test_starter_sequences_fresh_install(db):
         _setup(s)
         r = starter_data.apply_sequences(s)
         s.commit()
-        assert r["sequences_created"] == len(data["sequences"]) == 21  # V3 : + 10 cotations par branche
+        assert r["sequences_created"] == len(data["sequences"]) == 25  # V3 : + 10 cotations par branche ; V3.5.1 : + 4
         assert r["sequences_removed"] == 1 and r["blocks_filled"] == 12  # V3.4 : + 2 textes génériques
         names = set(s.scalars(select(Sequence.name)))
         assert "Prospection PME – 3 étapes" not in names
@@ -32,7 +32,7 @@ def test_starter_sequences_fresh_install(db):
         assert not any(render.TODO_MARKER in b.body for b in s.scalars(select(ContentBlock)))
         # deuxième passage : rien ne bouge
         assert starter_data.apply_sequences(s).get("skipped")
-        assert s.scalar(select(func.count(Sequence.id))) == 21
+        assert s.scalar(select(func.count(Sequence.id))) == 25
 
 
 def test_starter_sequences_render(db):
@@ -83,7 +83,7 @@ def test_starter_keeps_edited_and_used(db):
         r = starter_data.apply_sequences(s)
         s.commit()
         assert r["sequences_removed"] == 2 and r["sequences_kept"] == ["PME"]
-        assert r["sequences_created"] == 20 and r["blocks_filled"] == 11
+        assert r["sequences_created"] == 24 and r["blocks_filled"] == 11
         assert s.scalars(select(ContentBlock).where(ContentBlock.key == "FIN")).one().body == "Mon texte à moi."
         names = list(s.scalars(select(Sequence.name)))
         assert names.count("G1 · Demande d'avenant") == 1 and "PME" in names and "Délégation" not in names
