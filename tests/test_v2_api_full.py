@@ -144,9 +144,13 @@ def test_campaign_wizard_flow(client, dataset):  # noqa: F811
     free = {c["email"] for c in detail["candidates"] if not c["excluded"] and not c["other_campaigns"]}
     # c0 et c1 ont fini leur séquence dans « Vague 1 » (statut « a répondu », plus en cours) : éligibles.
     assert free == {"nouveau@lead.ma", "c0@entreprise0.ma", "c1@entreprise1.ma"}
+    # V3.5 : c0 et c1 ont reçu « Vague 1 » il y a moins de 90 jours sans répondre : mis de côté…
     rep = client.get(f"/api/campaigns/{cid}/activation").json()
+    assert rep["eligible"] == 1 and {c["email"] for c in rep["recent"]} == {"c0@entreprise0.ma", "c1@entreprise1.ma"}
+    # … sauf si on choisit de les inclure quand même
+    rep = client.get(f"/api/campaigns/{cid}/activation?recent=true").json()
     assert rep["eligible"] == 3 and not rep["blocked"] and rep["test_mode"] is True
-    assert client.post(f"/api/campaigns/{cid}/activate", json={}, headers=ORIGIN).json() == {"enrolled": 3}
+    assert client.post(f"/api/campaigns/{cid}/activate", json={"recent": True}, headers=ORIGIN).json() == {"enrolled": 3}
     assert client.post(f"/api/campaigns/{cid}/pause", headers=ORIGIN).json()["ok"]
     assert client.post(f"/api/campaigns/{cid}/pause", headers=ORIGIN).status_code == 400
     assert client.post(f"/api/campaigns/{cid}/resume", headers=ORIGIN).json()["ok"]

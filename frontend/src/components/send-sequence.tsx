@@ -7,7 +7,7 @@ import {
   AlertTriangle, ArrowLeft, ArrowRight, CalendarClock, CheckCircle2, Eye, FlaskConical, Mail, Loader2, Paperclip, PenLine, Rocket, RotateCcw, Search, Send, Users, X, XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { toastError } from "@/components/common";
@@ -56,7 +56,9 @@ export function SendSequenceDialog() {
   const [upTo, setUpTo] = useState<number | null>(null);
   // V2.25 : tout envoi passe par « Vérifier avant d'envoyer » (les emails exacts) ; on revient d'où on venait
   const [reviewFrom, setReviewFrom] = useState<Step>("mode");
-  const review = (from: Step) => { setReviewFrom(from); setStep("review"); };
+  // V3.5 : combien recevront vraiment la séquence, d'après la vérification (null = pas encore calculé)
+  const [reviewOk, setReviewOk] = useState<number | null>(null);
+  const review = (from: Step) => { setReviewFrom(from); setReviewOk(null); setStep("review"); };
   const { data: holesData } = useQuery({ queryKey: ["holes", seqId, upTo], queryFn: () => api.sequenceHoles(seqId!, upTo), enabled: open && !!seqId });
   const seqHoles = holesData?.holes ?? [];
 
@@ -209,7 +211,8 @@ export function SendSequenceDialog() {
 
         {/* ---------------------------------------------------- V2.25 : vérifier les emails exacts */}
         {step === "review" && seqId && (
-          <ReviewView seqId={seqId} body={{ contact_ids: people.map((p) => p.id), ...(() => { const pl = payload(people.map((p) => p.id)); return { overrides: pl.overrides, ...(pl.shared ?? {}) }; })(), max_steps: upTo }} />
+          <ReviewView seqId={seqId} onReady={setReviewOk}
+            onRemove={people.length > 1 ? (ids) => { setReviewOk(null); setPeople(people.filter((p) => !ids.includes(p.id))); } : undefined} body={{ contact_ids: people.map((p) => p.id), ...(() => { const pl = payload(people.map((p) => p.id)); return { overrides: pl.overrides, ...(pl.shared ?? {}) }; })(), max_steps: upTo }} />
         )}
 
         {/* ---------------------------------------------------- résultat partiel */}
@@ -235,9 +238,17 @@ export function SendSequenceDialog() {
               <Button onClick={() => review("personalize")}><Eye /> Vérifier avant d'envoyer</Button>
             )}
             {step === "review" && (
-              <Button disabled={sending} onClick={() => void send()}>
-                {sending ? <Loader2 className="animate-spin" /> : <Send />} {people.length > 1 ? `Envoyer à ${people.length} personnes` : "Confirmer l'envoi"}
-              </Button>
+              <>
+                {reviewOk === 0 && seqId && (
+                  <Button variant="outline" asChild><Link to={`/sequences/${seqId}`} onClick={() => setOpen(false)}>Compléter la séquence</Link></Button>
+                )}
+                {/* V3.5 : le bouton annonçait « Envoyer à 36 personnes » alors qu'aucune ne recevrait rien */}
+                <Button disabled={sending || reviewOk === null || reviewOk === 0} onClick={() => void send()}
+                  title={reviewOk === 0 ? "Aucun email ne peut partir : corrigez d'abord ce qui est signalé en rouge" : undefined}>
+                  {sending ? <Loader2 className="animate-spin" /> : <Send />}
+                  {reviewOk === 0 ? "Rien à envoyer" : people.length > 1 ? `Envoyer à ${reviewOk ?? people.length} personne${(reviewOk ?? people.length) > 1 ? "s" : ""}` : "Confirmer l'envoi"}
+                </Button>
+              </>
             )}
             {step === "result" && result && (
               <>
@@ -493,9 +504,10 @@ function Schedule({ seqId, upTo = null }: { seqId: number; upTo?: number | null 
 
 /** V2.25 : « Vérifier avant d'envoyer » : les emails EXACTS qui partiront, personne par personne
  *  (objet, texte avec signature, pièces jointes, date prévue), calculés par le serveur comme à l'envoi. */
-function ReviewView({ seqId, body }: { seqId: number; body: SendPayload }) {
+function ReviewView({ seqId, body, onReady, onRemove }: { seqId: number; body: SendPayload; onReady?: (ok: number) => void; onRemove?: (ids: number[]) => void }) {
   const key = JSON.stringify(body);
   const { data, isLoading, error } = useQuery({ queryKey: ["review", seqId, key], queryFn: () => api.sequenceReview(seqId, body), staleTime: 0 });
+  useEffect(() => { if (data) onReady?.(data.people.filter((p) => !p.refused).length); }, [data, onReady]);
   const [sel, setSel] = useState(0);
   const [pos, setPos] = useState(1);
   if (isLoading) return <div className="grid gap-3 md:grid-cols-[14rem_1fr]"><Skeleton className="h-64" /><Skeleton className="h-96" /></div>;
@@ -506,6 +518,10 @@ function ReviewView({ seqId, body }: { seqId: number; body: SendPayload }) {
   const person = data.people[Math.min(sel, data.people.length - 1)];
   const email = person?.emails.find((e) => e.position === pos) ?? person?.emails[0];
   const many = data.people.length > 1;
+  const refused = data.people.filter((p) => p.refused);
+  // V3.5 : tout le monde bloqué pour les mêmes raisons = la séquence elle-même est incomplète
+  const sameForAll = refused.length === data.people.length && refused.length > 1
+    && refused.every((p) => p.problems.join("|") === refused[0].problems.join("|")) && refused[0].problems.length > 0;
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
@@ -521,18 +537,38 @@ function ReviewView({ seqId, body }: { seqId: number; body: SendPayload }) {
           <span><b>Mode test</b> : rien ne part chez les destinataires. Chaque email arrive dans votre boîte{data.from ? ` (${data.from.email})` : ""}, avec le vrai destinataire dans l'objet.</span>
         </p>
       )}
+      {sameForAll && (
+        <p className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <span><b>Le problème vient de la séquence, pas des contacts</b> : ses emails sont incomplets ({refused[0].problems.join(" · ")}). Complétez la séquence, puis revenez ici.</span>
+        </p>
+      )}
+      {onRemove && refused.length > 0 && refused.length < data.people.length && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
+          <span>{refused.length} personne{refused.length > 1 ? "s" : ""} ne recevr{refused.length > 1 ? "ont" : "a"} rien. Retirez-l{refused.length > 1 ? "es" : "a"} pour envoyer aux autres.</span>
+          <Button size="sm" variant="outline" onClick={() => { setSel(0); onRemove(refused.map((p) => p.contact.id)); }}><X /> Retirer de l'envoi</Button>
+        </div>
+      )}
       <div className={cn("grid gap-3", many && "md:grid-cols-[15rem_1fr]")}>
         {many && (
           <ul className="max-h-[60vh] space-y-1 overflow-y-auto" aria-label="Destinataires">
             {data.people.map((p, i) => (
-              <li key={p.contact.id}>
+              <li key={p.contact.id} className="group relative">
+                {onRemove && (
+                  <button type="button" aria-label={`Retirer ${fullName(p.contact)} de l'envoi`} title="Retirer de cet envoi"
+                    onClick={() => { setSel(0); onRemove([p.contact.id]); }}
+                    className="absolute right-1.5 top-1.5 z-10 rounded-md p-1 text-muted-foreground opacity-60 transition hover:bg-destructive/10 hover:text-destructive hover:opacity-100 group-hover:opacity-100">
+                    <X className="size-3.5" />
+                  </button>
+                )}
                 <button onClick={() => { setSel(i); setPos(1); }}
-                  className={cn("w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors", i === sel ? "border-primary bg-primary/5" : "hover:bg-accent/40")}>
+                  className={cn("w-full rounded-lg border px-3 py-2 pr-8 text-left text-sm transition-colors", i === sel ? "border-primary bg-primary/5" : "hover:bg-accent/40")}>
                   <span className="flex items-center gap-1.5 font-medium">
                     {p.refused ? <XCircle className="size-3.5 shrink-0 text-destructive" /> : <CheckCircle2 className="size-3.5 shrink-0 text-success" />}
                     <span className="truncate">{fullName(p.contact)}</span>
                   </span>
                   <span className="block truncate text-xs text-muted-foreground">{p.contact.company || p.to}</span>
+                  {p.contact.company && <span className="block truncate text-xs text-muted-foreground">{p.to}</span>}
                   <span className={cn("block text-xs", p.refused ? "text-destructive" : "text-muted-foreground")}>
                     {p.refused ? "Ne partira pas" : `${p.emails.length} email${p.emails.length > 1 ? "s" : ""}`}
                   </span>

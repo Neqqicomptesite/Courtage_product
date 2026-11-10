@@ -205,6 +205,7 @@ export type ContactDetail = ContactRow & {
   notes: string;
   custom: { key: string; label: string; value: string }[];
   suppressed: boolean;
+  bounced_at: string | null;
   status_label: string;
   enrollments: { id: number; campaign: { id: number; name: string }; status: string; step: number; next_due_at: string | null; active: boolean }[];
   timeline: { ts: string; kind: "out" | "in" | "event"; title: string; detail: string }[];
@@ -288,7 +289,7 @@ export type CampaignListItem = {
   counts: Record<string, number>;
   indicators: Indicators;
 };
-export type Candidate = ContactRef & { excluded: string | null; other_campaigns: string[]; problems?: string[]; problem_count?: number };
+export type Candidate = ContactRef & { excluded: string | null; other_campaigns: string[]; recent?: string | null; problems?: string[]; problem_count?: number };
 export type CampaignDetail = {
   block_map: BlockMap;
   id: number;
@@ -305,6 +306,7 @@ export type CampaignDetail = {
   segments: Row[];
   ab: Dashboard["ab"];
   candidates: Candidate[];
+  no_reply: { count: number; days: number; last_sent: string | null; relaunch_from: string | null } | null;
   enrollments: { id: number; status: string; status_label: string; variant: string | null; step: number; max_steps?: number | null; next_due_at: string | null; error: string | null; contact: ContactRef }[];
   started: boolean;
 };
@@ -312,6 +314,7 @@ export type Activation = {
   eligible: number;
   excluded: Candidate[];
   overlapping: Candidate[];
+  recent: Candidate[];
   with_problems: Candidate[];
   with_problems_count: number;
   reliability_ratio: number;
@@ -673,6 +676,8 @@ export const api = {
     request<{ id: number }>("/api/sequences", { method: "POST", json: { name, category, steps } }),
   sequenceDuplicate: (id: number) => request<{ id: number }>(`/api/sequences/${id}/duplicate`, { method: "POST" }),
   sequenceShare: (id: number) => request<SequenceData>(`/api/sequences/${id}/share`, { method: "POST" }),
+  sequenceUnshare: (id: number) => request<SequenceData>(`/api/sequences/${id}/unshare`, { method: "POST" }),
+  campaignRename: (id: number, name: string) => request<{ name: string }>(`/api/campaigns/${id}/name`, { method: "PUT", json: { name } }),
   sequence: (id: number) => request<SequenceFull>(`/api/sequences/${id}`),
   sequenceSave: (id: number, name: string, steps: StepData[], category?: SequenceCategory, branch?: string | null) =>
     request<SequenceData>(`/api/sequences/${id}`, {
@@ -706,8 +711,9 @@ export const api = {
   campaignCreate: (body: { name: string; sequence_id: number; filters: Record<string, string>; stop_on_domain_reply: boolean; start_at?: string | null }) =>
     request<{ id: number }>("/api/campaigns", { method: "POST", json: body }),
   campaign: (id: number) => request<CampaignDetail>(`/api/campaigns/${id}`),
-  activation: (id: number, overlap: boolean) => request<Activation>(`/api/campaigns/${id}/activation${qs({ overlap })}`),
-  activate: (id: number, overlap: boolean) => request<{ enrolled: number }>(`/api/campaigns/${id}/activate`, { method: "POST", json: { overlap } }),
+  activation: (id: number, overlap: boolean, recent = false) => request<Activation>(`/api/campaigns/${id}/activation${qs({ overlap, recent })}`),
+  activate: (id: number, overlap: boolean, recent = false) => request<{ enrolled: number }>(`/api/campaigns/${id}/activate`, { method: "POST", json: { overlap, recent } }),
+  contactNewAddress: (id: number, email: string) => request<{ id: number }>(`/api/contacts/${id}/new-address`, { method: "POST", json: { email } }),
   campaignAction: (id: number, action: "pause" | "resume" | "delete") => request(`/api/campaigns/${id}/${action}`, { method: "POST" }),
 
   replies: (f: string) => request<Replies>(`/api/replies${qs({ f })}`),

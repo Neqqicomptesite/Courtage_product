@@ -126,6 +126,29 @@ def sequence_share(sid: int):
         return _sequence_json(s, seq)
 
 
+@router.post("/sequences/{sid:int}/unshare")
+def sequence_unshare(sid: int):
+    """V3.5 : l'administrateur repasse un modèle commun en personnel (lui seul le voit ensuite).
+    Refusé si un collègue l'utilise dans une campagne : il ne doit pas perdre l'accès à son modèle."""
+    from app import scope
+    from app.current import is_admin, user_id
+    with get_session() as s:
+        seq = _seq(s, sid)
+        if not is_admin():
+            raise HTTPException(403, "Seul l'administrateur peut retirer un modèle de l'équipe.")
+        if seq.owner_id is not None:
+            raise HTTPException(409, "Ce modèle est déjà personnel.")
+        mine = scope.mailbox_id_of(s, user_id()) if user_id() is not None else None
+        others = s.scalar(select(func.count(Campaign.id)).where(Campaign.sequence_id == seq.id, Campaign.mailbox_id != mine)
+                          .execution_options(oddo_all=True)) or 0
+        if others:
+            raise HTTPException(409, f"Un collègue l'utilise dans {others} campagne{'s' if others > 1 else ''} : "
+                                     "elle reste commune. Pour une version perso, dupliquez-la.")
+        seq.owner_id = user_id()
+        s.commit()
+        return _sequence_json(s, seq)
+
+
 @router.get("/sequences/{sid:int}")
 def sequence_get(sid: int):
     with get_session() as s:

@@ -592,3 +592,8 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
      jamais inventées). Une seule colonne « taux total » ; la colonne parafiscal_rate (0018) n'est
      plus utilisée (migration 0019 : additionnée au taux total, plus EVCAT taux + plafond). Remarque
      par branche (statut et source) modifiable dans Réglages.
+300. **Repris d'ODDO V3.4.5 et V3.5 (10/11)** : éditeur de séquence relu en base à chaque ouverture et
+     enregistrement en sortant (texte perdu sinon), bouton Enregistrer ; envoi : « Rien à envoyer » et
+     retirer une personne ; pas deux séquences à la même personne (collègues compris, 90 jours sans
+     réponse, forçable) ; rebonds visibles et nouvelle fiche avec la bonne adresse ; relance des
+     sans-réponse d'une campagne ; renommer une campagne ; séquence commune repassée en perso ; colonne Email.

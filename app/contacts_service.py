@@ -58,6 +58,7 @@ class ContactFilters:
     department: str = ""   # V2.18 : filtres de l'onglet Assureurs
     seniority: str = ""
     owner: str = ""        # V3 : "me" (mes prospects), "none" (non assignés) ou un numéro d'employé
+    no_reply_of: str = ""  # V3.5 : sont allés au bout de cette campagne sans répondre
 
     @classmethod
     def from_query(cls, params) -> "ContactFilters":
@@ -94,6 +95,10 @@ def filtered_query(f: ContactFilters):
     if f.campaign_id.isdigit():
         stmt = stmt.where(Contact.id.in_(
             select(Enrollment.contact_id).where(Enrollment.campaign_id == int(f.campaign_id))))
+    if f.no_reply_of.isdigit():
+        stmt = stmt.where(Contact.id.in_(
+            select(Enrollment.contact_id).where(Enrollment.campaign_id == int(f.no_reply_of),
+                                                Enrollment.status == "completed")))
     if f.q:
         like = f"%{f.q}%"
         stmt = stmt.where(or_(Contact.email.ilike(like), Contact.first_name.ilike(like),
@@ -318,6 +323,27 @@ def create_contact(session: Session, data: dict, source: str) -> tuple[Contact, 
         warnings.append("Adresse sur la liste d'exclusion : aucun email ne lui sera envoyé.")
     # pas de ligne d'historique ici : la fiche affiche déjà « Contact créé – source : Saisie manuelle… »
     return contact, warnings
+
+
+def last_bounce(session: Session, contact: Contact):
+    """V3.5 : date du dernier rebond définitif reçu pour ce contact (dans n'importe quelle boîte)."""
+    return session.scalar(select(func.max(Message.received_at)).where(
+        Message.contact_id == contact.id, Message.kind == "bounce_hard").execution_options(oddo_all=True))
+
+
+def new_address(session: Session, old: Contact, email: str) -> Contact:
+    """V3.5 : l'adresse a rebondi. Une nouvelle fiche reprend tout avec la bonne adresse ; l'ancienne
+    reste « Rebond » avec son historique (on ne change pas l'adresse d'emails déjà échangés)."""
+    data = {k: getattr(old, k) for k in EDITABLE_FIELDS if k not in ("email", "email_reliability")}
+    data.update(email=email, kind=old.kind)
+    new, _ = create_contact(session, data, f"Nouvelle adresse : l'ancienne ({old.email}) a rebondi")
+    new.custom = dict(old.custom or {})
+    new.notes = old.notes or ""
+    new.owner_id = old.owner_id
+    if old.sequence_code:
+        new.sequence_code = old.sequence_code
+    log(session, old, f"Nouvelle adresse enregistrée sur une nouvelle fiche : {new.email}")
+    return new
 
 
 def update_contact(session: Session, contact: Contact, data: dict) -> list[str]:

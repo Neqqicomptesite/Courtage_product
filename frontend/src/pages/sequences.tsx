@@ -64,6 +64,11 @@ export function SequencesPage() {
     onSuccess: () => { toast.success("Séquence partagée : toute l'équipe la voit maintenant"); qc.invalidateQueries({ queryKey: ["sequences"] }); },
     onError: (e) => toastError(e),
   });
+  const unshare = useMutation({
+    mutationFn: api.sequenceUnshare,
+    onSuccess: () => { toast.success("Séquence repassée en perso : vos collègues ne la voient plus"); qc.invalidateQueries({ queryKey: ["sequences"] }); },
+    onError: (e) => toastError(e),
+  });
   const duplicate = useMutation({
     mutationFn: api.sequenceDuplicate,
     onSuccess: ({ id }) => {
@@ -146,6 +151,9 @@ export function SequencesPage() {
                     {team && me?.role === "admin" && q.shared === false && q.editable && (
                       <DropdownMenuItem onSelect={() => setToShare(q.id)}><Users /> Partager avec l'équipe</DropdownMenuItem>
                     )}
+                    {team && me?.role === "admin" && q.shared && (
+                      <DropdownMenuItem onSelect={() => unshare.mutate(q.id)}><Lock /> Repasser en perso</DropdownMenuItem>
+                    )}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem destructive disabled={q.campaigns > 0 || q.editable === false} onSelect={() => setToDelete(q)}><Trash2 /> Supprimer</DropdownMenuItem>
                   </DropdownMenuContent>
@@ -217,7 +225,7 @@ export function SequencesPage() {
 
       <ConfirmDialog open={toShare !== null} onOpenChange={(o) => !o && setToShare(null)}
         title="Partager avec l'équipe ?" confirmLabel="Partager"
-        description="Toute l'équipe verra cette séquence et pourra l'utiliser. Vous seul (administrateur) pourrez encore la modifier. Ce partage ne se retire pas : pour une version perso, dupliquez-la."
+        description="Toute l'équipe verra cette séquence et pourra l'utiliser. Vous seul (administrateur) pourrez encore la modifier. Vous pourrez la repasser en perso tant qu'aucun collègue ne l'utilise dans une campagne."
         onConfirm={() => { if (toShare !== null) share.mutate(toShare); setToShare(null); }} />
 
       <ConfirmDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)} destructive

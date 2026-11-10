@@ -6,7 +6,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app import contacts_service as cs
@@ -14,12 +14,14 @@ from app import engine, settings_store, suppression
 from app import sequences_service as ss
 from app.ab_testing import assign_variants
 from app.companies_service import KIND_LABELS
-from app.models import Campaign, Contact, Enrollment, EventLog, Mailbox, Message, Sequence
+from app.models import AppUser, Campaign, Contact, Enrollment, EventLog, Mailbox, Message, Sequence
 from app.scheduling import SendWindow
 from app.timeutil import fmt_local, to_local, utcnow
 
 
-FILTER_KEYS = ("target_segment", "sector_family", "sequence_code", "wave", "reliability", "kind", "contact_ids")
+FILTER_KEYS = ("target_segment", "sector_family", "sequence_code", "wave", "reliability", "kind", "no_reply_of",
+               "contact_ids")
+REPROSPECT_DAYS = 90  # V3.5 : délai avant de reprospecter quelqu'un (réglage du cabinet « reprospect_days »)
 RELIABILITY_WARN_RATIO = 0.30  # §8
 STATUS_LABELS = {"draft": "Brouillon", "active": "Active", "paused": "En pause", "finished": "Terminée"}
 ENROLLMENT_LABELS = {
@@ -56,19 +58,88 @@ class Candidate:
     contact: Contact
     excluded: str | None = None                      # raison d'exclusion automatique
     other_campaigns: list[str] = field(default_factory=list)  # déjà en cours ailleurs (forçable)
+    recent: str | None = None                        # V3.5 : déjà prospecté récemment (forçable)
     problems: list[str] = field(default_factory=list)          # variables non résolues : bloquant
 
 
-def candidates(s: Session, camp: Campaign, check_render: bool = True) -> list[Candidate]:
+def reprospect_days(s: Session) -> int:
+    try:
+        return max(0, int(settings_store.get(s, "reprospect_days") or REPROSPECT_DAYS))
+    except (TypeError, ValueError):
+        return REPROSPECT_DAYS
+
+
+def _colleagues(s: Session) -> dict[int, str]:
+    """Boîte d'envoi -> prénom ou nom de l'employé (pour dire « chez Karim »)."""
+    rows = s.execute(select(Mailbox.id, AppUser.full_name, AppUser.email).join(AppUser, AppUser.id == Mailbox.user_id)
+                     .execution_options(oddo_all=True))
+    return {mb: (name or email or "un collègue").split()[0] for mb, name, email in rows}
+
+
+def busy_elsewhere(s: Session, camp: Campaign, contact_ids=None) -> dict[int, list[str]]:
+    """Contacts en cours dans une AUTRE campagne. Campagne de groupe : la sienne ou celle d'un
+    collègue (V3.5 : avant, seulement les siennes ; le filtre par employé cachait les autres).
+    Envoi à l'unité : seulement les siennes, comme avant (V3.3.3, pas de réservation : un collègue
+    peut toujours écrire à une personne choisie, même si un autre la suit)."""
+    who = _colleagues(s)
+    stmt = (select(Enrollment.contact_id, Campaign.name, Campaign.mailbox_id)
+            .join(Campaign, Campaign.id == Enrollment.campaign_id)
+            .where(Campaign.status.in_(("active", "paused")), Campaign.id != camp.id,
+                   Enrollment.status.in_(engine.OPEN_STATUSES)))
+    if not camp.direct:
+        stmt = stmt.execution_options(oddo_all=True)
+    if contact_ids is not None:
+        stmt = stmt.where(Enrollment.contact_id.in_(contact_ids))
+    busy: dict[int, list[str]] = {}
+    for cid, name, mb in s.execute(stmt):
+        # le nom d'une campagne d'un collègue reste privé (cloisonnement V3) : on dit seulement chez qui
+        busy.setdefault(cid, []).append(name if mb == camp.mailbox_id else f"une campagne de {who.get(mb, 'un collègue')}")
+    return busy
+
+
+def recently_prospected(s: Session, camp: Campaign, now: datetime) -> dict[int, str]:
+    """V3.5 : contacts qui ont reçu un email de séquence (réel, pas un essai) depuis moins de
+    `reprospect_days` jours, par n'importe qui dans l'équipe, hors de cette campagne. Ceux qui
+    ont répondu sont déjà écartés par leur statut : il reste ceux qui n'ont pas répondu."""
+    days = reprospect_days(s)
+    if not days:
+        return {}
+    own = select(Enrollment.id).where(Enrollment.campaign_id == camp.id).execution_options(oddo_all=True)
+    rows = s.execute(select(Message.contact_id, func.max(Message.sent_at), func.min(Message.mailbox_id))
+                     .where(Message.direction == "out", Message.step_position.is_not(None),
+                            Message.sent_at >= now - timedelta(days=days), Message.test_mode.is_(False),
+                            Message.contact_id.is_not(None),
+                            or_(Message.enrollment_id.is_(None), Message.enrollment_id.not_in(own)))
+                     .group_by(Message.contact_id).execution_options(oddo_all=True))
+    who = _colleagues(s)
+    out = {}
+    for cid, last, mb in rows:
+        by = "" if mb == camp.mailbox_id else f" (par {who.get(mb, 'un collègue')})"
+        out[cid] = (f"Dernier email le {to_local(last):%d/%m/%Y}{by} : relançable à partir du "
+                    f"{to_local(last + timedelta(days=days)):%d/%m/%Y}")
+    return out
+
+
+def no_reply_summary(s: Session, camp: Campaign) -> dict:
+    """V3.5 : les contacts allés au bout de la campagne sans répondre (et toujours joignables),
+    à relancer plus tard avec une autre séquence : combien, et à partir de quand c'est permis."""
+    ids = select(Enrollment.id).join(Contact, Contact.id == Enrollment.contact_id).where(
+        Enrollment.campaign_id == camp.id, Enrollment.status == "completed", Contact.global_status == "active")
+    n = s.scalar(select(func.count()).select_from(ids.subquery())) or 0
+    last = s.scalar(select(func.max(Message.sent_at)).where(Message.enrollment_id.in_(ids),
+                                                             Message.direction == "out")) if n else None
+    days = reprospect_days(s)
+    return {"count": n, "days": days, "last_sent": last.isoformat() if last else None,
+            "relaunch_from": (last + timedelta(days=days)).isoformat() if last else None}
+
+
+def candidates(s: Session, camp: Campaign, check_render: bool = True, now: datetime | None = None) -> list[Candidate]:
     seq = s.get(Sequence, camp.sequence_id)
     supp = suppression.suppressed_keys(s)
     already = set(s.scalars(select(Enrollment.contact_id).where(Enrollment.campaign_id == camp.id)))
-    busy: dict[int, list[str]] = {}
-    for cid, name in s.execute(
-            select(Enrollment.contact_id, Campaign.name).join(Campaign, Campaign.id == Enrollment.campaign_id)
-            .where(Campaign.status.in_(("active", "paused")), Campaign.id != camp.id,
-                   Enrollment.status.in_(engine.OPEN_STATUSES))):
-        busy.setdefault(cid, []).append(name)
+    busy = busy_elsewhere(s, camp)
+    prospection = ss.is_prospection(seq) and not camp.direct
+    recent = recently_prospected(s, camp, now or utcnow()) if prospection else {}
 
     out = []
     for c in matching_contacts(s, camp.filters or {}):
@@ -83,6 +154,8 @@ def candidates(s: Session, camp: Campaign, check_render: bool = True) -> list[Ca
             cand.excluded = "Dans la liste d'exclusion"
         else:
             cand.other_campaigns = busy.get(c.id, [])
+            if not cand.other_campaigns:
+                cand.recent = recent.get(c.id)
             if check_render:
                 cand.problems = ss.problems_for_contact(s, seq, c)
         out.append(cand)
@@ -153,6 +226,7 @@ class ActivationReport:
     eligible: list[Candidate]
     excluded: list[Candidate]
     overlapping: list[Candidate]
+    recent: list[Candidate]
     with_problems: list[Candidate]
     reliability_ratio: float
     link_warnings: list[str]
@@ -165,12 +239,15 @@ class ActivationReport:
         return bool(self.with_problems) or not self.eligible
 
 
-def activation_report(s: Session, camp: Campaign, include_overlapping: bool, now: datetime | None = None) -> ActivationReport:
+def activation_report(s: Session, camp: Campaign, include_overlapping: bool, now: datetime | None = None,
+                      include_recent: bool = False) -> ActivationReport:
     now = now or utcnow()
-    cands = candidates(s, camp)
+    cands = candidates(s, camp, now=now)
     excluded = [c for c in cands if c.excluded]
     overlapping = [c for c in cands if not c.excluded and c.other_campaigns]
-    eligible = [c for c in cands if not c.excluded and (include_overlapping or not c.other_campaigns)]
+    recent = [c for c in cands if not c.excluded and c.recent]
+    eligible = [c for c in cands if not c.excluded and (include_overlapping or not c.other_campaigns)
+                and (include_recent or not c.recent)]
     with_problems = [c for c in eligible if c.problems]
     not_good = sum(1 for c in eligible if cs.reliability_category(c.contact.email_reliability) != "Bonne")
     ratio = not_good / len(eligible) if eligible else 0.0
@@ -184,15 +261,15 @@ def activation_report(s: Session, camp: Campaign, include_overlapping: bool, now
     mb = s.get(Mailbox, camp.mailbox_id)
     first, last = estimate(SendWindow.from_settings(s), mb, engine.effective_daily_cap(s, mb, now),
                            start_of(camp, now), len(eligible), steps)
-    return ActivationReport(eligible, excluded, overlapping, with_problems, ratio, links, first, last,
+    return ActivationReport(eligible, excluded, overlapping, recent, with_problems, ratio, links, first, last,
                             bool(settings_store.get(s, "test_mode")))
 
 
 def activate(s: Session, camp: Campaign, include_overlapping: bool, now: datetime | None = None,
-             rng: random.Random | None = None) -> int:
+             rng: random.Random | None = None, include_recent: bool = False) -> int:
     """Inscrit les contacts éligibles, tire les variantes A/B et passe la campagne en « active »."""
     now = now or utcnow()
-    report = activation_report(s, camp, include_overlapping, now)
+    report = activation_report(s, camp, include_overlapping, now, include_recent=include_recent)
     if report.blocked:
         raise ValueError("Activation impossible : contacts avec problèmes ou aucun contact éligible.")
     seq = s.get(Sequence, camp.sequence_id)
@@ -358,10 +435,7 @@ def enroll_one(s: Session, camp: Campaign, contact: Contact, include_overlapping
                     problems.append(f"Email {pos} : {exc}")
     if problems:
         raise EnrollRefused("Un des emails serait incomplet pour ce contact.", problems=problems)
-    busy = list(s.scalars(select(Campaign.name).join(Enrollment, Enrollment.campaign_id == Campaign.id)
-                          .where(Enrollment.contact_id == contact.id, Campaign.id != camp.id,
-                                 Campaign.status.in_(("active", "paused")),
-                                 Enrollment.status.in_(engine.OPEN_STATUSES))))
+    busy = busy_elsewhere(s, camp, [contact.id]).get(contact.id, [])  # V3.5 : aussi chez les collègues
     if busy and not include_overlapping and prospection:  # V2.23 : un dossier de gestion n'en gêne pas un autre
         raise EnrollRefused("Ce contact est déjà en cours dans une autre campagne.", overlap=busy)
     first_step = ss.steps_of(s, seq)[0]

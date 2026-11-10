@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle, ArrowLeft, ArrowRight, CalendarCheck, CalendarClock, CheckCircle2, Download, Filter, ListOrdered, Loader2, MoreHorizontal,
-  Eye, FileText, Pause, Play, Rocket, Search, Send, ShieldCheck, SkipForward, Trash2, UserMinus, Users,
+  Eye, FileText, Pause, Pencil, Play, Rocket, Search, Send, ShieldCheck, SkipForward, Trash2, UserMinus, Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -20,7 +20,7 @@ import { Progress } from "@/components/ui/progress";
 import { NativeSelect } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { api, type Activation, type Block, type BlockMap, type CampaignDetail, type Indicators, type SequenceCategory } from "@/lib/api";
+import { api, type Activation, type Block, type BlockMap, type Candidate, type CampaignDetail, type Indicators, type SequenceCategory } from "@/lib/api";
 import { CATEGORIES } from "@/pages/sequences";
 import { formatDayTime, fullName, lot, pct } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -110,13 +110,15 @@ export function CampaignWizardPage() {
   const [category, setCategory] = useState<SequenceCategory>("prospection");
   const [sequenceId, setSequenceId] = useState<number | null>(null);
   const [mode, setMode] = useState<"group" | "people">("group");
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  // V3.5 : ?no_reply_of=ID : arrivée depuis « Relancer les sans-réponse » d'une campagne terminée
+  const [filters, setFilters] = useState<Record<string, string>>(() => { const v = params.get("no_reply_of"); const f: Record<string, string> = {}; if (v) f.no_reply_of = v; return f; });
   const [picked, setPicked] = useState<number[]>([]);
   const [name, setName] = useState("");
   const [stopDomain, setStopDomain] = useState(false);
   const [startAt, setStartAt] = useState<string | null>(null);  // ISO, ou null = dès le lancement
   const [draft, setDraft] = useState<{ id: number; key: string } | null>(null);
   const [overlap, setOverlap] = useState(false);
+  const [recent, setRecent] = useState(false);
 
   const { data: seqs } = useQuery({ queryKey: ["sequences"], queryFn: api.sequences });
   const seq = seqs?.items.find((q) => q.id === sequenceId);
@@ -158,12 +160,12 @@ export function CampaignWizardPage() {
     onError: (e) => toastError(e),
   });
   const { data: report, isFetching: checking } = useQuery({
-    queryKey: ["activation", draft?.id, overlap],
-    queryFn: () => api.activation(draft!.id, overlap),
+    queryKey: ["activation", draft?.id, overlap, recent],
+    queryFn: () => api.activation(draft!.id, overlap, recent),
     enabled: step === 2 && !!draft && draft.key === key,
   });
   const launch = useMutation({
-    mutationFn: () => api.activate(draft!.id, overlap),
+    mutationFn: () => api.activate(draft!.id, overlap, recent),
     onSuccess: (r) => {
       qc.invalidateQueries();
       toast.success("Campagne lancée", { description: `${r.enrolled} contact${r.enrolled > 1 ? "s" : ""} inscrit${r.enrolled > 1 ? "s" : ""}. ${startAt ? `Aucun email avant ${formatDayTime(startAt)}.` : "Premier envoi à la prochaine ouverture de la plage d'envoi."}` });
@@ -279,7 +281,7 @@ export function CampaignWizardPage() {
           {!report || checking || prepare.isPending ? (
             <Card className="flex items-center gap-3 p-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Vérification de chaque email, pour chaque contact…</Card>
           ) : (
-            <ActivationSummary report={report} sequenceId={sequenceId!} overlap={overlap} onOverlap={setOverlap} />
+            <ActivationSummary report={report} sequenceId={sequenceId!} overlap={overlap} onOverlap={setOverlap} recent={recent} onRecent={setRecent} />
           )}
           <div className="flex flex-wrap justify-between gap-2">
             <Button variant="outline" onClick={() => setStep(1)}><ArrowLeft /> Retour</Button>
@@ -298,8 +300,22 @@ export function CampaignWizardPage() {
 
 function GroupFilters({ filters, setFilters, prospection }: { filters: Record<string, string>; setFilters: (f: (x: Record<string, string>) => Record<string, string>) => void; prospection: boolean }) {
   const { data: options } = useQuery({ queryKey: ["contacts", {}], queryFn: () => api.contacts({}) });
+  const { data: camps } = useQuery({ queryKey: ["campaigns"], queryFn: api.campaigns });
+  const launched = (camps ?? []).filter((c) => !c.direct && c.status !== "draft");
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* V3.5 : relancer plus tard ceux qui sont allés au bout d'une campagne sans répondre */}
+      <label className="space-y-1.5 sm:col-span-2 lg:col-span-3">
+        <span className="text-sm font-medium">N'ont pas répondu à la campagne</span>
+        <NativeSelect value={filters.no_reply_of ?? ""} onChange={(e) => setFilters((f) => {
+          const n = { ...f };
+          if (e.target.value) n.no_reply_of = e.target.value; else delete n.no_reply_of;
+          return n;
+        })}>
+          <option value="">Pas de condition</option>
+          {launched.map((c) => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+        </NativeSelect>
+      </label>
       {Object.entries(FILTER_LABELS).filter(([k]) => k !== "kind" || !prospection).map(([k, label]) => (
         <label key={k} className="space-y-1.5">
           <span className="text-sm font-medium">{label}</span>
@@ -365,7 +381,7 @@ function PeopleChooser({ picked, setPicked, prospection }: { picked: number[]; s
 }
 
 /** Résumé du contrôle avant lancement, partagé par l'assistant et la page d'une campagne brouillon. */
-export function ActivationSummary({ report, sequenceId, overlap, onOverlap }: { report: Activation; sequenceId: number; overlap: boolean; onOverlap: (v: boolean) => void }) {
+export function ActivationSummary({ report, sequenceId, overlap, onOverlap, recent, onRecent }: { report: Activation; sequenceId: number; overlap: boolean; onOverlap: (v: boolean) => void; recent: boolean; onRecent: (v: boolean) => void }) {
   return (
     <>
       <div className={cn("flex items-start gap-3 rounded-xl border p-4 text-sm", report.test_mode ? "border-warning/40 bg-warning/5" : "border-destructive/40 bg-destructive/5")}>
@@ -402,11 +418,12 @@ export function ActivationSummary({ report, sequenceId, overlap, onOverlap }: { 
       )}
       {report.link_warnings.map((w) => <p key={w} className="rounded-xl border border-warning/40 bg-warning/5 p-4 text-sm">{w}</p>)}
       {report.overlapping.length > 0 && (
-        <label className="flex items-center justify-between gap-3 rounded-xl border p-4 text-sm">
-          <span>{report.overlapping.length} contact{report.overlapping.length > 1 ? "s sont" : " est"} déjà en cours dans une autre campagne
-            <span className="block text-xs text-muted-foreground">{overlap ? "Ils seront inscrits quand même." : "Ils ne seront pas inscrits."}</span></span>
-          <Switch checked={overlap} onCheckedChange={onOverlap} />
-        </label>
+        <AsideGroup items={report.overlapping} on={overlap} onChange={onOverlap} detail={(c) => `en cours : ${c.other_campaigns.join(", ")}`}
+          title={`${report.overlapping.length} contact${report.overlapping.length > 1 ? "s sont" : " est"} déjà en cours dans une autre campagne (la vôtre ou celle d'un collègue)`} />
+      )}
+      {report.recent.length > 0 && (
+        <AsideGroup items={report.recent} on={recent} onChange={onRecent} detail={(c) => c.recent ?? ""}
+          title={`${report.recent.length} contact${report.recent.length > 1 ? "s ont" : " a"} déjà reçu une séquence récemment, sans répondre`} />
       )}
       {report.excluded.length > 0 && (
         <details className="rounded-xl border p-4 text-sm">
@@ -418,12 +435,31 @@ export function ActivationSummary({ report, sequenceId, overlap, onOverlap }: { 
   );
 }
 
+/** V3.5 : contacts mis de côté (déjà en cours ailleurs, ou prospectés récemment), avec le détail et un interrupteur. */
+function AsideGroup({ title, items, on, onChange, detail }: { title: string; items: Candidate[]; on: boolean; onChange: (v: boolean) => void; detail: (c: Candidate) => string }) {
+  return (
+    <div className="rounded-xl border p-4 text-sm">
+      <label className="flex items-center justify-between gap-3">
+        <span>{title}
+          <span className="block text-xs text-muted-foreground">{on ? "Ils seront inscrits quand même." : "Ils sont mis de côté : ils ne recevront pas cette séquence."}</span></span>
+        <Switch checked={on} onCheckedChange={onChange} />
+      </label>
+      <details className="mt-2">
+        <summary className="cursor-pointer text-xs text-primary">Voir qui</summary>
+        <ul className="mt-2 space-y-1 text-xs text-muted-foreground">{items.slice(0, 100).map((c) => <li key={c.id}><span className="text-foreground">{fullName(c)}</span>{c.company ? ` · ${c.company}` : ""} : {detail(c)}</li>)}</ul>
+      </details>
+    </div>
+  );
+}
+
 /* =============================================================== détail */
 
 const VIEWS = [
   { key: "all", label: "Tous", match: () => true },
   { key: "running", label: "En cours", match: (s: string) => ["scheduled", "waiting", "sending"].includes(s) },
   { key: "replied", label: "Réponses", match: (s: string) => s === "replied" },
+  { key: "no_reply", label: "Sans réponse", match: (s: string) => s === "completed" },
+  { key: "bounced", label: "Rebonds", match: (s: string) => s === "bounced" },
   { key: "done", label: "Terminés", match: (s: string) => ["completed", "stopped", "bounced", "unsubscribed"].includes(s) },
   { key: "issues", label: "À vérifier", match: (s: string) => ["error", "needs_review"].includes(s) },
 ];
@@ -610,13 +646,15 @@ export function CampaignDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [checking, setChecking] = useState(false);
   const [overlap, setOverlap] = useState(false);
+  const [recent, setRecent] = useState(false);
   const [planning, setPlanning] = useState(false);
   const refresh = () => qc.invalidateQueries();
 
   const action = useMutation({
     mutationFn: (a: "pause" | "resume" | "delete") => api.campaignAction(id, a),
     onSuccess: (_, a) => {
-      if (a === "delete") { toast.success("Campagne supprimée"); qc.invalidateQueries(); return navigate("/campaigns"); }
+      // on quitte la page AVANT de rafraîchir : sinon elle redemande la campagne qui n'existe plus (404)
+      if (a === "delete") { toast.success("Campagne supprimée"); navigate("/campaigns"); qc.removeQueries({ queryKey: ["campaign", id] }); qc.invalidateQueries({ queryKey: ["campaigns"] }); qc.invalidateQueries({ queryKey: ["dashboard"] }); return; }
       toast.success(a === "pause" ? "Campagne en pause : plus aucun envoi" : "Campagne reprise");
       refresh();
     },
@@ -632,9 +670,9 @@ export function CampaignDetailPage() {
     },
     onError: (e) => toastError(e),
   });
-  const { data: report } = useQuery({ queryKey: ["activation", id, overlap], queryFn: () => api.activation(id, overlap), enabled: checking });
+  const { data: report } = useQuery({ queryKey: ["activation", id, overlap, recent], queryFn: () => api.activation(id, overlap, recent), enabled: checking });
   const launch = useMutation({
-    mutationFn: () => api.activate(id, overlap),
+    mutationFn: () => api.activate(id, overlap, recent),
     onSuccess: (r) => { toast.success(`Campagne lancée : ${r.enrolled} contacts`); setChecking(false); refresh(); },
     onError: (e) => toastError(e, "Lancement impossible"),
   });
@@ -647,7 +685,7 @@ export function CampaignDetailPage() {
     <>
       <PageHeader
         back={<Button variant="ghost" size="sm" className="-ml-2" asChild><Link to="/campaigns"><ArrowLeft /> Campagnes</Link></Button>}
-        title={<span className="flex items-center gap-3">{data.name}<CampaignStatus status={data.status} /></span>}
+        title={<span className="flex items-center gap-3"><CampaignName id={data.id} name={data.name} /><CampaignStatus status={data.status} /></span>}
         description={<>Séquence <Link className="text-primary hover:underline" to={`/sequences/${data.sequence?.id}`}>{data.sequence?.name}</Link>
           {Object.entries(data.filters).map(([k, v]) => <Badge key={k} variant="secondary" className="ml-2">{k === "contact_ids" ? filterValue(k, v) : `${FILTER_LABELS[k] ?? k} : ${filterValue(k, v)}`}</Badge>)}
           {data.activated_at && <> · lancée le {formatDayTime(data.activated_at)}</>}
@@ -666,7 +704,7 @@ export function CampaignDetailPage() {
         checking ? (
           <div className="space-y-4">
             {!report ? <Card className="flex items-center gap-3 p-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Vérification de chaque email…</Card>
-              : <ActivationSummary report={report} sequenceId={data.sequence!.id} overlap={overlap} onOverlap={setOverlap} />}
+              : <ActivationSummary report={report} sequenceId={data.sequence!.id} overlap={overlap} onOverlap={setOverlap} recent={recent} onRecent={setRecent} />}
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setChecking(false)}>Annuler</Button>
               <Button variant="brand" disabled={!report || report.blocked || launch.isPending} onClick={() => launch.mutate()}><Rocket /> Lancer la campagne</Button>
@@ -692,12 +730,14 @@ export function CampaignDetailPage() {
       ) : (
         <div className="space-y-6">
           <MiniKpis i={data.indicators} counts={data.counts}
-            onSent={() => { setView("sent"); requestAnimationFrame(() => document.getElementById("campaign-people")?.scrollIntoView({ behavior: "smooth", block: "start" })); }} />
+            onSent={() => { setView("sent"); requestAnimationFrame(() => document.getElementById("campaign-people")?.scrollIntoView({ behavior: "smooth", block: "start" })); }}
+            onBounced={() => { setView("bounced"); requestAnimationFrame(() => document.getElementById("campaign-people")?.scrollIntoView({ behavior: "smooth", block: "start" })); }} />
           <div className="grid gap-6 lg:grid-cols-2">
             <StepFunnel i={data.indicators} />
             <Outcomes i={data.indicators} running={(data.counts.scheduled ?? 0) + (data.counts.waiting ?? 0) + (data.counts.sending ?? 0)} />
           </div>
           {(data.segments.length > 1 || data.ab.rows.length > 0) && <Breakdown data={data} />}
+          {data.no_reply && data.no_reply.count > 0 && <NoReplyCard camp={data} />}
           {data.status !== "finished" && !data.direct && <CampaignTexts camp={data} />}
           <Card id="campaign-people" className="scroll-mt-4">
             <div className="flex flex-wrap items-center gap-1 border-b p-2">
@@ -781,7 +821,7 @@ function RowActions({ e, onAct }: { e: CampaignDetail["enrollments"][number]; on
   );
 }
 
-function MiniKpis({ i, counts, onSent }: { i: Indicators; counts: Record<string, number>; onSent: () => void }) {
+function MiniKpis({ i, counts, onSent, onBounced }: { i: Indicators; counts: Record<string, number>; onSent: () => void; onBounced: () => void }) {
   const running = (counts.scheduled ?? 0) + (counts.waiting ?? 0) + (counts.sending ?? 0);
   const items = [
     { label: "Contacts", value: i.enrolled },
@@ -789,7 +829,7 @@ function MiniKpis({ i, counts, onSent }: { i: Indicators; counts: Record<string,
     { label: "Emails envoyés", value: i.sent_total, onClick: i.sent_total > 0 ? onSent : undefined },
     { label: "Réponses", value: i.replies, sub: pct(i.reply_rate), accent: true },
     { label: "Intéressés", value: i.interested },
-    { label: "Rebonds · STOP", value: i.bounced + i.unsubscribed },
+    { label: "Rebonds · STOP", value: i.bounced + i.unsubscribed, onClick: i.bounced > 0 ? onBounced : undefined, tip: "Voir les adresses qui ont rebondi" },
   ];
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -798,12 +838,62 @@ function MiniKpis({ i, counts, onSent }: { i: Indicators; counts: Record<string,
           t.onClick && "cursor-pointer transition-colors hover:border-primary/40 hover:bg-accent/40")}
           onClick={t.onClick} role={t.onClick ? "button" : undefined} tabIndex={t.onClick ? 0 : undefined}
           onKeyDown={t.onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); t.onClick!(); } } : undefined}
-          title={t.onClick ? "Voir les emails envoyés" : undefined}>
+          title={t.onClick ? ("tip" in t && t.tip ? t.tip : "Voir les emails envoyés") : undefined}>
           <p className="flex items-center justify-between text-xs text-muted-foreground">{t.label}{t.onClick && <Eye className="size-3.5" />}</p>
           <p className={cn("mt-1 text-xl font-semibold tabular", t.accent && "text-brand")}>{t.value}{t.sub && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{t.sub}</span>}</p>
         </Card>
       ))}
     </div>
+  );
+}
+
+/** V3.5 : renommer une campagne à tout moment (« Campagne BTP »…) : clic sur le crayon, Entrée pour valider. */
+function CampaignName({ id, name }: { id: number; name: string }) {
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(name);
+  const save = useMutation({
+    mutationFn: () => api.campaignRename(id, value),
+    onSuccess: () => { setEditing(false); toast.success("Campagne renommée"); qc.invalidateQueries({ queryKey: ["campaign", id] }); qc.invalidateQueries({ queryKey: ["campaigns"] }); },
+    onError: (e) => toastError(e, "Renommage impossible"),
+  });
+  if (!editing) return (
+    <span className="group inline-flex items-center gap-1.5">{name}
+      <button type="button" onClick={() => { setValue(name); setEditing(true); }} aria-label="Renommer la campagne" title="Renommer"
+        className="rounded-md p-1 text-muted-foreground opacity-60 transition hover:bg-accent hover:text-foreground group-hover:opacity-100"><Pencil className="size-4" /></button>
+    </span>
+  );
+  return (
+    <form className="inline-flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (value.trim()) save.mutate(); }}>
+      <Input autoFocus value={value} onChange={(e) => setValue(e.target.value)} maxLength={200} className="h-9 w-[22rem] max-w-[60vw] text-base font-semibold"
+        onKeyDown={(e) => { if (e.key === "Escape") setEditing(false); }} aria-label="Nom de la campagne" />
+      <Button size="sm" disabled={!value.trim() || save.isPending}>Enregistrer</Button>
+      <Button size="sm" type="button" variant="ghost" onClick={() => setEditing(false)}>Annuler</Button>
+    </form>
+  );
+}
+
+/** V3.5 : ceux qui sont allés au bout sans répondre, à relancer plus tard avec une autre séquence. */
+function NoReplyCard({ camp }: { camp: CampaignDetail }) {
+  const navigate = useNavigate();
+  const nr = camp.no_reply!;
+  const from = nr.relaunch_from ? new Date(nr.relaunch_from) : null;
+  const ready = !!from && from <= new Date();
+  return (
+    <Card className="flex flex-wrap items-center gap-4 p-5">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Users className="size-5" /></span>
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <p className="font-medium">{nr.count} personne{nr.count > 1 ? "s sont allées" : " est allée"} au bout de la séquence sans répondre</p>
+        <p className="text-sm text-muted-foreground">
+          {camp.status === "finished" ? "" : "La liste grandit tant que la campagne tourne. "}
+          {ready ? "Elles peuvent recevoir une autre séquence dès maintenant."
+            : from ? `Pour ne pas les relancer trop tôt, une autre séquence pourra leur partir à partir du ${from.toLocaleDateString("fr-FR")} (${nr.days} jours après leur dernier email).` : ""}
+        </p>
+      </div>
+      <Button variant={ready ? "brand" : "outline"} onClick={() => navigate(`/campaigns/new?no_reply_of=${camp.id}`)}>
+        <Rocket /> {ready ? "Les relancer" : "Préparer leur relance"}
+      </Button>
+    </Card>
   );
 }
 

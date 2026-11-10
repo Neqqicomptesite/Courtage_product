@@ -361,7 +361,10 @@ def test_auth_error_suspends_without_losing_the_send(world):
         assert s.scalars(select(Message).where(Message.direction == "out")).first() is None
 
 
-def test_sent_copy_failure_does_not_block(world):
+def test_sent_copy_failure_does_not_block(world, monkeypatch):
+    from app import sent_copy
+    # le test simule le 03/11/2026, mais la règle « abandon après 7 jours » lit l'heure réelle
+    monkeypatch.setattr(sent_copy, "MAX_AGE_S", 10 ** 10)
     with get_session() as s:
         s.scalars(select(Mailbox)).one().sent_folder = "Dossier inexistant"
         s.commit()

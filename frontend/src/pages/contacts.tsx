@@ -223,7 +223,7 @@ export function ContactsPage() {
               <thead className="sticky top-0 z-10 bg-card text-left text-xs text-muted-foreground shadow-[0_1px_0_hsl(var(--border))]">
                 <tr>
                   <th className="w-10 py-2.5 pl-4"><input type="checkbox" className="accent-[hsl(var(--primary))]" checked={allShown} onChange={toggleAll} aria-label="Tout sélectionner" /></th>
-                  {(isInsurer ? ["Contact", "Compagnie", "Service", "Niveau", "Statut"] : ["Contact", "Entreprise", "Profil", "Lot", "Qualité email", "Statut"]).map((h) => <th key={h} className="px-4 py-2.5 font-medium">{h}</th>)}
+                  {(isInsurer ? ["Contact", "Email", "Compagnie", "Service", "Niveau", "Statut"] : ["Contact", "Email", "Entreprise", "Profil", "Lot", "Qualité email", "Statut"]).map((h) => <th key={h} className="px-4 py-2.5 font-medium">{h}</th>)}
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -235,8 +235,12 @@ export function ContactsPage() {
                     </td>
                     <td className="max-w-[16rem] px-4 py-2.5">
                       <div className="truncate font-medium">{fullName(c)}</div>
-                      <div className="truncate text-xs text-muted-foreground">{c.job_title ?? c.email}</div>
+                      {c.job_title && <div className="truncate text-xs text-muted-foreground">{c.job_title}</div>}
                       {c.owner && <div className="mt-1"><OwnerBadge owner={c.owner} /></div>}
+                    </td>
+                    {/* V3.5 : l'adresse en clair (barrée si elle a rebondi) */}
+                    <td className="max-w-[16rem] px-4 py-2.5" title={c.status === "bounced" ? "Adresse invalide : un email a rebondi" : c.email}>
+                      <span className={cn("block truncate text-xs", c.status === "bounced" ? "text-destructive line-through" : "text-muted-foreground")}>{c.email}</span>
                     </td>
                     <td className="max-w-[14rem] px-4 py-2.5">
                       <div className="flex items-center gap-1.5">
@@ -279,6 +283,8 @@ export function ContactsPage() {
         if (back) navigate(back); else setParam("open", "");
       }}>
         <DialogContent side="right" aria-describedby={undefined}>
+          {/* titre pour les lecteurs d'écran le temps que la liste charge (avertissement Radix) */}
+          {openId !== null && !data && <DialogTitle className="sr-only">Contact</DialogTitle>}
           {openId !== null && data && <ContactSheet key={openId} id={openId} vocab={data.vocab} companies={data.companies} companyKinds={data.company_kinds} onClosed={() => setParam("open", "")} />}
         </DialogContent>
       </Dialog>
@@ -296,6 +302,36 @@ export function ContactsPage() {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** V3.5 : l'adresse a rebondi. On le dit clairement, et on propose d'enregistrer la bonne adresse
+ * (une nouvelle fiche reprend tout ; celle-ci garde son historique). */
+function BounceBanner({ c }: { c: ContactDetail }) {
+  const qc = useQueryClient();
+  const [, setParams] = useSearchParams();
+  const [email, setEmail] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const create = useMutation({
+    mutationFn: () => api.contactNewAddress(c.id, email.trim()),
+    onSuccess: (r) => {
+      toast.success("Nouvelle fiche créée avec la bonne adresse");
+      qc.invalidateQueries({ queryKey: ["contacts"] });
+      setParams((p) => { p.set("open", String(r.id)); return p; });
+    },
+    onError: (e) => setErr(e instanceof ApiError ? (e.fields?.email ?? e.message) : String(e)),
+  });
+  return (
+    <div className="space-y-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
+      <p className="flex items-start gap-2"><Ban className="mt-0.5 size-4 shrink-0 text-destructive" />
+        <span><b>Cette adresse n'est pas la bonne.</b> Un email envoyé à {c.email} a rebondi{c.bounced_at ? ` le ${new Date(c.bounced_at).toLocaleDateString("fr-FR")}` : ""} : elle n'existe pas ou plus.
+          Plus aucun email ne lui partira.</span></p>
+      <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); setErr(null); create.mutate(); }}>
+        <Input className="min-w-[14rem] flex-1 bg-card" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="La bonne adresse, si vous l'avez trouvée" />
+        <Button size="sm" className="h-9" disabled={!email.includes("@") || create.isPending}>Créer la fiche avec cette adresse</Button>
+      </form>
+      {err && <p className="text-xs text-destructive">{err}</p>}
+    </div>
   );
 }
 
@@ -356,6 +392,8 @@ function ContactSheet({ id, vocab, companies, companyKinds, onClosed }: { id: nu
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {c.status === "bounced" && <BounceBanner c={c} />}
 
       <div className="flex flex-wrap gap-2">
         {canSend(c.status) && !c.suppressed && <Button size="sm" onClick={() => openSendSequence({ contacts: [c] })}><Send /> Envoyer une séquence</Button>}

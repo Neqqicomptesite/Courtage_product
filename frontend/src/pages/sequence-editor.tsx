@@ -40,9 +40,15 @@ const VARS: { label: string; text: string; hint: string }[] = [
   { label: "Texte secteur", text: "{{ bloc_secteur }}", hint: "Votre texte personnalisé selon le secteur du contact (industrie, BTP…) : Séquences → Textes personnalisés" },
 ];
 
+// V3.5 : enregistrement lancé en quittant l'éditeur ; si on rouvre aussitôt, on l'attend avant de relire.
+const pendingSaves = new Map<number, Promise<unknown>>();
+
 export function SequenceEditorPage() {
   const id = Number(useParams().id);
-  const { data, isError } = useQuery({ queryKey: ["sequence", id], queryFn: () => api.sequence(id), staleTime: Infinity });
+  // V3.5 : relue en base à CHAQUE ouverture (gcTime 0). Avant, la version gardée en mémoire depuis la
+  // première ouverture revenait (vide pour une séquence neuve) et la frappe suivante l'enregistrait.
+  // Pendant l'édition, pas de relecture (staleTime) : l'éditeur garde la main sur le texte.
+  const { data, isError } = useQuery({ queryKey: ["sequence", id], queryFn: async () => { await pendingSaves.get(id)?.catch(() => undefined); return api.sequence(id); }, staleTime: Infinity, gcTime: 0 });
   if (isError) return <p className="text-sm text-destructive">Séquence introuvable.</p>;
   if (!data) return <div className="space-y-4"><Skeleton className="h-10 w-80" /><Skeleton className="h-[600px] rounded-xl" /></div>;
   return <Editor key={id} initial={data} />;
@@ -77,10 +83,25 @@ function Editor({ initial }: { initial: SequenceFull }) {
     },
   });
   const debouncedSave = useDebounced(() => save.mutate(), 700);
+  const dirty = useRef(false);
   const touch = () => {
+    dirty.current = true;
     setState("dirty");
     debouncedSave();
   };
+  useEffect(() => { if (state === "saved") dirty.current = false; }, [state]);
+  // V3.5 : en quittant l'éditeur (lien, menu, retour), ce qui attendait d'être enregistré part tout de suite.
+  // Avant, l'attente de 0,7 s était annulée et la dernière modification perdue.
+  useEffect(() => () => {
+    if (dirty.current) {
+      const l = latest.current;
+      const p = api.sequenceSave(initial.id, l.name, l.steps, l.category, l.branch)
+        .then(() => qc.invalidateQueries({ queryKey: ["sequences"] }))
+        .catch((e) => toastError(e, "Dernière modification de la séquence non enregistrée"))
+        .finally(() => pendingSaves.delete(initial.id));
+      pendingSaves.set(initial.id, p);
+    }
+  }, [initial.id, qc]);
   // Prévenir avant de quitter la page si un enregistrement est en attente.
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
@@ -129,6 +150,10 @@ function Editor({ initial }: { initial: SequenceFull }) {
           className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-xl font-semibold tracking-tight outline-none transition-colors hover:border-border focus:border-ring" />
         {initial.shared === false && SERVER_MODE && <Badge variant="info" className="font-normal" title="Vos collègues ne la voient pas">Perso · visible par vous seul</Badge>}
         <SaveIndicator state={state} />
+        <Button size="sm" variant={state === "dirty" || state === "error" ? "default" : "outline"} disabled={state === "saving" || state === "saved"}
+          onClick={() => save.mutate()} title="L'enregistrement est aussi automatique, quelques instants après chaque modification">
+          {state === "saving" ? <Loader2 className="animate-spin" /> : <Check />} Enregistrer
+        </Button>
       </div>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-muted-foreground">Type</span>

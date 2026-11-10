@@ -94,6 +94,26 @@ def contact_create(body: dict):
         return {"id": c.id, "warnings": warnings}
 
 
+class NewAddressIn(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+
+
+@router.post("/contacts/{cid:int}/new-address")
+def contact_new_address(cid: int, body: NewAddressIn):
+    """V3.5 : après un rebond, une nouvelle fiche avec la bonne adresse (voir cs.new_address)."""
+    with get_session() as s:
+        c = s.get(Contact, cid)
+        if c is None:
+            raise not_found("Contact")
+        try:
+            new = cs.new_address(s, c, body.email)
+        except cs.ContactInvalid as exc:
+            s.rollback()
+            raise _invalid(exc) from None
+        s.commit()
+        return {"id": new.id}
+
+
 @router.put("/contacts/{cid:int}")
 def contact_update(cid: int, body: dict):
     with get_session() as s:
@@ -112,7 +132,7 @@ def contact_update(cid: int, body: dict):
 @router.get("/contacts/count")
 def contacts_count(target_segment: str = "", sector_family: str = "", sequence_code: str = "",
                    wave: str = "", reliability: str = "", kind: str = "", category: str = "prospection",
-                   contact_ids: str = ""):
+                   contact_ids: str = "", no_reply_of: str = ""):
     """Compteur en direct pour l'assistant de campagne (« 54 contacts correspondent »).
     En prospection, seuls les prospects comptent ; en gestion/souscription (V2.8), tous les types."""
     f = _filters({k: v for k, v in locals().items() if k not in ("category", "contact_ids")})
@@ -145,6 +165,7 @@ def contact_detail(cid: int):
             "custom": [{"key": k, "label": labels.get(k, k.replace("_", " ").capitalize()), "value": v}
                        for k, v in (c.custom or {}).items()],
             "suppressed": suppression.is_suppressed_db(s, c.email),
+            "bounced_at": iso(cs.last_bounce(s, c)) if c.global_status == "bounced" else None,
             "status_label": cs.STATUS_LABELS[c.global_status],
             "company_ref": ({"id": c.company_id, "name": comp.name, "kind": comp.kind}
                             if c.company_id and (comp := s.get(Company, c.company_id)) else None),
