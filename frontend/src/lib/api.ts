@@ -194,7 +194,12 @@ export type Followup = {
   message: { id: number; message_id: string | null; body: string; references: string[]; test_mode: boolean } | null;
   days: number;
 };
+export type ContactListItem = { id: number; name: string; count: number; source: "manual" | "import" | "campaign"; shared: boolean;
+  owner: string | null; mine: boolean; editable: boolean; created_at: string | null; updated_at: string | null };
+export type ImportDone = { new: number; update: number; ignore: number; list?: { id: number; name: string; count: number; prospects: number } };
+
 export type ContactDetail = ContactRow & {
+  lists?: { id: number; name: string }[];
   company_ref: { id: number; name: string; kind: Kind } | null;
   sector: string | null;
   size_bucket: string | null;
@@ -664,7 +669,16 @@ export const api = {
   importPreview: (token: string, sheet: string | null, mapping: string[]) =>
     request<ImportPreview>(`/api/import/${token}/preview`, { method: "POST", json: { sheet, mapping } }),
   importCommit: (token: string, sheet: string | null, mapping: string[]) =>
-    request<{ new: number; update: number; ignore: number }>(`/api/import/${token}/commit`, { method: "POST", json: { sheet, mapping } }),
+    request<ImportDone>(`/api/import/${token}/commit`, { method: "POST", json: { sheet, mapping } }),
+  // V3.6 : listes de contacts
+  lists: () => request<{ items: ContactListItem[] }>("/api/lists"),
+  listCreate: (name: string, contact_ids: number[] = []) => request<ContactListItem>("/api/lists", { method: "POST", json: { name, contact_ids } }),
+  listRename: (id: number, name: string) => request<ContactListItem>(`/api/lists/${id}`, { method: "PUT", json: { name } }),
+  listDelete: (id: number) => request<{ ok: boolean }>(`/api/lists/${id}`, { method: "DELETE" }),
+  listAdd: (id: number, contact_ids: number[]) => request<ContactListItem & { added: number }>(`/api/lists/${id}/members`, { method: "POST", json: { contact_ids } }),
+  listRemove: (id: number, contact_ids: number[]) => request<ContactListItem & { removed: number }>(`/api/lists/${id}/members/remove`, { method: "POST", json: { contact_ids } }),
+  listShare: (id: number, shared: boolean) => request<ContactListItem>(`/api/lists/${id}/share`, { method: "POST", json: { shared } }),
+  campaignNoReplyList: (id: number) => request<ContactListItem>(`/api/campaigns/${id}/no-reply-list`, { method: "POST" }),
   importCancel: (token: string) => request(`/api/import/${token}`, { method: "DELETE" }),
   exclusions: () => request<Exclusion[]>("/api/exclusions"),
   exclusionAdd: (entry: string, note: string) =>

@@ -59,7 +59,9 @@ def test_import_wizard(client, db):
     assert prev["new"] == 1 and prev["ignored"][0]["reason"] == "Pas d'email"
     done = client.post(f"/api/import/{up['token']}/commit", json={"sheet": up["sheet"], "mapping": mapping},
                        headers=ORIGIN).json()
-    assert done == {"new": 1, "update": 0, "ignore": 1}
+    assert {k: done[k] for k in ("new", "update", "ignore")} == {"new": 1, "update": 0, "ignore": 1}
+    # V3.6 : les contacts du fichier forment une liste, proposée pour une campagne
+    assert done["list"]["count"] == 1 and done["list"]["prospects"] == 1 and done["list"]["name"].startswith("Import leads.xlsx · ")
     bad = client.post("/api/import", files={"file": ("x.pdf", b"%PDF")}, headers=ORIGIN)
     assert bad.status_code == 400
 

@@ -42,11 +42,11 @@ def _apply(state: ORMExecuteState) -> None:
     if not state.is_select or state.execution_options.get("oddo_all"):
         return
     # Dossiers de cotation : tables du cabinet (org_id). Toujours filtrées, employé en cours ou non.
-    from app.models import Contract, QuoteCase, QuoteEvent, QuoteFile, QuoteInsurer
+    from app.models import ContactList, Contract, QuoteCase, QuoteEvent, QuoteFile, QuoteInsurer
     org = org_id()
     state.statement = state.statement.options(*(
         with_loader_criteria(m, lambda t: t.org_id == org, include_aliases=True, track_closure_variables=True)
-        for m in (QuoteCase, QuoteInsurer, QuoteEvent, QuoteFile, Contract)))
+        for m in (QuoteCase, QuoteInsurer, QuoteEvent, QuoteFile, Contract, ContactList)))
     uid = user_id()
     if uid is None:
         return
@@ -60,6 +60,9 @@ def _apply(state: ORMExecuteState) -> None:
         with_loader_criteria(Reminder, lambda r: r.user_id == uid, include_aliases=True, track_closure_variables=True),
         with_loader_criteria(EventLog, lambda ev: ev.user_id == uid, include_aliases=True, track_closure_variables=True),
         with_loader_criteria(Sequence, lambda q: or_(q.owner_id.is_(None), q.owner_id == uid),
+                             include_aliases=True, track_closure_variables=True),
+        # V3.6 : ses listes, et celles que l'équipe partage
+        with_loader_criteria(ContactList, lambda cl: or_(cl.owner_id == uid, cl.shared.is_(True), cl.owner_id.is_(None)),
                              include_aliases=True, track_closure_variables=True),
     )
 

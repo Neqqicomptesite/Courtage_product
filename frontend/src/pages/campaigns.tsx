@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle, ArrowLeft, ArrowRight, CalendarCheck, CalendarClock, CheckCircle2, Download, Filter, ListOrdered, Loader2, MoreHorizontal,
-  Eye, FileText, Pause, Pencil, Play, Rocket, Search, Send, ShieldCheck, SkipForward, Trash2, UserMinus, Users,
+  Eye, FileText, ListPlus, Pause, Pencil, Play, Rocket, Search, Send, ShieldCheck, SkipForward, Trash2, UserMinus, Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -111,7 +111,11 @@ export function CampaignWizardPage() {
   const [sequenceId, setSequenceId] = useState<number | null>(null);
   const [mode, setMode] = useState<"group" | "people">("group");
   // V3.5 : ?no_reply_of=ID : arrivée depuis « Relancer les sans-réponse » d'une campagne terminée
-  const [filters, setFilters] = useState<Record<string, string>>(() => { const v = params.get("no_reply_of"); const f: Record<string, string> = {}; if (v) f.no_reply_of = v; return f; });
+  const [filters, setFilters] = useState<Record<string, string>>(() => {
+    const f: Record<string, string> = {};
+    for (const k of ["no_reply_of", "list_id"]) { const v = params.get(k); if (v) f[k] = v; }  // V3.5 / V3.6 : arrivée pré-remplie
+    return f;
+  });
   const [picked, setPicked] = useState<number[]>([]);
   const [name, setName] = useState("");
   const [stopDomain, setStopDomain] = useState(false);
@@ -301,9 +305,19 @@ export function CampaignWizardPage() {
 function GroupFilters({ filters, setFilters, prospection }: { filters: Record<string, string>; setFilters: (f: (x: Record<string, string>) => Record<string, string>) => void; prospection: boolean }) {
   const { data: options } = useQuery({ queryKey: ["contacts", {}], queryFn: () => api.contacts({}) });
   const { data: camps } = useQuery({ queryKey: ["campaigns"], queryFn: api.campaigns });
+  const { data: lists } = useQuery({ queryKey: ["lists"], queryFn: api.lists });
   const launched = (camps ?? []).filter((c) => !c.direct && c.status !== "draft");
+  const setOne = (k: string, v: string) => setFilters((f) => { const n = { ...f }; if (v) n[k] = v; else delete n[k]; return n; });
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* V3.6 : une liste (import, salon, sélection…) ; combinable avec les autres critères */}
+      <label className="space-y-1.5 sm:col-span-2 lg:col-span-3">
+        <span className="text-sm font-medium">Liste</span>
+        <NativeSelect value={filters.list_id ?? ""} onChange={(e) => setOne("list_id", e.target.value)}>
+          <option value="">Toutes les listes (pas de condition)</option>
+          {(lists?.items ?? []).map((l) => <option key={l.id} value={String(l.id)}>{l.name} · {l.count} contact{l.count > 1 ? "s" : ""}{l.mine ? "" : l.owner ? ` · de ${l.owner}` : ""}</option>)}
+        </NativeSelect>
+      </label>
       {/* V3.5 : relancer plus tard ceux qui sont allés au bout d'une campagne sans répondre */}
       <label className="space-y-1.5 sm:col-span-2 lg:col-span-3">
         <span className="text-sm font-medium">N'ont pas répondu à la campagne</span>
@@ -879,6 +893,12 @@ function NoReplyCard({ camp }: { camp: CampaignDetail }) {
   const nr = camp.no_reply!;
   const from = nr.relaunch_from ? new Date(nr.relaunch_from) : null;
   const ready = !!from && from <= new Date();
+  const qc = useQueryClient();
+  const toList = useMutation({
+    mutationFn: () => api.campaignNoReplyList(camp.id),
+    onSuccess: (l) => { qc.invalidateQueries({ queryKey: ["lists"] }); toast.success(`Liste « ${l.name} » créée (${l.count} contacts)`, { action: { label: "Voir", onClick: () => navigate(`/contacts?list_id=${l.id}`) } }); },
+    onError: (e) => toastError(e),
+  });
   return (
     <Card className="flex flex-wrap items-center gap-4 p-5">
       <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Users className="size-5" /></span>
@@ -890,6 +910,7 @@ function NoReplyCard({ camp }: { camp: CampaignDetail }) {
             : from ? `Pour ne pas les relancer trop tôt, une autre séquence pourra leur partir à partir du ${from.toLocaleDateString("fr-FR")} (${nr.days} jours après leur dernier email).` : ""}
         </p>
       </div>
+      <Button variant="outline" disabled={toList.isPending} onClick={() => toList.mutate()}><ListPlus /> Enregistrer dans une liste</Button>
       <Button variant={ready ? "brand" : "outline"} onClick={() => navigate(`/campaigns/new?no_reply_of=${camp.id}`)}>
         <Rocket /> {ready ? "Les relancer" : "Préparer leur relance"}
       </Button>

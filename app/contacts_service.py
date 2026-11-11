@@ -59,6 +59,7 @@ class ContactFilters:
     seniority: str = ""
     owner: str = ""        # V3 : "me" (mes prospects), "none" (non assignés) ou un numéro d'employé
     no_reply_of: str = ""  # V3.5 : sont allés au bout de cette campagne sans répondre
+    list_id: str = ""      # V3.6 : membres de cette liste (visible par l'employé)
 
     @classmethod
     def from_query(cls, params) -> "ContactFilters":
@@ -95,6 +96,10 @@ def filtered_query(f: ContactFilters):
     if f.campaign_id.isdigit():
         stmt = stmt.where(Contact.id.in_(
             select(Enrollment.contact_id).where(Enrollment.campaign_id == int(f.campaign_id))))
+    if f.list_id.isdigit():
+        from app.models import ContactList, ContactListMember
+        visible = select(ContactList.id).where(ContactList.id == int(f.list_id))  # filtre « ses listes ou partagées »
+        stmt = stmt.where(Contact.id.in_(select(ContactListMember.contact_id).where(ContactListMember.list_id.in_(visible))))
     if f.no_reply_of.isdigit():
         stmt = stmt.where(Contact.id.in_(
             select(Enrollment.contact_id).where(Enrollment.campaign_id == int(f.no_reply_of),

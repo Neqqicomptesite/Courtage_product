@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Download, FileSpreadsheet, Loader2, RefreshCw, ShieldOff, Upload, UserPlus } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Download, FileSpreadsheet, Loader2, RefreshCw, Rocket, ShieldOff, Upload, UserPlus } from "lucide-react";
 import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { NativeSelect } from "@/components/ui/select";
-import { api, type ImportColumns, type ImportPreview, type ImportRow } from "@/lib/api";
+import { api, type ImportColumns, type ImportDone, type ImportPreview, type ImportRow } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export function ImportPage() {
@@ -19,7 +19,7 @@ export function ImportPage() {
   const [cols, setCols] = useState<ImportColumns | null>(null);
   const [mapping, setMapping] = useState<string[]>([]);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
-  const [done, setDone] = useState<{ new: number; update: number; ignore: number } | null>(null);
+  const [done, setDone] = useState<ImportDone | null>(null);
 
   const load = (c: ImportColumns) => { setCols(c); setMapping(c.columns.map((x) => x.mapping)); setPreview(null); };
   const upload = useMutation({ mutationFn: api.importUpload, onSuccess: load, onError: (e) => toastError(e, "Import impossible") });
@@ -133,9 +133,18 @@ export function ImportPage() {
           <CheckCircle2 className="size-10 text-success" />
           <p className="text-lg font-semibold">Import terminé</p>
           <p className="text-sm text-muted-foreground">{done.new} ajoutés · {done.update} mis à jour · {done.ignore} ignorés</p>
-          <div className="mt-2 flex gap-2">
+          {/* V3.6 : les contacts du fichier sont dans une liste : on propose d'enchaîner sur une campagne */}
+          {done.list && done.list.prospects > 0 && (
+            <div className="mt-3 w-full max-w-lg rounded-xl border bg-accent/40 p-4 text-left">
+              <p className="font-medium">Lancer une séquence pour ces {done.list.prospects} prospect{done.list.prospects > 1 ? "s" : ""} ?</p>
+              <p className="mt-1 text-sm text-muted-foreground">Ils sont rangés dans la liste « {done.list.name} ». Vous choisirez la séquence, puis vous vérifierez les emails avant le départ.</p>
+              <Button variant="brand" className="mt-3" onClick={() => navigate(`/campaigns/new?list_id=${done.list!.id}`)}><Rocket /> Créer une campagne pour eux</Button>
+            </div>
+          )}
+          <div className="mt-2 flex flex-wrap justify-center gap-2">
             <Button variant="outline" onClick={reset}>Importer un autre fichier</Button>
-            <Button onClick={() => navigate("/contacts")}>Voir les contacts</Button>
+            {done.list && <Button variant="outline" onClick={() => navigate(`/contacts?list_id=${done.list!.id}`)}>Voir la liste</Button>}
+            <Button variant={done.list?.prospects ? "outline" : "default"} onClick={() => navigate("/contacts")}>Voir les contacts</Button>
           </div>
         </Card>
       )}

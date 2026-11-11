@@ -9,12 +9,13 @@ from fastapi import APIRouter, HTTPException, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
+from app import lists_service
 from app import contacts_service as cs
 from app import campaigns_service as camp_svc
 from app import importer, settings_store, suppression, template_xlsx, vocab
 from app.db import get_session
 from app.models import Company, Contact, Suppression
-from app.timeutil import fmt_local, utcnow
+from app.timeutil import fmt_local, to_local, utcnow
 from app.web.api_common import contact_ref, iso, not_found, require_admin_or_owner
 from app.web.routes_contacts import MANUAL_REASON, MAX_UPLOAD, TOKEN_RE, _discard, _imports_dir, _upload
 
@@ -48,7 +49,7 @@ def _filters(params: dict) -> cs.ContactFilters:
 @router.get("/contacts")
 def contacts(q: str = "", target_segment: str = "", sector_family: str = "", sequence_code: str = "",
              wave: str = "", reliability: str = "", status: str = "", campaign_id: str = "", kind: str = "",
-             company_id: str = "", department: str = "", seniority: str = "", owner: str = ""):
+             company_id: str = "", department: str = "", seniority: str = "", owner: str = "", list_id: str = ""):
     f = _filters(locals())
     with get_session() as s:
         names = _owners(s)
@@ -132,7 +133,7 @@ def contact_update(cid: int, body: dict):
 @router.get("/contacts/count")
 def contacts_count(target_segment: str = "", sector_family: str = "", sequence_code: str = "",
                    wave: str = "", reliability: str = "", kind: str = "", category: str = "prospection",
-                   contact_ids: str = "", no_reply_of: str = ""):
+                   contact_ids: str = "", no_reply_of: str = "", list_id: str = ""):
     """Compteur en direct pour l'assistant de campagne (« 54 contacts correspondent »).
     En prospection, seuls les prospects comptent ; en gestion/souscription (V2.8), tous les types."""
     f = _filters({k: v for k, v in locals().items() if k not in ("category", "contact_ids")})
@@ -165,6 +166,7 @@ def contact_detail(cid: int):
             "custom": [{"key": k, "label": labels.get(k, k.replace("_", " ").capitalize()), "value": v}
                        for k, v in (c.custom or {}).items()],
             "suppressed": suppression.is_suppressed_db(s, c.email),
+            "lists": lists_service.lists_of(s, c.id),  # V3.6
             "bounced_at": iso(cs.last_bounce(s, c)) if c.global_status == "bounced" else None,
             "status_label": cs.STATUS_LABELS[c.global_status],
             "company_ref": ({"id": c.company_id, "name": comp.name, "kind": comp.kind}
@@ -341,10 +343,23 @@ def import_commit(token: str, body: MappingIn):
     meta, table = _plan(token, body)
     source = f"{meta['filename']} – importé le {fmt_local(utcnow())}"
     with get_session() as s:
-        counts = importer.apply_plan(s, importer.plan_import(s, table, body.mapping), source)
+        plan = importer.plan_import(s, table, body.mapping)
+        counts = importer.apply_plan(s, plan, source)
+        # V3.6 : les contacts du fichier (nouveaux et mis à jour) forment une liste, pour lancer
+        # tout de suite une campagne sur eux (proposé à la fin de l'import)
+        emails = [r.email for r in plan.rows if r.action != "ignore"]
+        out = dict(counts)
+        if emails:
+            from app import lists_service as ls
+            ids = list(s.scalars(select(Contact.id).where(Contact.email.in_(emails))))
+            name = f"Import {meta['filename']} · {to_local(utcnow()):%d/%m/%Y}"
+            cl = ls.create(s, name, ids, source="import")
+            prospects = s.scalar(select(func.count(Contact.id)).where(Contact.id.in_(ids), Contact.kind == "prospect",
+                                                                      Contact.global_status == "active")) or 0
+            out["list"] = {"id": cl.id, "name": cl.name, "count": len(ids), "prospects": prospects}
         s.commit()
     _discard(token)
-    return counts
+    return out
 
 
 @router.delete("/import/{token}")

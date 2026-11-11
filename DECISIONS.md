@@ -600,3 +600,6 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
 301. **Repris d'ODDO V3.5.1 (10/11)** : branches de cotation Automobile, Multirisque bureau, RC décennale,
      Assurance crédit (fiches, documents, modèles C11 à C14) ; renommer un dossier. Taxes et commissions de
      ces branches pour les contrats : pas encore dans le tableau d'Omar (Assurance crédit ≈ « Crédit »).
+302. **Repris d'ODDO V3.6 (11/11)** : listes de contacts personnelles et partageables (import, Contacts,
+     sans-réponse d'une campagne), filtre « Liste » des contacts et des campagnes, campagne proposée à la
+     fin de l'import. Migration 0021 (contact_list, contact_list_member, org_id).

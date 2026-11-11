@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Command } from "cmdk";
 import { openComposer } from "@/components/composer";
-import { Building2, CalendarDays, FileCheck2, FileText, Inbox, PenSquare, LayoutDashboard, ListOrdered, RefreshCw, Rocket, Settings, Upload, User, UserPlus, Users } from "lucide-react";
+import { Building2, CalendarDays, FileCheck2, FileText, Inbox, PenSquare, LayoutDashboard, ListChecks, ListOrdered, RefreshCw, Rocket, Settings, Upload, User, UserPlus, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -25,6 +25,8 @@ const ACTIONS = [
   { to: "/campaigns/new", label: "Nouvelle campagne", icon: Rocket },
   { to: "/contacts?new=1", label: "Nouveau contact", icon: UserPlus },
   { to: "/contacts/import", label: "Importer des contacts", icon: Upload },
+  { to: "/contacts/lists", label: "Listes de contacts", icon: ListChecks },
+  { to: "/contacts/lists", label: "Listes de contacts", icon: ListChecks },
   { to: "/agenda?new=1", label: "Ajouter un rappel", icon: CalendarDays },
   { to: "/sequences/blocks", label: "Rédiger les textes personnalisés", icon: FileText },
 ];

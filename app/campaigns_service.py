@@ -19,7 +19,7 @@ from app.scheduling import SendWindow
 from app.timeutil import fmt_local, to_local, utcnow
 
 
-FILTER_KEYS = ("target_segment", "sector_family", "sequence_code", "wave", "reliability", "kind", "no_reply_of",
+FILTER_KEYS = ("target_segment", "sector_family", "sequence_code", "wave", "reliability", "kind", "no_reply_of", "list_id",
                "contact_ids")
 REPROSPECT_DAYS = 90  # V3.5 : délai avant de reprospecter quelqu'un (réglage du cabinet « reprospect_days »)
 RELIABILITY_WARN_RATIO = 0.30  # §8

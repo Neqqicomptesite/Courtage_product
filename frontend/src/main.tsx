@@ -18,6 +18,7 @@ import { DashboardPage } from "@/pages/dashboard";
 import { GuideHome, GuideLayout, GuideSectionPage, StartPage, UseCasePage } from "@/pages/guide-pages";
 import { ExclusionsPage } from "@/pages/exclusions";
 import { ImportPage } from "@/pages/import";
+import { ListsPage } from "@/pages/lists";
 import { AwaitingPage, FollowupsPage, InboxPage } from "@/pages/inbox";
 import { QuoteDetailPage } from "@/pages/quote-detail";
 import { QuotesPage } from "@/pages/quotes";
@@ -57,6 +58,7 @@ const router = createBrowserRouter(
         { path: "contacts", element: <ContactsPage /> },
         { path: "contacts/import", element: <ImportPage /> },
         { path: "contacts/exclusions", element: <ExclusionsPage /> },
+        { path: "contacts/lists", element: <ListsPage /> },  // V3.6
         { path: "companies", element: <CompaniesPage /> },
         { path: "companies/:id", element: <CompanyPage /> },
         { path: "agenda", element: <AgendaPage /> },

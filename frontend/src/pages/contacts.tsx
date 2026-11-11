@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDownLeft, ArrowUpRight, Ban, CalendarPlus, StickyNote, Download, ExternalLink, FileSpreadsheet, Linkedin, Mail, MoreHorizontal, Paperclip, Pencil,
-  Phone, Rocket, RotateCcw, Search, Send, ShieldOff, Trash2, Upload, UserCheck, UserMinus, UserPlus, Users, X,
+  ListChecks, Phone, Rocket, RotateCcw, Search, Send, ShieldOff, Trash2, Upload, UserCheck, UserMinus, UserPlus, Users, X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -23,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ApiError, api, type ContactDetail, type ContactList, type Kind, type Vocab } from "@/lib/api";
 import { formatDayTime, fullName, lot } from "@/lib/format";
 import { KindCards } from "@/components/kind-cards";
+import { AddToListMenu } from "@/pages/lists";
 import { RemindersPanel, openReminder } from "@/pages/agenda";
 import { DEPARTMENTS, SENIORITIES } from "@/pages/companies";
 import { QuotesPanel } from "@/pages/quotes";
@@ -45,7 +46,7 @@ const FILTERS_BY_KIND: Record<string, FilterDef[]> = {
   client: [{ key: "company_id", label: "Entreprise" }, STATUS_F, CAMPAIGN_F],
   partner: [{ key: "company_id", label: "Entreprise" }, STATUS_F, CAMPAIGN_F],
 };
-const KEEP_PARAMS = ["q", "kind", "open", "new", "owner"];
+const KEEP_PARAMS = ["q", "kind", "open", "new", "owner", "list_id"];
 
 /** V3 : « Suivi par » d'un prospect (appli en ligne). */
 function OwnerBadge({ owner }: { owner?: { name: string; me: boolean } | null }) {
@@ -135,12 +136,22 @@ export function ContactsPage() {
   const allShown = rows.length > 0 && rows.every((c) => sel.has(c.id));
   const toggle = (id: number) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const toggleAll = () => setSel((s) => { const n = new Set(s); rows.forEach((c) => (allShown ? n.delete(c.id) : n.add(c.id))); return n; });
+  // V3.6 : listes (filtre, « Ajouter à une liste », « Retirer de la liste » quand on regarde une liste)
+  const qc = useQueryClient();
+  const { data: lists } = useQuery({ queryKey: ["lists"], queryFn: api.lists });
+  const currentList = lists?.items.find((l) => String(l.id) === filters.list_id);
+  const removeFromList = useMutation({
+    mutationFn: () => api.listRemove(currentList!.id, chosen.map((c) => c.id)),
+    onSuccess: (r) => { toast.success(`${r.removed} retiré${r.removed > 1 ? "s" : ""} de « ${r.name} »`); setSel(new Set()); qc.invalidateQueries({ queryKey: ["contacts"] }); qc.invalidateQueries({ queryKey: ["lists"] }); },
+    onError: (e) => toastError(e),
+  });
 
   return (
     <>
       <PageHeader title="Contacts" description={data ? `${data.total} contacts au total` : undefined}
         actions={<>
           <Button variant="ghost" asChild><Link to="/contacts/exclusions"><ShieldOff /> Exclusions</Link></Button>
+          <Button variant="outline" asChild><Link to="/contacts/lists"><ListChecks /> Listes</Link></Button>
           <Button variant="outline" asChild><a href="/api/export"><Download /> Exporter</a></Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild><Button variant="outline"><Upload /> Importer</Button></DropdownMenuTrigger>
@@ -179,6 +190,13 @@ export function ContactsPage() {
               </NativeSelect>
             );
           })}
+          {lists && lists.items.length > 0 && (
+            <NativeSelect value={filters.list_id ?? ""} onChange={(e) => setParam("list_id", e.target.value)} aria-label="Liste"
+              className={cn("h-8 w-auto max-w-[16rem] rounded-full pr-8 text-xs", filters.list_id && "border-primary bg-accent font-medium text-accent-foreground")}>
+              <option value="">Toutes les listes</option>
+              {lists.items.map((l) => <option key={l.id} value={String(l.id)}>{l.name} ({l.count})</option>)}
+            </NativeSelect>
+          )}
           {serverMode && (
             <NativeSelect value={filters.owner ?? ""} onChange={(e) => setParam("owner", e.target.value)} aria-label="Suivi par"
               className={cn("h-8 w-auto rounded-full pr-8 text-xs", filters.owner && "border-primary bg-accent font-medium text-accent-foreground")}>
@@ -214,6 +232,10 @@ export function ContactsPage() {
               </Button>
               <Button size="sm" variant="outline" onClick={() => openReminder({ contacts: chosen })}><CalendarPlus /> Ajouter un rappel</Button>
               <AssignMenu ids={chosen.map((c) => c.id)} onDone={() => setSel(new Set())} />
+              <AddToListMenu ids={chosen.map((c) => c.id)} onDone={() => setSel(new Set())} />
+              {currentList?.editable && (
+                <Button size="sm" variant="outline" onClick={() => removeFromList.mutate()}><X /> Retirer de « {currentList.name} »</Button>
+              )}
               <Button size="sm" variant="ghost" onClick={() => setSel(new Set())}><X /> Désélectionner</Button>
             </div>
           )}
@@ -394,6 +416,13 @@ function ContactSheet({ id, vocab, companies, companyKinds, onClosed }: { id: nu
       </div>
 
       {c.status === "bounced" && <BounceBanner c={c} />}
+      {/* V3.6 : ses listes */}
+      {c.lists && c.lists.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <ListChecks className="size-3.5 text-muted-foreground" />
+          {c.lists.map((l) => <Link key={l.id} to={`/contacts?list_id=${l.id}`} className="rounded-full border px-2 py-0.5 hover:bg-accent">{l.name}</Link>)}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {canSend(c.status) && !c.suppressed && <Button size="sm" onClick={() => openSendSequence({ contacts: [c] })}><Send /> Envoyer une séquence</Button>}

@@ -560,3 +560,34 @@ class Contract(Base):
     history: Mapped[list] = mapped_column(JSON, default=list)             # [{ts, text}] : périodes, changements
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
+# ---------------------------------------------------------------------------------------------
+# V3.6 : listes de contacts. Une liste est personnelle (son auteur) et peut être partagée avec
+# l'équipe. Remplie à l'import, à la main depuis Contacts, ou depuis une campagne (sans-réponse).
+
+LIST_SOURCES = ("manual", "import", "campaign")
+
+
+class ContactList(Base):
+    __tablename__ = "contact_list"
+    __table_args__ = (_in("source", LIST_SOURCES),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    org_id: Mapped[int] = mapped_column(Integer, default=_current_org, server_default="1", index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id", ondelete="SET NULL"), index=True)
+    shared: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    source: Mapped[str] = mapped_column(String(10), default="manual", server_default="manual")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
+class ContactListMember(Base):
+    __tablename__ = "contact_list_member"
+    __table_args__ = (UniqueConstraint("list_id", "contact_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    list_id: Mapped[int] = mapped_column(ForeignKey("contact_list.id", ondelete="CASCADE"), index=True)
+    contact_id: Mapped[int] = mapped_column(ForeignKey("contact.id", ondelete="CASCADE"), index=True)
+    added_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
