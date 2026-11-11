@@ -185,9 +185,19 @@ def apply_sequences(s: Session, force: bool = False) -> dict:
     return report
 
 
+def _cleanup_v352(s: Session) -> dict:
+    """Une seule fois : transferts et messages de collègues rangés à tort dans les réponses (V3.5.2)."""
+    if settings_store.get(s, "cleanup_v352_done"):
+        return {"skipped": True}
+    from app import imap_sync
+    n = imap_sync.hide_internal_and_forwards(s)
+    settings_store.set_(s, "cleanup_v352_done", True)
+    return {"retires": n}
+
+
 def apply_at_startup(s: Session) -> None:
     """Jamais bloquant : une erreur est notée dans le journal et l'application démarre quand même."""
-    for label, fn in (("assureurs", apply), ("séquences", apply_sequences)):
+    for label, fn in (("assureurs", apply), ("séquences", apply_sequences), ("nettoyage des réponses", _cleanup_v352)):
         try:
             with s.begin_nested():
                 r = fn(s)

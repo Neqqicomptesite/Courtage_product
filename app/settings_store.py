@@ -37,6 +37,7 @@ def _defaults() -> dict[str, Any]:
         "unsubscribe_enabled": UNSUBSCRIBE_DEFAULT,
         "starter_insurers_version": 0,
         "starter_sequences_version": 0,  # V2.15 : séquences modèles et textes fonction / secteur
+        "cleanup_v352_done": False,  # V3.5.2 : transferts et messages de collègues retirés des réponses
         "awaiting_dismissed": {},  # V2.13 : « À répondre » rangés à la main {expéditeur: date ISO du dernier rangé}  # V2.12 : version de la liste d'assureurs de départ déjà appliquée
         "digest_time": "18:00",
         "digest_recipient": "",  # vide = adresse de la boîte mail
@@ -74,7 +75,7 @@ def test_mode_locked() -> bool:
 # V3 : réglages communs à toute l'équipe ; tous les autres sont propres à chaque employé
 # (mode test, plages d'envoi, ligne STOP, récapitulatif, cloche, guide…).
 GLOBAL_KEYS = frozenset({
-    "holidays", "starter_insurers_version", "starter_sequences_version", "seed_done",
+    "holidays", "starter_insurers_version", "starter_sequences_version", "cleanup_v352_done", "seed_done",
     "backup_copy_dir", "update_url", "update_status", "custom_field_labels", "engine_last_tick",
     "reprospect_days",  # V3.5 : règle commune (deux collègues ne doivent pas relancer la même personne)
     "quote_followup_days",  # Dossiers de cotation : réglage du cabinet (pas d'un employé)

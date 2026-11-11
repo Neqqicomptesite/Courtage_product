@@ -239,6 +239,29 @@ def apply_effects(s: Session, msg: Message, contact: Contact, test_mode: bool, a
 
 # ---------------------------------------------------------------------- traitement
 
+# V3.5.2 : un transfert (« TR: », « Fwd: », « Fw: », « Transf: ») n'est pas une réponse à la campagne.
+# « RE: TR: … » (on nous répond dans un fil transféré) reste une réponse : seul le PREMIER préfixe compte.
+FORWARD_RE = re.compile(r"^\s*(fwd?|tr|transf(?:éré)?|wg|rv)\s*:", re.IGNORECASE)
+
+
+def is_forward(subject: str | None) -> bool:
+    return bool(FORWARD_RE.match(subject or ""))
+
+
+def team_addresses(s: Session) -> tuple[set[str], set[str]]:
+    """Adresses de l'équipe (boîtes d'envoi et comptes) et leurs domaines, hors messageries gratuites."""
+    from app.models import AppUser
+    emails = {e.lower() for e in s.scalars(select(Mailbox.email).execution_options(oddo_all=True)) if e}
+    emails |= {e.lower() for e in s.scalars(select(AppUser.email).execution_options(oddo_all=True)) if e}
+    domains = {e.rsplit("@", 1)[-1] for e in emails if "@" in e}
+    return emails, {d for d in domains if not inbound.is_free_mail(d)}
+
+
+def is_internal(sender: str, team: tuple[set[str], set[str]]) -> bool:
+    sender = (sender or "").lower()
+    return sender in team[0] or sender.rsplit("@", 1)[-1] in team[1]
+
+
 def process_raw(s: Session, mb: Mailbox, raw: bytes, folder: str | None, uid: int | None,
                 report: SyncReport) -> Message | None:
     a = inbound.analyse(raw)
@@ -262,6 +285,17 @@ def process_raw(s: Session, mb: Mailbox, raw: bytes, folder: str | None, uid: in
     m = _match(s, a)
     if m.contact is None and m.suggestion is None:
         report.add("unrelated")  # sans rapport avec la prospection : on ne stocke rien
+        return None
+    # V3.5.2 : un collègue qui partage ou transfère un message, ou un transfert en général, n'est pas
+    # une réponse de prospect : il reste dans la boîte mail, pas dans « Réponses aux campagnes », et
+    # n'arrête aucune séquence. Exceptions : un essai en mode test (on se répond à soi-même), et le
+    # prospect qui nous renvoie lui-même notre email.
+    own_test = m.sent is not None and m.sent.test_mode
+    if is_internal(a.sender, team_addresses(s)) and not own_test:
+        report.add("internal")
+        return None
+    if is_forward(a.subject) and not (m.how == "message_id" and m.contact is not None and m.contact.email == a.sender):
+        report.add("forward")
         return None
 
     test_mode = m.sent.test_mode if m.sent is not None else bool(settings_store.get(s, "test_mode"))
@@ -434,6 +468,32 @@ def attach(message_id: int, contact_id: int) -> bool:
         apply_effects(s, msg, contact, msg.test_mode, bool(settings_store.get(s, "auto_reply_continues")))
         s.commit()
         return True
+
+
+def _from_header(raw_headers: str | None) -> str:
+    match = re.search(r"^From:\s*(.+)$", raw_headers or "", re.MULTILINE | re.IGNORECASE)
+    from email.utils import parseaddr
+    return parseaddr(match.group(1))[1].lower() if match else ""
+
+
+def hide_internal_and_forwards(s: Session, now: datetime | None = None) -> int:
+    """V3.5.2, une fois : les messages déjà rangés à tort dans « Réponses aux campagnes » (transferts,
+    messages de collègues) et pas encore classés. Non rattachés : retirés ; rattachés : marqués lus
+    (ils sortent de « À classer » sans rien effacer de l'historique du contact)."""
+    team = team_addresses(s)
+    n = 0
+    for msg in s.scalars(select(Message).where(Message.direction == "in", Message.classification.is_(None),
+                                               Message.seen_at.is_(None), Message.kind.in_(("reply", "unmatched")))
+                         .execution_options(oddo_all=True)):
+        sender = _from_header(msg.raw_headers)
+        if not (is_forward(msg.subject) or (sender and is_internal(sender, team))) or msg.test_mode:
+            continue
+        if msg.kind == "unmatched":
+            s.delete(msg)
+        else:
+            msg.seen_at = now or utcnow()
+        n += 1
+    return n
 
 
 def dismiss(message_id: int) -> bool:
