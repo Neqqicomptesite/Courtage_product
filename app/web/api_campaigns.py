@@ -250,10 +250,11 @@ def campaign_detail(cid: int):
                          .where(Enrollment.campaign_id == camp.id)
                          .order_by(Enrollment.next_due_at.is_(None), Enrollment.next_due_at, Contact.company))
         ab_rows, ab_small = stats.ab_test(s, camp.id)
-        candidates = []
+        candidates, cands = [], None
         if camp.status == "draft":
-            candidates = [{**contact_ref(c.contact), "excluded": c.excluded, "other_campaigns": c.other_campaigns}
-                          for c in camp_svc.candidates(s, camp, check_render=False)]
+            cands = camp_svc.candidates(s, camp, check_render=False)
+            candidates = [{**contact_ref(c.contact), "excluded": c.excluded, "other_campaigns": c.other_campaigns,
+                           "lot": c.contact.lot_number} for c in cands]
         return {
             "id": camp.id, "name": camp.name, "status": camp.status, "filters": camp.filters or {}, "direct": camp.direct,
             "stop_on_domain_reply": camp.stop_on_domain_reply, "activated_at": iso(camp.activated_at),
@@ -265,11 +266,27 @@ def campaign_detail(cid: int):
             "ab": {"rows": [{"key": r.key, "reached": r.reached, "replies": r.replies, "rate": r.rate} for r in ab_rows],
                    "too_small": ab_small, "min_sample": stats.AB_MIN_SAMPLE},
             "candidates": candidates, "block_map": camp.block_map or {},
+            "lot_texts": _lot_texts(s, camp, cands),
             "no_reply": camp_svc.no_reply_summary(s, camp) if not camp.direct else None,
             "enrollments": [{"id": e.id, "status": e.status, "status_label": camp_svc.ENROLLMENT_LABELS[e.status],
                              "variant": e.variant_label, "step": e.current_step, "max_steps": e.max_steps, "next_due_at": iso(e.next_due_at),
                              "error": e.last_error, "contact": contact_ref(c)} for e, c in rows],
         }
+
+
+def _lot_texts(s, camp, cands=None) -> list[dict]:
+    """V3.7 : variantes attendues par lot, pour qui n'a pas encore reçu son 1er email."""
+    if camp.direct or camp.status == "finished":
+        return []
+    if camp.status == "draft":
+        people = [c.contact for c in (cands if cands is not None else camp_svc.candidates(s, camp, check_render=False))
+                  if not c.excluded]
+    else:
+        from app.models import Message
+        sent = select(Message.enrollment_id).where(Message.direction == "out", Message.sent_at.is_not(None))
+        people = list(s.scalars(select(Contact).join(Enrollment, Enrollment.contact_id == Contact.id)
+                                .where(Enrollment.campaign_id == camp.id, Enrollment.id.not_in(sent))))
+    return ss.lot_texts(s, people, camp.block_map)
 
 
 @router.put("/campaigns/{cid:int}/blocks")

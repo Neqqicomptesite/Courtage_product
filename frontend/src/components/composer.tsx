@@ -13,11 +13,13 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ApiError, api, type Attachment, type MailDraft } from "@/lib/api";
 import { formatDayTime } from "@/lib/format";
+import { joinAddresses, RecipientInput, type RecipientInputHandle, splitAddresses } from "@/components/recipient-input";
 import { cn } from "@/lib/utils";
 
 export type ComposeRequest = {
   to?: string;
   cc?: string;
+  bcc?: string;
   subject?: string;
   body?: string;
   inReplyTo?: string | null;
@@ -48,7 +50,9 @@ function quoted(q: NonNullable<ComposeRequest["quote"]>) {
   return `\n\n${head}\n${q.text.split("\n").map((l) => `> ${l}`).join("\n")}`;
 }
 
-type State = { req: ComposeRequest; d: MailDraft; showCc: boolean; withQuote: boolean; signature: boolean; atts: Attachment[] };
+type Drafts = { to: string; cc: string; bcc: string };  // V3.7 : texte tapé pas encore devenu pastille
+const NO_DRAFTS: Drafts = { to: "", cc: "", bcc: "" };
+type State = { req: ComposeRequest; d: MailDraft; showCc: boolean; showBcc: boolean; drafts: Drafts; withQuote: boolean; signature: boolean; atts: Attachment[] };
 const MAX_BYTES = 10 * 1024 * 1024;
 export const fileSize = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1).replace(".", ",")} Mo` : `${Math.max(1, Math.round(n / 1024))} Ko`);
 
@@ -82,7 +86,7 @@ export function Composer() {
   const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: api.settings, staleTime: 5 * 60_000 });
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"normal" | "min" | "max">("normal");
-  const [st, setSt] = useState<State>({ req: {}, d: { to: "", subject: "", body: "" }, showCc: false, withQuote: true, signature: true, atts: [] });
+  const [st, setSt] = useState<State>({ req: {}, d: { to: "", subject: "", body: "" }, showCc: false, showBcc: false, drafts: NO_DRAFTS, withQuote: true, signature: true, atts: [] });
   const [uploading, setUploading] = useState(0);
   const [dragging, setDragging] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -104,24 +108,25 @@ export function Composer() {
   const insertTemplate = async (id: number) => {
     setInserting(true);
     try {
-      const tpl = await api.sequenceTemplate(id, st.d.to);
+      const tpl = await api.sequenceTemplate(id, splitAddresses(st.d.to)[0] ?? st.drafts.to.trim());
       setSt((x) => ({
         ...x,
         d: { ...x.d, subject: x.d.subject.trim() && (x.req.inReplyTo || x.req.forward) ? x.d.subject : tpl.subject,
              body: x.d.body.trim() ? `${tpl.body}\n\n${x.d.body}` : tpl.body },
         atts: [...x.atts, ...tpl.attachments.filter((a) => !x.atts.some((b) => b.id === a.id))],
       }));
-      if (!tpl.contact && st.d.to.trim()) toast.info("Destinataire absent de vos contacts : le modèle commence par « Madame, Monsieur ».");
+      if (!tpl.contact && (st.d.to.trim() || st.drafts.to.trim())) toast.info("Destinataire absent de vos contacts : le modèle commence par « Madame, Monsieur ».");
       requestAnimationFrame(() => body.current?.focus());
     } catch (e) { toastError(e, "Modèle non inséré"); } finally { setInserting(false); }
   };
   const body = useRef<HTMLTextAreaElement>(null);
-  const toInput = useRef<HTMLInputElement>(null);
+  const toInput = useRef<RecipientInputHandle>(null);
 
   useEffect(() => {
     const onCompose = (e: Event) => {
       const r = (e as CustomEvent<ComposeRequest>).detail ?? {};
-      setSt({ req: r, d: { to: r.to ?? "", cc: r.cc ?? "", subject: r.subject ?? "", body: r.body ?? "" }, showCc: !!r.cc, withQuote: true, signature: true, atts: r.attachments ?? [] });
+      setSt({ req: r, d: { to: r.to ?? "", cc: r.cc ?? "", bcc: r.bcc ?? "", subject: r.subject ?? "", body: r.body ?? "" },
+              showCc: !!r.cc, showBcc: !!r.bcc, drafts: NO_DRAFTS, withQuote: true, signature: true, atts: r.attachments ?? [] });
       setErrors({});
       setMode("normal");
       setOpen(true);
@@ -136,7 +141,10 @@ export function Composer() {
   }, []);
 
   // Envoi en arrière-plan : on ferme tout de suite, on rouvre le brouillon si ça échoue.
-  const send = useCallback(async (state: State, force = false, checked = false) => {
+  const send = useCallback(async (raw: State, force = false, checked = false) => {
+    // V3.7 : une adresse tapée mais pas encore devenue pastille part aussi
+    const merge = (k: "to" | "cc" | "bcc") => joinAddresses([...splitAddresses(raw.d[k]), ...splitAddresses(raw.drafts[k])]);
+    const state: State = { ...raw, d: { ...raw.d, to: merge("to"), cc: merge("cc"), bcc: merge("bcc") }, drafts: NO_DRAFTS };
     const { d, req } = state;
     const local: Record<string, string> = {};
     if (!d.to.trim()) local.to = "Indiquez un destinataire.";
@@ -153,7 +161,8 @@ export function Composer() {
       if (issues.length) { setWarn({ message: issues.join(" "), state, force }); return; }
     }
     setOpen(false);
-    const id = toast.loading(`Envoi à ${d.to}…`);
+    const others = splitAddresses(d.cc).length + splitAddresses(d.bcc).length;
+    const id = toast.loading(`Envoi à ${d.to}${others ? ` (+ ${others} en copie)` : ""}…`);
     try {
       const r = await api.mailSend({
         ...d, body: d.body + (req.quote && state.withQuote ? quoted(req.quote) : ""), signature: state.signature, force,
@@ -172,6 +181,7 @@ export function Composer() {
   }, [qc]);
 
   const set = (patch: Partial<MailDraft>) => setSt((x) => ({ ...x, d: { ...x.d, ...patch } }));
+  const setDraft = (k: "to" | "cc" | "bcc", v: string) => setSt((x) => ({ ...x, drafts: { ...x.drafts, [k]: v } }));
   const sig = settings?.mailbox.signature?.trim();
   const { req, d } = st;
   const title = req.forward ? "Transfert" : req.inReplyTo ? "Réponse" : "Nouveau message";
@@ -210,17 +220,22 @@ export function Composer() {
               onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); setDragging(false); void addFiles(e.dataTransfer.files); } }}
               onSubmit={(e) => { e.preventDefault(); void send(st); }}
               onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); void send(st); } }}>
-              <div className={line}>
-                <span className="w-12 text-sm text-muted-foreground">À</span>
-                <input ref={toInput} className={field} value={d.to} onChange={(e) => set({ to: e.target.value })} placeholder="nom@entreprise.ma" />
-                {!st.showCc && <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setSt((x) => ({ ...x, showCc: true }))}>Cc</button>}
-              </div>
+              <RecipientInput ref={toInput} label="À" placeholder="nom ou adresse (ex. yassine)"
+                value={splitAddresses(d.to)} onChange={(v) => set({ to: joinAddresses(v) })}
+                draft={st.drafts.to} onDraft={(v) => setDraft("to", v)} exclude={[...splitAddresses(d.cc), ...splitAddresses(d.bcc)]}
+                trailing={<>
+                  {!st.showCc && <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setSt((x) => ({ ...x, showCc: true }))}>Cc</button>}
+                  {!st.showBcc && <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setSt((x) => ({ ...x, showBcc: true }))}>Cci</button>}
+                </>} />
               {errors.to && <p className="px-4 pt-1 text-xs text-destructive">{errors.to}</p>}
               {st.showCc && (
-                <div className={line}>
-                  <span className="w-12 text-sm text-muted-foreground">Cc</span>
-                  <input className={field} value={d.cc ?? ""} onChange={(e) => set({ cc: e.target.value })} placeholder="adresses séparées par une virgule" />
-                </div>
+                <RecipientInput label="Cc" value={splitAddresses(d.cc)} onChange={(v) => set({ cc: joinAddresses(v) })}
+                  draft={st.drafts.cc} onDraft={(v) => setDraft("cc", v)} exclude={[...splitAddresses(d.to), ...splitAddresses(d.bcc)]} placeholder="en copie (plusieurs possibles)" />
+              )}
+              {st.showBcc && (
+                <RecipientInput label="Cci" value={splitAddresses(d.bcc)} onChange={(v) => set({ bcc: joinAddresses(v) })}
+                  draft={st.drafts.bcc} onDraft={(v) => setDraft("bcc", v)} exclude={[...splitAddresses(d.to), ...splitAddresses(d.cc)]}
+                  placeholder="copie cachée : les autres destinataires ne la voient pas" />
               )}
               <div className={line}>
                 <span className="w-12 text-sm text-muted-foreground">Objet</span>

@@ -69,6 +69,9 @@ def start() -> None:
     from app import quotes  # dossiers de cotation : relances automatiques des compagnies
     sch.add_job(_safe(for_each_user(quotes.run_due_followups), "relances des dossiers"), "interval", seconds=60,
                 id="quote_followups", name="relances des dossiers", max_instances=1, coalesce=True)
+    from app import prospecting  # recherches de prospects lancées (looot), repris d'ODDO V3.7
+    sch.add_job(_safe(prospecting.tick, "recherche de prospects"), "interval", seconds=20, id="prospecting",
+                name="recherche de prospects", max_instances=1, coalesce=True)
     from app import contracts  # contrats : tacite reconduction des contrats échus (tout le cabinet)
     sch.add_job(_safe(contracts.run_tacit, "reconduction des contrats"), "interval", hours=6, id="contracts_tacit",
                 name="reconduction des contrats", next_run_time=datetime.now(TZ) + timedelta(minutes=3),

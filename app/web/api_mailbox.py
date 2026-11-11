@@ -156,6 +156,25 @@ def archive_message(uid: int, folder: str = "INBOX"):
         raise _unavailable(exc) from None
 
 
+@router.get("/unread")
+def unread(refresh: bool = False):
+    """V3.7.1 : nombre d'emails non lus de la boîte de réception (pastille du menu)."""
+    try:
+        return {"unread": mbx.unread_count(refresh)}
+    except mbx.MailboxUnavailable:
+        return {"unread": None}
+
+
+@router.post("/messages/{uid:int}/seen")
+def mark_seen(uid: int, folder: str = "INBOX", seen: bool = True):
+    """V3.7.1 : lu / non lu, sur le serveur (le webmail le voit aussi)."""
+    try:
+        mbx.set_seen(folder, uid, seen)
+    except mbx.MailboxUnavailable as exc:
+        raise _unavailable(exc) from None
+    return {"ok": True, "seen": seen}
+
+
 @router.post("/messages/{uid:int}/spam")
 def spam_message(uid: int, folder: str = "INBOX"):
     """V3 : « Spam » : l'email part dans le dossier des indésirables de la boîte (comme dans
@@ -190,6 +209,14 @@ def send(body: dict):
                 raise HTTPException(409, {"message": exc.confirm, "confirm": True}) from None
             raise HTTPException(422, {"errors": exc.errors}) from None
         return {"id": out.id, "test_mode": out.test_mode, "to": out.to_email}
+
+
+@router.get("/suggest")
+def suggest(q: str = "", exclude: str = ""):
+    """V3.7 : adresses proposées pendant la saisie d'un destinataire (À, Cc, Cci)."""
+    from app import address_book
+    with get_session() as s:
+        return {"items": address_book.suggest(s, q, exclude=[e for e in exclude.split(",") if e.strip()])}
 
 
 @router.get("/awaiting")

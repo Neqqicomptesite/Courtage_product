@@ -36,7 +36,7 @@ def _owner(c: Contact, names: dict[int, str] | None) -> dict | None:
 
 
 def _row(c: Contact, names: dict[int, str] | None = None) -> dict:
-    return {**contact_ref(c), "job_title": c.job_title, "wave": c.wave, "status": c.global_status, "owner": _owner(c, names),
+    return {**contact_ref(c), "job_title": c.job_title, "wave": c.wave, "lot_number": c.lot_number, "status": c.global_status, "owner": _owner(c, names),
             "reliability": cs.reliability_category(c.email_reliability), "sector_family": c.sector_family,
             "target_segment": c.target_segment, "kind": c.kind, "company_id": c.company_id,
             "department": c.department, "seniority": c.seniority}
@@ -354,9 +354,11 @@ def import_commit(token: str, body: MappingIn):
             ids = list(s.scalars(select(Contact.id).where(Contact.email.in_(emails))))
             name = f"Import {meta['filename']} · {to_local(utcnow()):%d/%m/%Y}"
             cl = ls.create(s, name, ids, source="import")
+            new_emails = [r.email for r in plan.of("new")]  # V3.7 : le fichier est un lot numéroté
+            lot = ls.stamp_lot(s, cl, s.scalars(select(Contact.id).where(Contact.email.in_(new_emails))) if new_emails else [])
             prospects = s.scalar(select(func.count(Contact.id)).where(Contact.id.in_(ids), Contact.kind == "prospect",
                                                                       Contact.global_status == "active")) or 0
-            out["list"] = {"id": cl.id, "name": cl.name, "count": len(ids), "prospects": prospects}
+            out["list"] = {"id": cl.id, "name": cl.name, "count": len(ids), "prospects": prospects, "lot": lot}
         s.commit()
     _discard(token)
     return out

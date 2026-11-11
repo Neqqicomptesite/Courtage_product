@@ -44,7 +44,7 @@ import { Brand } from "@/components/brand";
 
 const NAV = [
   { to: "/", label: "Tableau de bord", icon: LayoutDashboard, end: true },
-  { to: "/inbox", label: "Boîte mail", icon: Inbox, badge: "to_classify" as const, also: ["/replies"] },
+  { to: "/inbox", label: "Boîte mail", icon: Inbox, unread: true, also: ["/replies"] },
   { to: "/quotes", label: "Dossiers", icon: FileStack },
   { to: "/contracts", label: "Contrats", icon: FileCheck2 },
   { to: "/agenda", label: "Agenda", icon: CalendarDays },
@@ -132,9 +132,21 @@ function SyncIndicator({ status, sync }: { status: Status | undefined; sync: Ret
   );
 }
 
+/** V3.7.1 : emails non lus de la boîte de réception, comme le chiffre d'une messagerie (aussi dans l'onglet). */
+export function useUnread() {
+  const { data } = useQuery({ queryKey: ["mail-unread"], queryFn: api.mailUnread, refetchInterval: 60_000, retry: false, staleTime: 30_000 });
+  const n = data?.unread ?? 0;
+  useEffect(() => {
+    const base = document.title.replace(/^\(\d+\) /, "");
+    document.title = n > 0 ? `(${n}) ${base}` : base;
+  }, [n]);
+  return n;
+}
+
 function Sidebar({ status, onNavigate }: { status: Status | undefined; onNavigate?: () => void }) {
   const location = useLocation();
   const me = useMe();
+  const unread = useUnread();
   const nav = me?.server_mode && me.role === "admin"
     ? [...NAV.slice(0, -1), { to: "/equipe", label: "Équipe", icon: UserCog }, NAV[NAV.length - 1]]
     : NAV;
@@ -145,7 +157,7 @@ function Sidebar({ status, onNavigate }: { status: Status | undefined; onNavigat
       </div>
       <nav className="flex-1 space-y-0.5 px-3">
         {nav.map((n) => {
-          const count = "badge" in n && n.badge && status ? status[n.badge] : 0;
+          const count = "unread" in n && n.unread ? unread : 0;
           const alsoActive = "also" in n && n.also?.some((p) => location.pathname.startsWith(p));
           return (
             <NavLink key={n.to} to={n.to} end={n.end} onClick={onNavigate}

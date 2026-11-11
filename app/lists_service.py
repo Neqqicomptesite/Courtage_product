@@ -93,7 +93,7 @@ def to_json(s: Session, cl: ContactList, n: int | None = None, names: dict | Non
         owner = (u.full_name or u.email) if u else None
     else:
         owner = names.get(cl.owner_id)
-    return {"id": cl.id, "name": cl.name, "count": n, "source": cl.source, "shared": cl.shared,
+    return {"id": cl.id, "name": cl.name, "count": n, "source": cl.source, "shared": cl.shared, "lot": cl.lot_number,
             "owner": owner, "mine": cl.owner_id is not None and cl.owner_id == user_id(),
             "editable": can_edit(cl), "created_at": cl.created_at.isoformat() if cl.created_at else None,
             "updated_at": cl.updated_at.isoformat() if cl.updated_at else None}
@@ -112,3 +112,24 @@ def lists_of(s: Session, contact_id: int) -> list[dict]:
         ContactListMember, ContactListMember.list_id == ContactList.id).where(ContactListMember.contact_id == contact_id)
         .order_by(ContactList.name)).all()
     return [{"id": i, "name": n} for i, n in rows]
+
+
+# --------------------------------------------------------------------------- V3.7 : lots numérotés
+
+def next_lot(s: Session) -> int:
+    """Numéro du prochain lot, pour toute l'équipe (1, 2, 3…)."""
+    top = s.scalar(select(func.max(ContactList.lot_number)).execution_options(oddo_all=True))
+    return (top or 0) + 1
+
+
+def stamp_lot(s: Session, cl: ContactList, new_ids) -> int | None:
+    """Un import ou une recherche crée un lot : la liste reçoit le numéro suivant, et ses NOUVEAUX
+    contacts le prennent (un contact déjà connu garde son lot d'origine, donc les mêmes textes)."""
+    ids = [int(i) for i in new_ids or ()]
+    if not ids:
+        return cl.lot_number
+    if cl.lot_number is None:
+        cl.lot_number = next_lot(s)
+    for c in s.scalars(select(Contact).where(Contact.id.in_(ids), Contact.lot_number.is_(None))):
+        c.lot_number = cl.lot_number
+    return cl.lot_number

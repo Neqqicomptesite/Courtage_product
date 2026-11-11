@@ -201,10 +201,22 @@ class FakeImapServer:
                     continue
                 wanted = self._uid_set(selected, args[1])
                 new_flags = " ".join(args[3:]).strip("()").split()
+                remove = args[2].startswith("-")
                 for uid, flags, _ in selected.messages:
                     if uid in wanted:
-                        flags.extend(f for f in new_flags if f not in flags)
+                        if remove:
+                            flags[:] = [f for f in flags if f not in new_flags]
+                        else:
+                            flags.extend(f for f in new_flags if f not in flags)
                 send(f"{tag} OK STORE termine")
+            elif cmd == "STATUS":
+                folder = self.folders.get(_unquote(args[0]))
+                if folder is None:
+                    send(f"{tag} NO dossier inconnu")
+                    continue
+                unseen = sum(1 for _, flags, _ in folder.messages if "\\Seen" not in flags)
+                send(f'* STATUS "{_unquote(args[0])}" (UNSEEN {unseen})')
+                send(f"{tag} OK STATUS termine")
             elif cmd == "UID" and selected is not None and args and args[0].upper() == "EXPUNGE":
                 wanted = self._uid_set(selected, args[1])
                 with self._lock:

@@ -168,7 +168,8 @@ def root_key(block) -> str:
     return block.variant_of or block.key
 
 
-def add_variant(session, block):
+def add_variant(session, block, number: int | None = None):
+    """Variante suivante (FIN2, FIN3…) ; `number` (V3.7) : celle d'un lot précis (FIN4 pour le lot 4)."""
     from sqlalchemy import select
 
     from app.models import ContentBlock
@@ -176,9 +177,17 @@ def add_variant(session, block):
         raise ProfileError("Le texte générique n'a pas de variante.")
     root = root_key(block)
     keys = set(session.scalars(select(ContentBlock.key).where(ContentBlock.kind == block.kind)))
-    n = 2
-    while f"{root}{n}" in keys or f"{root}{n}" in (set(TARGETS) | set(SECTORS)):
-        n += 1
+    reserved = set(TARGETS) | set(SECTORS)
+    if number is not None:
+        n = int(number)
+        if n < 2 or n > 999:
+            raise ProfileError("Numéro de variante invalide (2 et plus).")
+        if f"{root}{n}" in keys or f"{root}{n}" in reserved:
+            raise ProfileError(f"Le texte {root}{n} existe déjà.")
+    else:
+        n = 2
+        while f"{root}{n}" in keys or f"{root}{n}" in reserved:
+            n += 1
     table = _TB if block.kind == "target" else _SB  # libellés affichés dans « Textes personnalisés »
     base_label = table.get(root) or block.label or root
     v = ContentBlock(kind=block.kind, key=f"{root}{n}", label=f"{base_label} · variante {n}"[:120],

@@ -201,6 +201,13 @@ def list_messages(folder: str = "INBOX", days: int = 30, refresh: bool = False, 
     finally:
         _close(conn)
     items.sort(key=lambda x: x["date"] or "", reverse=True)
+    try:  # V3.7 : les expéditeurs (vrais, pas les envois automatiques) alimentent le carnet d'adresses
+        from app import address_book
+        address_book.record_seen([(i["from_name"], i["from_email"]) for i in items if not i["bulk"]],
+                                 own={ctx.cfg.username} if getattr(ctx.cfg, "username", None) else None)
+    except Exception:  # noqa: BLE001 – le carnet ne doit jamais empêcher d'afficher la boîte
+        import logging
+        logging.getLogger(__name__).warning("Carnet d'adresses non mis à jour", exc_info=True)
     result = {"folder": folder, "days": days, "searched": bool(criteria), "items": items, "found": found, "truncated": found > len(items),
               "fetched_at": now.isoformat()}
     with _lock:
@@ -368,6 +375,8 @@ def invalidate(folder: str | None = None) -> None:
             del _cache[k]
         for k in [k for k in _raw_cache if k[0] == me and (folder is None or k[1] == folder)]:
             del _raw_cache[k]
+        if folder in (None, "INBOX"):
+            _unread.pop(me, None)
 
 
 def _quote_folder(name: str) -> str:  # réexport pour l'envoi manuel
@@ -508,3 +517,55 @@ def unarchive(message_id: str, to_folder: str = "INBOX", imap_factory=None, kind
         _close(conn)
     invalidate()
     return True
+
+
+# --------------------------------------------------------------------------- V3.7.1 : non lus
+# Comme dans une messagerie : un chiffre à côté de « Boîte mail » (non lus de la boîte de réception),
+# et l'email ouvert dans l'appli passe « lu » sur le serveur (donc aussi dans le webmail).
+UNREAD_TTL_S = 45
+_unread: dict = {}
+
+
+def unread_count(refresh: bool = False, imap_factory=None) -> int:
+    """Non lus de INBOX, via IMAP STATUS (léger : rien n'est téléchargé), gardé 45 s par employé."""
+    key = _who()
+    with _lock:
+        hit = _unread.get(key)
+        if hit and not refresh and time.monotonic() - hit[0] < UNREAD_TTL_S:
+            return hit[1]
+    ctx = _context()
+    conn = _open(ctx, imap_factory)
+    try:
+        typ, data = conn.status("INBOX", "(UNSEEN)")
+        m = re.search(rb"UNSEEN (\d+)", b" ".join(d if isinstance(d, bytes) else str(d).encode() for d in data or []))
+        n = int(m.group(1)) if typ == "OK" and m else 0
+    except imaplib.IMAP4.error as exc:
+        raise MailboxUnavailable(f"Boîte de réception illisible : {exc}") from None
+    finally:
+        _close(conn)
+    with _lock:
+        _unread[key] = (time.monotonic(), n)
+    return n
+
+
+def set_seen(folder: str, uid: int, seen: bool = True, imap_factory=None) -> None:
+    """Marque l'email lu (ou non lu) sur le serveur ; la liste et le compteur sont mis à jour."""
+    ctx = _context()
+    conn = _open(ctx, imap_factory)
+    try:
+        typ, _ = conn.select(_quote(folder))  # lecture-écriture, pour ce seul drapeau
+        if typ != "OK":
+            raise MailboxUnavailable(f"Dossier « {folder} » inaccessible.")
+        conn.uid("STORE", str(int(uid)), "+FLAGS.SILENT" if seen else "-FLAGS.SILENT", r"(\Seen)")
+    except imaplib.IMAP4.error as exc:
+        raise MailboxUnavailable(f"Email non mis à jour : {exc}") from None
+    finally:
+        _close(conn)
+    me = _who()
+    with _lock:
+        _unread.pop(me, None)
+        for k, (_t, res) in _cache.items():  # la liste en mémoire suit, sans relire le serveur
+            if k[0] == me and k[1] == folder:
+                for it in res["items"]:
+                    if it["uid"] == int(uid):
+                        it["seen"] = seen

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  AlertTriangle, Archive, Ban, Building2, CalendarClock, CalendarPlus, CheckCheck, Clock, FileStack, Forward, Phone, Inbox, Loader2, Mail, Paperclip, PenSquare, RefreshCw, Reply, ReplyAll, Rocket, Search, Send, UserPlus, Users,
+  AlertTriangle, Archive, Ban, Building2, CalendarClock, CalendarPlus, CheckCheck, Clock, FileStack, Forward, Phone, Inbox, Loader2, Mail, MailOpen, Paperclip, PenSquare, RefreshCw, Reply, ReplyAll, Rocket, Search, Send, UserPlus, Users,
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -17,7 +17,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ApiError, api, type AwaitingItem, type Followup, type MailItem } from "@/lib/api";
+import { type MailList, ApiError, api, type AwaitingItem, type Followup, type MailItem } from "@/lib/api";
 import { formatDayTime, fullName, relativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { openReminder } from "@/pages/agenda";
@@ -225,6 +225,21 @@ function Reader({ item, folder, actions }: { item: MailItem; folder: string; act
   const [asText, setAsText] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
   const person = item.contact;
+  // V3.7.1 : comme dans Outlook, un email affiché 2 secondes passe « lu » (sur le serveur : le webmail le voit aussi)
+  const setSeen = async (seen: boolean) => {
+    const patch = (d: MailList | undefined) => d && { ...d, items: d.items.map((x) => (x.uid === item.uid ? { ...x, seen } : x)) };
+    qc.setQueriesData<MailList>({ queryKey: ["mail", "list", folder] }, patch);
+    qc.setQueriesData<MailList>({ queryKey: ["mail", "search", folder] }, patch);
+    try { await api.mailSeen(folder, item.uid, seen); } catch (e) { toastError(e, "Email non mis à jour"); }
+    qc.invalidateQueries({ queryKey: ["mail-unread"] });
+  };
+  const sentFolder = /sent|envoy/i.test(folder);
+  useEffect(() => {
+    if (item.seen || !m || sentFolder) return;
+    const t = setTimeout(() => void setSeen(true), 2000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.uid, item.seen, !!m, folder]);
 
   const createContact = () => {
     const [first, ...rest] = (item.from_name && item.from_name !== item.from_email ? item.from_name : "").split(" ");
@@ -357,6 +372,11 @@ function Reader({ item, folder, actions }: { item: MailItem; folder: string; act
                 ? { contact: { id: item.contact.id, name: fullName(item.contact) }, company: item.contact.company_ref }
                 : { client_name: item.from_name || item.from_email })}>
               <FileStack /> Dossier
+            </Button>
+          )}
+          {!sentFolder && (
+            <Button variant="outline" onClick={() => void setSeen(!item.seen)} title={item.seen ? "Le remettre en non lu (aussi dans le webmail)" : "Marquer comme lu"}>
+              {item.seen ? <><Mail /> Non lu</> : <><MailOpen /> Lu</>}
             </Button>
           )}
           {!folder.toLowerCase().includes("archive") && (

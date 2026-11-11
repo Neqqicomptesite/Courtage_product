@@ -1,13 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { Command } from "cmdk";
 import { openComposer } from "@/components/composer";
-import { Building2, CalendarDays, FileCheck2, FileText, Inbox, PenSquare, LayoutDashboard, ListChecks, ListOrdered, RefreshCw, Rocket, Settings, Upload, User, UserPlus, Users } from "lucide-react";
+import { Building2, CalendarDays, FileCheck2, FileText, Inbox, PenSquare, LayoutDashboard, ListChecks, ListOrdered, RefreshCw, Rocket, Search, Settings, Upload, User, UserPlus, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
 import { fullName } from "@/lib/format";
+import { useMe } from "@/pages/login";
 
 const PAGES = [
   { to: "/", label: "Tableau de bord", icon: LayoutDashboard },
@@ -26,13 +27,14 @@ const ACTIONS = [
   { to: "/contacts?new=1", label: "Nouveau contact", icon: UserPlus },
   { to: "/contacts/import", label: "Importer des contacts", icon: Upload },
   { to: "/contacts/lists", label: "Listes de contacts", icon: ListChecks },
-  { to: "/contacts/lists", label: "Listes de contacts", icon: ListChecks },
+  { to: "/contacts/prospecting", label: "Trouver des prospects (looot)", icon: Search, admin: true },
   { to: "/agenda?new=1", label: "Ajouter un rappel", icon: CalendarDays },
   { to: "/sequences/blocks", label: "Rédiger les textes personnalisés", icon: FileText },
 ];
 
 /** Palette de commandes (Ctrl+K) : aller n'importe où ou trouver un contact au clavier. */
 export function CommandPalette({ onSync }: { onSync: () => void }) {
+  const me = useMe();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const navigate = useNavigate();
@@ -69,7 +71,7 @@ export function CommandPalette({ onSync }: { onSync: () => void }) {
           <Command.List className="max-h-80 overflow-y-auto p-2">
             <Command.Empty className="py-6 text-center text-sm text-muted-foreground">Aucun résultat.</Command.Empty>
             <Command.Group heading="Actions" className="text-xs text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
-              {ACTIONS.map((a) => (
+              {ACTIONS.filter((a) => !("admin" in a) || !me?.server_mode || me.role === "admin").map((a) => (
                 <Command.Item key={a.to} className={item} onSelect={() => go(a.to)}><a.icon />{a.label}</Command.Item>
               ))}
               <Command.Item className={item} onSelect={() => { setOpen(false); openComposer(); }}><PenSquare />Écrire un email</Command.Item>

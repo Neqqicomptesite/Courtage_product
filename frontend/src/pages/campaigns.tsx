@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle, ArrowLeft, ArrowRight, CalendarCheck, CalendarClock, CheckCircle2, Download, Filter, ListOrdered, Loader2, MoreHorizontal,
-  Eye, FileText, ListPlus, Pause, Pencil, Play, Rocket, Search, Send, ShieldCheck, SkipForward, Trash2, UserMinus, Users,
+  Eye, FileText, Layers, ListPlus, Pause, Plus, Pencil, Play, Rocket, Search, Send, ShieldCheck, SkipForward, Trash2, UserMinus, Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -20,7 +20,8 @@ import { Progress } from "@/components/ui/progress";
 import { NativeSelect } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { api, type Activation, type Block, type BlockMap, type Candidate, type CampaignDetail, type Indicators, type SequenceCategory } from "@/lib/api";
+import { Textarea } from "@/components/ui/textarea";
+import { api, type Activation, type Block, type BlockMap, type Candidate, type CampaignDetail, type Indicators, type LotText, type SequenceCategory } from "@/lib/api";
 import { CATEGORIES } from "@/pages/sequences";
 import { formatDayTime, fullName, lot, pct } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -29,7 +30,7 @@ const KIND_FR: Record<string, string> = { prospect: "Prospect", client: "Client"
 const filterValue = (k: string, v: string) => (k === "wave" ? lot(v) : k === "kind" ? KIND_FR[v] ?? v
   : k === "contact_ids" ? `${v.split(",").filter(Boolean).length} personne(s) choisie(s)` : v);
 const FILTER_LABELS: Record<string, string> = {
-  kind: "Type de contact", target_segment: "Fonction", sector_family: "Secteur", sequence_code: "Profil", wave: "Lot d'envoi", reliability: "Qualité de l'email",
+  kind: "Type de contact", target_segment: "Fonction", sector_family: "Secteur", sequence_code: "Profil", wave: "Lot d'envoi", reliability: "Qualité de l'email", list_id: "Liste",
 };
 
 /* =============================================================== liste */
@@ -540,6 +541,82 @@ function UpcomingEmails({ campaignId }: { campaignId: number }) {
   );
 }
 
+/** V3.7 : chaque import (ou recherche looot) est un lot numéroté ; le lot 4 reçoit les variantes 4
+ * (FIN4, BTP4…). Si une variante manque, le texte d'origine part : on propose de la rédiger ici,
+ * sans quitter la campagne. */
+export function LotTextsCard({ camp }: { camp: CampaignDetail }) {
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState<{ item: LotText; lot: number; id: number; body: string } | null>(null);
+  const create = useMutation({
+    mutationFn: async ({ item, lot }: { item: LotText; lot: number }) => {
+      const b = await api.blockVariant(item.root_id, lot);
+      return { item, lot, b };
+    },
+    onSuccess: ({ item, lot, b }) => setEditing({ item, lot, id: b.id, body: b.body }),
+    onError: (e) => toastError(e),
+  });
+  const save = useMutation({
+    mutationFn: (e: { id: number; body: string }) => api.blockSave(e.id, e.body),
+    onSuccess: () => {
+      toast.success(`Texte ${editing?.item.key} enregistré : le lot ${editing?.lot} le recevra`);
+      setEditing(null);
+      qc.invalidateQueries({ queryKey: ["campaign", camp.id] }); qc.invalidateQueries({ queryKey: ["blocks"] });
+      qc.invalidateQueries({ queryKey: ["activation", camp.id] });
+    },
+    onError: (e) => toastError(e),
+  });
+  const lots = camp.lot_texts ?? [];
+  if (!lots.length) return null;
+  const missing = lots.reduce((n, l) => n + l.items.filter((i) => !i.block_id).length, 0);
+  return (
+    <Card className={cn(missing > 0 && "border-warning/50")}>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2"><Layers className="size-4 text-muted-foreground" />Textes par lot</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Chaque import ou recherche de prospects est un lot numéroté. Le lot 4 reçoit les variantes 4 (ex. FIN4, BTP4) ; le lot 1 garde les textes d'origine.
+          {missing > 0 && <> <b className="text-foreground">{missing} variante{missing > 1 ? "s" : ""} à rédiger</b> : sans elle, le texte d'origine part.</>}
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {lots.map((l) => (
+          <div key={l.lot} className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="w-full text-xs text-muted-foreground sm:w-40"><b className="text-foreground">Lot {l.lot}</b> · {l.contacts} contact{l.contacts > 1 ? "s" : ""}</span>
+            {l.items.map((i) => i.block_id ? (
+              <span key={i.key} className="inline-flex items-center gap-1.5 rounded-full border border-success/40 bg-success/5 px-3 py-1">
+                <CheckCircle2 className="size-3.5 text-success" />{i.root_label} <code className="text-[11px] opacity-70">{i.key}</code>
+              </span>
+            ) : (
+              <span key={i.key} className="inline-flex items-center gap-2 rounded-full border border-dashed border-warning/60 py-0.5 pl-3 pr-0.5">
+                <AlertTriangle className="size-3.5 text-warning" />
+                <span>{i.root_label} <code className="text-[11px] opacity-70">{i.key}</code> manque <span className="text-muted-foreground">→ {i.root}</span></span>
+                <Button size="sm" variant="outline" className="h-7 rounded-full" disabled={create.isPending} onClick={() => create.mutate({ item: i, lot: l.lot })}>
+                  <Plus /> Rédiger {i.key}
+                </Button>
+              </span>
+            ))}
+          </div>
+        ))}
+      </CardContent>
+      <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Texte {editing?.item.key} · {editing?.item.root_label}, lot {editing?.lot}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Partie à part pour les contacts du lot {editing?.lot}. Elle part de la copie du texte {editing?.item.root} : réécrivez ce que vous voulez changer.
+            Vous la retrouverez aussi dans Séquences → Textes personnalisés.
+          </p>
+          <Textarea rows={10} value={editing?.body ?? ""} onChange={(e) => editing && setEditing({ ...editing, body: e.target.value })} aria-label={`Texte ${editing?.item.key}`} />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>Plus tard</Button>
+            <Button disabled={save.isPending || !editing?.body.trim()} onClick={() => editing && save.mutate({ id: editing.id, body: editing.body })}>Enregistrer {editing?.item.key}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
 /** V3.4 : textes de la campagne. Pour une fonction ou un secteur qui a des variantes, la campagne
  * peut envoyer une variante à la place du texte de la fiche, ou partager à parts égales entre
  * plusieurs (test). Rien de coché = selon la fiche du contact. */
@@ -656,6 +733,7 @@ export function CampaignDetailPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { data } = useQuery({ queryKey: ["campaign", id], queryFn: () => api.campaign(id), refetchInterval: 30_000 });
+  const { data: listsData } = useQuery({ queryKey: ["lists"], queryFn: api.lists, enabled: !!data?.filters && "list_id" in data.filters });
   const [view, setView] = useState("all");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -701,7 +779,8 @@ export function CampaignDetailPage() {
         back={<Button variant="ghost" size="sm" className="-ml-2" asChild><Link to="/campaigns"><ArrowLeft /> Campagnes</Link></Button>}
         title={<span className="flex items-center gap-3"><CampaignName id={data.id} name={data.name} /><CampaignStatus status={data.status} /></span>}
         description={<>Séquence <Link className="text-primary hover:underline" to={`/sequences/${data.sequence?.id}`}>{data.sequence?.name}</Link>
-          {Object.entries(data.filters).map(([k, v]) => <Badge key={k} variant="secondary" className="ml-2">{k === "contact_ids" ? filterValue(k, v) : `${FILTER_LABELS[k] ?? k} : ${filterValue(k, v)}`}</Badge>)}
+          {Object.entries(data.filters).map(([k, v]) => <Badge key={k} variant="secondary" className="ml-2">{k === "contact_ids" ? filterValue(k, v)
+            : `${FILTER_LABELS[k] ?? k} : ${k === "list_id" ? listsData?.items.find((l) => String(l.id) === String(v))?.name ?? `n° ${v}` : filterValue(k, v)}`}</Badge>)}
           {data.activated_at && <> · lancée le {formatDayTime(data.activated_at)}</>}
           {data.start_at && !data.started && new Date(data.start_at) > new Date() && <Badge variant="info" className="ml-2"><CalendarClock className="mr-1 size-3" />Démarre {formatDayTime(data.start_at)}</Badge>}</>}
         actions={<>
@@ -718,7 +797,7 @@ export function CampaignDetailPage() {
         checking ? (
           <div className="space-y-4">
             {!report ? <Card className="flex items-center gap-3 p-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Vérification de chaque email…</Card>
-              : <ActivationSummary report={report} sequenceId={data.sequence!.id} overlap={overlap} onOverlap={setOverlap} recent={recent} onRecent={setRecent} />}
+              : <><LotTextsCard camp={data} /><ActivationSummary report={report} sequenceId={data.sequence!.id} overlap={overlap} onOverlap={setOverlap} recent={recent} onRecent={setRecent} /></>}
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setChecking(false)}>Annuler</Button>
               <Button variant="brand" disabled={!report || report.blocked || launch.isPending} onClick={() => launch.mutate()}><Rocket /> Lancer la campagne</Button>
@@ -726,6 +805,7 @@ export function CampaignDetailPage() {
           </div>
         ) : (
           <div className="space-y-6">
+          <LotTextsCard camp={data} />
           <CampaignTexts camp={data} />
           <Card>
             <CardHeader><CardTitle>{data.candidates.filter((c) => !c.excluded).length} contacts seront inscrits</CardTitle></CardHeader>

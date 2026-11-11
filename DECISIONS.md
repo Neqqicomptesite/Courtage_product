@@ -603,3 +603,9 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
 302. **Repris d'ODDO V3.6 (11/11)** : listes de contacts personnelles et partageables (import, Contacts,
      sans-réponse d'une campagne), filtre « Liste » des contacts et des campagnes, campagne proposée à la
      fin de l'import. Migration 0021 (contact_list, contact_list_member, org_id).
+303. **Repris d'ODDO V3.7 et V3.7.1 (11/11)** : « Trouver des prospects » via looot (réservé à l'administrateur,
+     clé looot gardée dans le coffre, aperçu payant puis recherche en tâche de fond, ~55 industries précises
+     validées contre la liste officielle de Prospeo) ; lots numérotés (chaque import / recherche) → variante n
+     des textes, avec « Rédiger FIN4 » depuis la campagne ; destinataires en pastilles, suggestions
+     d'adresses (carnet appris + contacts + collègues), Cc et Cci multiples ; nombre de non lus à côté de
+     « Boîte mail », email affiché 2 s = lu sur le serveur, bouton Lu / Non lu. Migrations 0022 à 0024.

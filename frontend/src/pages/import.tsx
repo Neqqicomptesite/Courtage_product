@@ -137,7 +137,7 @@ export function ImportPage() {
           {done.list && done.list.prospects > 0 && (
             <div className="mt-3 w-full max-w-lg rounded-xl border bg-accent/40 p-4 text-left">
               <p className="font-medium">Lancer une séquence pour ces {done.list.prospects} prospect{done.list.prospects > 1 ? "s" : ""} ?</p>
-              <p className="mt-1 text-sm text-muted-foreground">Ils sont rangés dans la liste « {done.list.name} ». Vous choisirez la séquence, puis vous vérifierez les emails avant le départ.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Ils sont rangés dans la liste « {done.list.name} »{done.list.lot ? <>, <b className="text-foreground">lot {done.list.lot}</b>{done.list.lot >= 2 ? ` (ils recevront les variantes ${done.list.lot} de vos textes, ex. FIN${done.list.lot})` : " (textes d'origine)"}</> : null}. Vous choisirez la séquence, puis vous vérifierez les emails avant le départ.</p>
               <Button variant="brand" className="mt-3" onClick={() => navigate(`/campaigns/new?list_id=${done.list!.id}`)}><Rocket /> Créer une campagne pour eux</Button>
             </div>
           )}

@@ -95,6 +95,7 @@ function optionsFor(o: ContactList["options"] | undefined, key: string, kind: st
 
 
 export function ContactsPage() {
+  const me = useMe();
   const [params, setParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -152,6 +153,7 @@ export function ContactsPage() {
         actions={<>
           <Button variant="ghost" asChild><Link to="/contacts/exclusions"><ShieldOff /> Exclusions</Link></Button>
           <Button variant="outline" asChild><Link to="/contacts/lists"><ListChecks /> Listes</Link></Button>
+          {me && (!me.server_mode || me.role === "admin") && <Button variant="outline" asChild><Link to="/contacts/prospecting"><Search /> Trouver des prospects</Link></Button>}
           <Button variant="outline" asChild><a href="/api/export"><Download /> Exporter</a></Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild><Button variant="outline"><Upload /> Importer</Button></DropdownMenuTrigger>
@@ -275,7 +277,7 @@ export function ContactsPage() {
                       <td className="px-4 py-2.5 text-xs text-muted-foreground">{SENIORITIES.find((d) => d.value === c.seniority)?.label}</td>
                     </> : <>
                       <td className="px-4 py-2.5"><code className="text-xs text-muted-foreground">{c.sequence_code}</code></td>
-                      <td className="px-4 py-2.5 text-xs text-muted-foreground">{lot(c.wave)}</td>
+                      <td className="px-4 py-2.5 text-xs text-muted-foreground">{c.lot_number ? `Lot ${c.lot_number}` : lot(c.wave)}</td>
                       <td className="px-4 py-2.5"><ReliabilityDot value={c.reliability} /></td>
                     </>}
                     <td className="px-4 py-2.5"><ContactStatus status={c.status} /></td>
@@ -441,7 +443,7 @@ function ContactSheet({ id, vocab, companies, companyKinds, onClosed }: { id: nu
         </dl>
       )}
       {(() => {
-        const infos = ([["Profil", c.sequence_code], ["Lot d'envoi", lot(c.wave)], ["Fonction", c.target_segment], ["Secteur", c.sector_family],
+        const infos = ([["Profil", c.sequence_code], ["Lot d'envoi", c.lot_number ? `Lot ${c.lot_number}${c.wave ? ` · ${lot(c.wave)}` : ""}` : lot(c.wave)], ["Fonction", c.target_segment], ["Secteur", c.sector_family],
           ["Activité", c.sector], ["Taille", c.size_bucket], ["Qualité de l'email", c.email_reliability_detail]] as [string, string | null | undefined][])
           .filter(([, v]) => v).concat(c.custom.map((f) => [f.label, f.value] as [string, string]));
         if (!infos.length) return null;

@@ -295,7 +295,8 @@ def test_send_sequence_to_one_person_with_personalised_first_email(client, world
     assert len(r["sent"]) == 1 and not r["refused"] and r["campaign"]["name"].startswith("À l'unité")
     again = client.post(f"/api/sequences/{seq_id}/send", json={"contact_ids": [c0]}, headers=ORIGIN).json()
     assert again["refused"][0]["reason"].startswith("Cette personne a déjà reçu")
-    _run(until=START + timedelta(days=21))
+    # l'envoi direct part de l'heure réelle (pas de START) : 21 jours à partir du plus tardif des deux
+    _run(until=max(START, utcnow()) + timedelta(days=21))
     msgs = [message_from_bytes(m.data, policy=policy.default) for m in world["smtp"].messages]
     first = msgs[0]
     assert "Pour Société 0, en direct" in first["Subject"]

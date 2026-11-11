@@ -377,17 +377,25 @@ def blocks():
         return [_block_json(s, b, labels) for b in sorted(all_, key=rank)]
 
 
+class VariantIn(BaseModel):
+    number: int | None = None  # V3.7 : variante d'un lot précis (4 → FIN4)
+
+
 @router.post("/blocks/{bid:int}/variant")
-def block_variant(bid: int):
+def block_variant(bid: int, body: VariantIn | None = None):
     """V3.4 : une variante du texte (« Finance 2 »), à rédiger autrement pour tester."""
     with get_session() as s:
         b = s.get(ContentBlock, bid)
         if b is None:
             raise not_found("Texte")
         try:
-            v = vocab.add_variant(s, b)
+            v = vocab.add_variant(s, b, body.number if body else None)
         except vocab.ProfileError as exc:
             raise HTTPException(422, {"errors": {"label": str(exc)}}) from None
+        if body and body.number:  # V3.7 : le lot visé la reçoit aussi dans les campagnes déjà lancées
+            from app.models import Campaign
+            for camp in s.scalars(select(Campaign).where(Campaign.status.in_(("active", "paused")))):
+                ss.assign_codes(s, camp)
         s.commit()
         return _block_json(s, v, {**TARGET_BLOCKS, **SECTOR_BLOCKS})
 

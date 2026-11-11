@@ -84,7 +84,7 @@ export type ContactRow = ContactRef & {
   /** V3 : employé qui suit ce contact (prospects) ; null = libre. */
   owner?: { id: number; name: string; me: boolean } | null;
   job_title: string | null;
-  wave: string | null;
+  wave: string | null; lot_number?: number | null;
   status: "active" | "replied" | "bounced" | "unsubscribed" | "do_not_contact";
   reliability: string;
   sector_family: string | null;
@@ -144,8 +144,9 @@ export type MailAttachment = { index: number; name: string; size: number; type: 
 export type AttachmentPreview = { name: string; type: string; size: number; kind: "pdf" | "image" | "html" | "text" | "none";
   html?: string; text?: string; truncated?: boolean; reason?: string };
 export type MailFolders = { items: { raw: string; display: string; label: string; rank: number }[]; sent: string | null; watched: string[] };
+export type AddressSuggestion = { email: string; name: string | null; company: string | null; kind: string | null; uses: number; contact_id: number | null };
 export type MailDraft = {
-  to: string; cc?: string; subject: string; body: string; in_reply_to?: string | null; references?: string[];
+  to: string; cc?: string; bcc?: string; subject: string; body: string; in_reply_to?: string | null; references?: string[];
   signature?: boolean; force?: boolean; attachment_ids?: number[];
 };
 export type ContactList = {
@@ -196,7 +197,7 @@ export type Followup = {
 };
 export type ContactListItem = { id: number; name: string; count: number; source: "manual" | "import" | "campaign"; shared: boolean;
   owner: string | null; mine: boolean; editable: boolean; created_at: string | null; updated_at: string | null };
-export type ImportDone = { new: number; update: number; ignore: number; list?: { id: number; name: string; count: number; prospects: number } };
+export type ImportDone = { new: number; update: number; ignore: number; list?: { id: number; name: string; count: number; prospects: number; lot?: number | null } };
 
 export type ContactDetail = ContactRow & {
   lists?: { id: number; name: string }[];
@@ -295,8 +296,12 @@ export type CampaignListItem = {
   indicators: Indicators;
 };
 export type Candidate = ContactRef & { excluded: string | null; other_campaigns: string[]; recent?: string | null; problems?: string[]; problem_count?: number };
+/** V3.7 : textes par lot (le 4e import ou la 4e recherche → variante 4 : FIN4, BTP4…). */
+export type LotText = { kind: "target" | "sector"; root: string; root_label: string; root_id: number; key: string; block_id: number | null };
+export type LotTexts = { lot: number; contacts: number; items: LotText[] }[];
 export type CampaignDetail = {
   block_map: BlockMap;
+  lot_texts?: LotTexts;
   id: number;
   name: string;
   status: CampaignListItem["status"];
@@ -547,6 +552,21 @@ export type Adoption = {
 };
 export type Me = (TeamUser & { server_mode: true }) | { id: null; role: "admin"; server_mode: false };
 
+export type ProspectOption = { value: string; label: string };
+export type ProspectCriteria = { functions: string[]; sectors: string[]; details?: string[]; cities: string[]; sizes: string[]; wanted: number };
+export type ProspectSearch = {
+  id: number; status: "preview" | "running" | "done" | "stopped" | "failed"; criteria: ProspectCriteria; summary: string;
+  wanted: number; total_found: number | null; checked: number; emails_found: number; imported: number;
+  skipped_existing: number; skipped_no_email: number; skipped_excluded: number; cost_usd: number;
+  list_id: number | null; error: string | null; created_at: string | null; finished_at: string | null;
+  estimate?: { findable_ratio: number; reachable: number; pages: number; cost_usd: number };
+  sample?: { first: string; last: string; title: string | null; company: string | null; industry: string | null; size: string | null; city: string | null; findable: boolean }[];
+};
+export type ProspectingIndex = {
+  configured: boolean; items: ProspectSearch[];
+  options: { functions: ProspectOption[]; sectors: (ProspectOption & { details: ProspectOption[] })[]; cities: string[]; sizes: ProspectOption[]; max_wanted: number; page_cost: number; email_cost: number };
+};
+
 async function request<T>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
   const { json, ...rest } = init ?? {};
   const token = await accessToken(); // V3 : employé connecté (null sur le poste unique)
@@ -657,6 +677,10 @@ export const api = {
     request<CampaignUpcoming>(`/api/campaigns/${id}/upcoming${enrollmentId ? `?enrollment_id=${enrollmentId}` : ""}`),
   mailPreview: (partUrl: string) => request<AttachmentPreview>(partUrl.replace("/part/", "/preview/")),
   mailMessage: (folder: string, uid: number) => request<MailMessage>(`/api/mailbox/messages/${uid}${qs({ folder })}`),
+  mailUnread: () => request<{ unread: number | null }>("/api/mailbox/unread"),
+  mailSeen: (folder: string, uid: number, seen = true) =>
+    request<{ ok: boolean; seen: boolean }>(`/api/mailbox/messages/${uid}/seen${qs({ folder, seen })}`, { method: "POST" }),
+  mailSuggest: (q: string) => request<{ items: AddressSuggestion[] }>(`/api/mailbox/suggest?q=${encodeURIComponent(q)}`),
   mailSend: (d: MailDraft) => request<{ id: number; test_mode: boolean; to: string }>("/api/mailbox/send", { method: "POST", json: d }),
   picker: (q: string) => request<(ContactRef & { job_title?: string | null })[]>(`/api/contacts-picker${qs({ q })}`),
 
@@ -678,6 +702,14 @@ export const api = {
   listAdd: (id: number, contact_ids: number[]) => request<ContactListItem & { added: number }>(`/api/lists/${id}/members`, { method: "POST", json: { contact_ids } }),
   listRemove: (id: number, contact_ids: number[]) => request<ContactListItem & { removed: number }>(`/api/lists/${id}/members/remove`, { method: "POST", json: { contact_ids } }),
   listShare: (id: number, shared: boolean) => request<ContactListItem>(`/api/lists/${id}/share`, { method: "POST", json: { shared } }),
+  prospecting: () => request<ProspectingIndex>("/api/prospecting"),
+  prospectingBalance: () => request<{ balance: number }>("/api/prospecting/balance"),
+  prospectingSetKey: (key: string) => request<{ configured: boolean; balance: number }>("/api/prospecting/key", { method: "PUT", json: { key } }),
+  prospectingDeleteKey: () => request<{ configured: boolean }>("/api/prospecting/key", { method: "DELETE" }),
+  prospectingPreview: (c: ProspectCriteria) => request<ProspectSearch>("/api/prospecting/preview", { method: "POST", json: c }),
+  prospectingGet: (id: number) => request<ProspectSearch>(`/api/prospecting/${id}`),
+  prospectingStart: (id: number, wanted: number) => request<ProspectSearch>(`/api/prospecting/${id}/start`, { method: "POST", json: { wanted } }),
+  prospectingStop: (id: number) => request<ProspectSearch>(`/api/prospecting/${id}/stop`, { method: "POST" }),
   campaignNoReplyList: (id: number) => request<ContactListItem>(`/api/campaigns/${id}/no-reply-list`, { method: "POST" }),
   importCancel: (token: string) => request(`/api/import/${token}`, { method: "DELETE" }),
   exclusions: () => request<Exclusion[]>("/api/exclusions"),
@@ -705,7 +737,7 @@ export const api = {
   previewSend: (id: number, contactId: number, variant: string) =>
     request<{ sent: number; to: string }>(`/api/sequences/${id}/preview/send`, { method: "POST", json: { contact_id: contactId, variant } }),
   blocks: () => request<Block[]>("/api/blocks"),
-  blockVariant: (id: number) => request<Block>(`/api/blocks/${id}/variant`, { method: "POST" }),
+  blockVariant: (id: number, number?: number) => request<Block>(`/api/blocks/${id}/variant`, { method: "POST", json: number ? { number } : {} }),
   campaignBlocks: (id: number, map: BlockMap) => request<{ block_map: BlockMap }>(`/api/campaigns/${id}/blocks`, { method: "PUT", json: map }),
   blockSave: (id: number, body: string) => request<{ id: number; todo: boolean }>(`/api/blocks/${id}`, { method: "PUT", json: { body } }),
   blockCreate: (kind: Block["kind"], label: string) => request<Block>("/api/blocks", { method: "POST", json: { kind, label } }),

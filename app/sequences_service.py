@@ -106,16 +106,22 @@ def build_context(session: Session, contact: Contact, code: str | None = None) -
 
 
 def resolve_code(block_map: dict | None, contact_code: str | None, salt: int,
-                 counters: dict | None = None) -> str | None:
+                 counters: dict | None = None, lot: int | None = None, keys: dict | None = None) -> str | None:
     """V3.4 : textes envoyés à un contact dans une campagne. La campagne peut remplacer la
     fonction et/ou le secteur de la fiche (« FIN » → « FIN2 »), ou partager entre plusieurs
-    variantes (liste : à tour de rôle avec `counters`, sinon d'après `salt`). None = code de la fiche."""
-    if not block_map:
+    variantes (liste : à tour de rôle avec `counters`, sinon d'après `salt`). None = code de la fiche.
+    V3.7 : sans choix de la campagne pour ce texte, un contact du lot n (n ≥ 2) reçoit la
+    variante n (« FIN4 » pour le lot 4) quand elle existe (`keys` : textes existants par sorte)."""
+    use_lot = bool(lot and lot >= 2 and keys)
+    if not block_map and not use_lot:
         return None
+    block_map = block_map or {}
     t, _, sct = (contact_code or "").upper().partition("-")
 
     def pick(kind: str, key: str) -> str:
         v = (block_map.get(kind) or {}).get(key or render.GENERIC)
+        if v is None and use_lot and key and key != render.GENERIC and f"{key}{lot}" in (keys.get(kind) or ()):
+            return f"{key}{lot}"
         if isinstance(v, list):
             v = [x for x in v if x]
             if not v:
@@ -130,6 +136,13 @@ def resolve_code(block_map: dict | None, contact_code: str | None, salt: int,
     return None if code == (contact_code or "").upper() or code == "-" else code
 
 
+def block_keys(session: Session) -> dict[str, set[str]]:
+    keys: dict[str, set[str]] = {"target": set(), "sector": set()}
+    for kind, key in session.execute(select(ContentBlock.kind, ContentBlock.key)):
+        keys.setdefault(kind, set()).add(key)
+    return keys
+
+
 def assign_codes(session: Session, camp) -> int:
     """Fixe les textes des inscriptions dont le 1er email n'est pas encore parti, d'après les
     textes de la campagne ; un partage A/B alterne les personnes (moitié / moitié)."""
@@ -139,16 +152,56 @@ def assign_codes(session: Session, camp) -> int:
                            .where(Enrollment.campaign_id == camp.id, Enrollment.id.not_in(sent))
                            .order_by(Enrollment.id)).all()
     counters: dict = {}
+    keys = block_keys(session)
     for enr, contact in rows:
-        enr.block_code = resolve_code(camp.block_map, contact.sequence_code, enr.id, counters)
+        enr.block_code = resolve_code(camp.block_map, contact.sequence_code, enr.id, counters, contact.lot_number, keys)
     return len(rows)
+
+
+def lot_texts(session: Session, contacts, block_map: dict | None) -> list[dict]:
+    """V3.7 : pour les contacts de lot n ≥ 2, les variantes n attendues (FIN4, BTP4…), existantes
+    ou non (sans elle, le texte d'origine part). Les textes déjà choisis par la campagne sont exclus."""
+    from collections import defaultdict
+    labels = {(b.kind, b.key): (b.label or vocab_label(b.kind, b.key), b.id) for b in session.scalars(select(ContentBlock))}
+    per_lot: dict[int, set] = defaultdict(set)
+    count: dict[int, int] = defaultdict(int)
+    for c in contacts:
+        if not c.lot_number or c.lot_number < 2:
+            continue
+        count[c.lot_number] += 1
+        t, _, sct = (c.sequence_code or "").upper().partition("-")
+        for kind, key in (("target", t), ("sector", sct)):
+            if key and (kind, key) in labels and key not in ((block_map or {}).get(kind) or {}):
+                per_lot[c.lot_number].add((kind, key))
+    out = []
+    for lot in sorted(count):
+        items = []
+        for kind, key in sorted(per_lot[lot], key=lambda x: (x[0] != "target", x[1])):
+            label, root_id = labels[(kind, key)]
+            var = labels.get((kind, f"{key}{lot}"))
+            items.append({"kind": kind, "root": key, "root_label": label, "root_id": root_id,
+                          "key": f"{key}{lot}", "block_id": var[1] if var else None})
+        if items:
+            out.append({"lot": lot, "contacts": count[lot], "items": items})
+    return out
+
+
+def vocab_label(kind: str, key: str) -> str:
+    from app import vocab
+    return (vocab.TARGETS if kind == "target" else vocab.SECTORS).get(key, key)
 
 
 def enrollment_code(enr, camp, contact: Contact) -> str | None:
     """Le code fixé à l'inscription (1er email), sinon celui que donne la campagne."""
     if getattr(enr, "block_code", None):
         return enr.block_code
-    return resolve_code(getattr(camp, "block_map", None), contact.sequence_code, enr.id or 0)
+    lot = getattr(contact, "lot_number", None)
+    keys = None
+    if lot and lot >= 2:
+        from sqlalchemy.orm import object_session
+        sess = object_session(contact)
+        keys = block_keys(sess) if sess is not None else None
+    return resolve_code(getattr(camp, "block_map", None), contact.sequence_code, enr.id or 0, lot=lot, keys=keys)
 
 
 @dataclass

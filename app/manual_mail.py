@@ -40,6 +40,7 @@ class Draft:
     subject: str
     body: str
     cc: list[str] = field(default_factory=list)
+    bcc: list[str] = field(default_factory=list)  # V3.7 : Cci (copies cachées)
     in_reply_to: str | None = None
     references: list[str] = field(default_factory=list)
     signature: bool = True
@@ -56,7 +57,7 @@ def _split(value) -> list[str]:
 
 
 def draft_from(body: dict) -> Draft:
-    return Draft(to=_split(body.get("to")), cc=_split(body.get("cc")), subject=str(body.get("subject") or "").strip(),
+    return Draft(to=_split(body.get("to")), cc=_split(body.get("cc")), bcc=_split(body.get("bcc")), subject=str(body.get("subject") or "").strip(),
                  body=str(body.get("body") or "").replace("\r\n", "\n").rstrip(),
                  in_reply_to=body.get("in_reply_to") or None, references=[r for r in body.get("references") or [] if r],
                  signature=bool(body.get("signature", True)), force=bool(body.get("force")),
@@ -67,15 +68,15 @@ def validate(s: Session, d: Draft) -> None:
     errors = {}
     if not d.to:
         errors["to"] = "Indiquez au moins un destinataire."
-    elif bad := [a for a in d.to + d.cc if not EMAIL_RE.match(a)]:
-        errors["to"] = "Adresse invalide : " + ", ".join(bad)
+    elif bad := [a for a in d.to + d.cc + d.bcc if not EMAIL_RE.match(a)]:
+        errors["to"] = ("Adresse invalide : " if len(bad) == 1 else "Adresses invalides : ") + ", ".join(bad)
     # V2.21 : un email sans objet est permis (l'écran demande confirmation avant, comme Gmail)
     if not d.body.strip():
         errors["body"] = "Le message est vide."
     if errors:
         raise SendRefused(errors)
     supp = suppression.suppressed_keys(s)
-    blocked = [a for a in d.to + d.cc if suppression.is_suppressed(a, supp)]
+    blocked = [a for a in d.to + d.cc + d.bcc if suppression.is_suppressed(a, supp)]
     if blocked and not d.force:
         raise SendRefused({}, confirm=f"{', '.join(blocked)} : sur la liste d'exclusion (demande STOP, effacement ou "
                                       "exclusion manuelle). Envoyer quand même ce message personnel ?")
@@ -109,6 +110,8 @@ def send(s: Session, d: Draft, now: datetime | None = None, smtp_factory=None, i
         attachments=atts)
     if d.cc and not test_mode:
         msg["Cc"] = ", ".join(d.cc)
+    if d.bcc and not test_mode:  # smtplib l'enlève de l'email envoyé ; il reste dans la copie « Envoyés »
+        msg["Bcc"] = ", ".join(d.bcc)
 
     cfg = server_config(as_form_values(mb), password)
     try:
@@ -123,6 +126,8 @@ def send(s: Session, d: Draft, now: datetime | None = None, smtp_factory=None, i
                   references_header=" ".join(d.references) or None, subject=d.subject, body_text=body, sent_at=now,
                   attachments=[a.filename for a in atts] or None)
     s.add(out)
+    from app import address_book  # V3.7 : carnet d'adresses appris (aussi en mode test : ce sont les vraies adresses saisies)
+    address_book.record_sent(s, d.to + d.cc + d.bcc, now)
     s.add(EventLog(level="info", entity="contact" if contact else "mail", entity_id=contact.id if contact else None,
                    text=f"Email écrit à {real}" + (" (mode test : parti vers votre adresse)" if test_mode else "")))
     s.commit()

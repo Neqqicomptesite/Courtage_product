@@ -132,6 +132,7 @@ class Contact(Base):
     sequence_code: Mapped[str | None] = mapped_column(String(30), index=True)
     size_bucket: Mapped[str | None] = mapped_column(String(60))
     wave: Mapped[str | None] = mapped_column(String(60))
+    lot_number: Mapped[int | None] = mapped_column(Integer, index=True)  # V3.7 : n° de l'import / de la recherche
     email_reliability: Mapped[str | None] = mapped_column(Text)
     phone: Mapped[str | None] = mapped_column(String(60))
     website: Mapped[str | None] = mapped_column(String(255))
@@ -579,6 +580,7 @@ class ContactList(Base):
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id", ondelete="SET NULL"), index=True)
     shared: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     source: Mapped[str] = mapped_column(String(10), default="manual", server_default="manual")
+    lot_number: Mapped[int | None] = mapped_column(Integer)  # V3.7 : lot créé par un import ou une recherche
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
@@ -591,3 +593,53 @@ class ContactListMember(Base):
     list_id: Mapped[int] = mapped_column(ForeignKey("contact_list.id", ondelete="CASCADE"), index=True)
     contact_id: Mapped[int] = mapped_column(ForeignKey("contact.id", ondelete="CASCADE"), index=True)
     added_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+# ---------------------------------------------------------------------------------------------
+# V3.7 : recherches de prospects via looot (administrateur). L'état (page suivante, file de
+# profils à traiter) est gardé ici : une recherche reprend où elle en était après un redémarrage.
+
+PROSPECT_SEARCH_STATUSES = ("preview", "running", "done", "stopped", "failed")
+
+
+class ProspectSearch(Base):
+    __tablename__ = "prospect_search"
+    __table_args__ = (_in("status", PROSPECT_SEARCH_STATUSES),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    org_id: Mapped[int] = mapped_column(Integer, default=_current_org, server_default="1", index=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("app_user.id", ondelete="SET NULL"))
+    criteria: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(10), default="preview", server_default="preview", index=True)
+    wanted: Mapped[int] = mapped_column(Integer, default=50)
+    total_found: Mapped[int | None] = mapped_column(Integer)
+    checked: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    emails_found: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    imported: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    skipped_existing: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    skipped_no_email: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    skipped_excluded: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    failures: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    cost_usd: Mapped[float] = mapped_column(default=0.0, server_default="0")
+    list_id: Mapped[int | None] = mapped_column(ForeignKey("contact_list.id", ondelete="SET NULL"))
+    state: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
+class AddressBook(Base):
+    """V3.7 : carnet d'adresses appris (adresses écrites et expéditeurs reçus), propre à chaque employé,
+    pour proposer la fin de l'adresse pendant la saisie (« yassine » → yassine.laoud@…)."""
+    __tablename__ = "address_book"
+    __table_args__ = (UniqueConstraint("user_id", "email", name="uq_address_book"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id", ondelete="CASCADE"), index=True)
+    email: Mapped[str] = mapped_column(String(254))  # en minuscules
+    name: Mapped[str | None] = mapped_column(String(200))
+    uses: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # emails que vous lui avez écrits
+    last_used: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    last_seen: Mapped[datetime | None] = mapped_column(UTCDateTime)          # dernier email reçu de lui
