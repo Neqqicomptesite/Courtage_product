@@ -608,4 +608,4 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
      validées contre la liste officielle de Prospeo) ; lots numérotés (chaque import / recherche) → variante n
      des textes, avec « Rédiger FIN4 » depuis la campagne ; destinataires en pastilles, suggestions
      d'adresses (carnet appris + contacts + collègues), Cc et Cci multiples ; nombre de non lus à côté de
-     « Boîte mail », email affiché 2 s = lu sur le serveur, bouton Lu / Non lu. Migrations 0022 à 0024.
+     « Boîte mail », email ouvert d'un clic = lu sur le serveur (celui affiché tout seul reste non lu), bouton Lu / Non lu. Migrations 0022 à 0024.

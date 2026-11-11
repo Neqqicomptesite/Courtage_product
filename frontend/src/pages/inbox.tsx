@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import {
   AlertTriangle, Archive, Ban, Building2, CalendarClock, CalendarPlus, CheckCheck, Clock, FileStack, Forward, Phone, Inbox, Loader2, Mail, MailOpen, Paperclip, PenSquare, RefreshCw, Reply, ReplyAll, Rocket, Search, Send, UserPlus, Users,
 } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { KindBadge, PageHeader, toastError } from "@/components/common";
@@ -66,6 +66,7 @@ export function InboxPage() {
   useEffect(() => { const t = setTimeout(() => setDq(q), 500); return () => clearTimeout(t); }, [q]);
   // ?uid=… : arrivée depuis la fiche d'un contact (« Derniers emails ») -> cet email est ouvert
   const [selected, setSelected] = useState<number | null>(params.get("uid") ? Number(params.get("uid")) : null);
+  const [clicked, setClicked] = useState<number | null>(null);  // V3.7.1 : seul l'email cliqué passe « lu »
   const [refreshing, setRefreshing] = useState(false);
   // V2.11 : « Mes contacts seulement » masque newsletters, reçus et notifications (choix mémorisé)
   const [onlyContacts, setOnlyContacts] = useState(() => { try { return localStorage.getItem("oddo-inbox-only-contacts") === "1"; } catch { return false; } });
@@ -125,8 +126,8 @@ export function InboxPage() {
       const t = e.target as HTMLElement;
       if (e.ctrlKey || e.metaKey || e.altKey || t.closest("input, textarea, select, [contenteditable=true], [role=dialog]")) return;
       const i = items.findIndex((m) => m.uid === selected);
-      if (e.key === "ArrowDown" || e.key === "j") { e.preventDefault(); const n = items[Math.min(items.length - 1, i + 1)]; if (n) { setSelected(n.uid); document.getElementById(`mail-${n.uid}`)?.scrollIntoView({ block: "nearest" }); } }
-      else if (e.key === "ArrowUp" || e.key === "k") { e.preventDefault(); const n = items[Math.max(0, i - 1)]; if (n) { setSelected(n.uid); document.getElementById(`mail-${n.uid}`)?.scrollIntoView({ block: "nearest" }); } }
+      if (e.key === "ArrowDown" || e.key === "j") { e.preventDefault(); const n = items[Math.min(items.length - 1, i + 1)]; if (n) { setSelected(n.uid); setClicked(n.uid); document.getElementById(`mail-${n.uid}`)?.scrollIntoView({ block: "nearest" }); } }
+      else if (e.key === "ArrowUp" || e.key === "k") { e.preventDefault(); const n = items[Math.max(0, i - 1)]; if (n) { setSelected(n.uid); setClicked(n.uid); document.getElementById(`mail-${n.uid}`)?.scrollIntoView({ block: "nearest" }); } }
       else if (e.key === "R" && e.shiftKey) { e.preventDefault(); window.dispatchEvent(new Event("oddo-inbox-reply-all")); }
       else if (e.key === "r" || e.key === "R") { e.preventDefault(); window.dispatchEvent(new Event("oddo-inbox-reply")); }
       else if (e.key === "f" || e.key === "F") { e.preventDefault(); window.dispatchEvent(new Event("oddo-inbox-forward")); }
@@ -178,7 +179,7 @@ export function InboxPage() {
           <div className="flex min-h-0 flex-col border-b lg:border-b-0 lg:border-r">
             <div className="max-h-96 flex-1 divide-y overflow-y-auto lg:max-h-none">
               {items.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">{onlyContacts ? "Aucun email de vos contacts sur cette période." : "Aucun email sur cette période."}</p>}
-              {items.map((m) => <Row key={m.uid} m={m} active={m.uid === selected} sent={isSent} onClick={() => setSelected(m.uid)} />)}
+              {items.map((m) => <Row key={m.uid} m={m} active={m.uid === selected} sent={isSent} onClick={() => { setSelected(m.uid); setClicked(m.uid); }} />)}
             </div>
             <p className="border-t px-4 py-2 text-[11px] text-muted-foreground">
               {onlyContacts ? `${items.length} de vos contacts sur ${list.data.found}` : `${list.data.found} email${list.data.found > 1 ? "s" : ""}`}{list.data.truncated && !searching && ` · les ${list.data.items.length} plus récents affichés${q.trim() ? " (tapez 3 lettres pour chercher dans toute la période)" : ""}`}
@@ -189,7 +190,7 @@ export function InboxPage() {
               <span className="ml-1 hidden lg:inline" title="Raccourcis clavier"> · ↑↓ naviguer · R répondre · F transférer · E archiver · S séquence</span>
             </p>
           </div>
-          {current ? <Reader key={`${folder}-${current.uid}`} item={current} folder={folder} /> : <div className="hidden lg:block" />}
+          {current ? <Reader key={`${folder}-${current.uid}`} item={current} folder={folder} markRead={clicked === current.uid} /> : <div className="hidden lg:block" />}
         </Card>
       )}
     </>
@@ -216,7 +217,7 @@ function Row({ m, active, sent, onClick }: { m: MailItem; active: boolean; sent:
   );
 }
 
-function Reader({ item, folder, actions }: { item: MailItem; folder: string; actions?: ReactNode }) {
+function Reader({ item, folder, actions, markRead = false }: { item: MailItem; folder: string; actions?: ReactNode; markRead?: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
   const qc = useQueryClient();
@@ -225,7 +226,8 @@ function Reader({ item, folder, actions }: { item: MailItem; folder: string; act
   const [asText, setAsText] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
   const person = item.contact;
-  // V3.7.1 : comme dans Outlook, un email affiché 2 secondes passe « lu » (sur le serveur : le webmail le voit aussi)
+  // V3.7.1 : l'email que vous ouvrez d'un clic passe « lu » sur le serveur (le webmail le voit aussi) ;
+  // celui affiché tout seul (le premier de la liste, le suivant après « Archiver ») reste non lu.
   const setSeen = async (seen: boolean) => {
     const patch = (d: MailList | undefined) => d && { ...d, items: d.items.map((x) => (x.uid === item.uid ? { ...x, seen } : x)) };
     qc.setQueriesData<MailList>({ queryKey: ["mail", "list", folder] }, patch);
@@ -234,12 +236,13 @@ function Reader({ item, folder, actions }: { item: MailItem; folder: string; act
     qc.invalidateQueries({ queryKey: ["mail-unread"] });
   };
   const sentFolder = /sent|envoy/i.test(folder);
+  const autoDone = useRef(false);  // une seule fois : « Non lu » juste après ne doit pas être annulé
   useEffect(() => {
-    if (item.seen || !m || sentFolder) return;
-    const t = setTimeout(() => void setSeen(true), 2000);
-    return () => clearTimeout(t);
+    if (!markRead || autoDone.current || item.seen || !m || sentFolder) return;
+    autoDone.current = true;
+    void setSeen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item.uid, item.seen, !!m, folder]);
+  }, [markRead, item.uid, item.seen, !!m, folder]);
 
   const createContact = () => {
     const [first, ...rest] = (item.from_name && item.from_name !== item.from_email ? item.from_name : "").split(" ");
@@ -445,6 +448,7 @@ export function AwaitingPage() {
   const { data, isLoading, error, refetch, isFetching } = useQuery({ queryKey: ["awaiting"], queryFn: () => api.awaiting(), retry: false });
   const [params] = useSearchParams();
   const [selected, setSelected] = useState<number | null>(params.get("uid") ? Number(params.get("uid")) : null);
+  const [clicked, setClicked] = useState<number | null>(null);  // V3.7.1 : seul l'email cliqué passe « lu »
   const items = data?.items ?? [];
   const current = items.find((m) => m.uid === selected) ?? items[0] ?? null;
   const days = data?.days ?? 3;
@@ -500,7 +504,7 @@ export function AwaitingPage() {
               <div key={m.uid} className={cn("flex items-start gap-3 px-4 py-3 transition-colors", current?.uid === m.uid ? "bg-accent/70" : "hover:bg-accent/30")}>
                 <input type="checkbox" className="mt-1 accent-[hsl(var(--primary))]" checked={checked.has(m.uid)} aria-label="Sélectionner"
                   onChange={() => setChecked((s) => { const n = new Set(s); if (n.has(m.uid)) n.delete(m.uid); else n.add(m.uid); return n; })} />
-              <button onClick={() => setSelected(m.uid)} className="min-w-0 flex-1 text-left">
+              <button onClick={() => { setSelected(m.uid); setClicked(m.uid); }} className="min-w-0 flex-1 text-left">
                 <div className="flex items-center gap-2">
                   <span className="truncate text-sm font-medium">{m.contact ? fullName(m.contact) : m.from_name || m.from_email}</span>
                   <span className={cn("ml-auto shrink-0 rounded-full px-2 text-[11px] font-medium tabular", m.business_days >= days * 2 ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary")}>
@@ -517,7 +521,7 @@ export function AwaitingPage() {
             ))}
             </div>
           </div>
-          {current && <Reader key={current.uid} item={current} folder="INBOX"
+          {current && <Reader key={current.uid} item={current} folder="INBOX" markRead={clicked === current.uid}
             actions={<Button variant="outline" onClick={() => void dismiss([current])} title="Retirer de « À répondre » : déjà traité, ou pas de réponse à faire"><CheckCheck /> Marquer comme répondu</Button>} />}
         </Card>
       )}
