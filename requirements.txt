@@ -19,3 +19,4 @@ psycopg[binary]==3.3.8
 PyJWT[crypto]==2.15.1
 cryptography==50.0.2
 mammoth==1.13.0   # V3 : aperçu des documents Word reçus
+httpx==0.28.1     # recherche de prospects (API looot), repris d'ODDO V3.7
