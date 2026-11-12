@@ -3,7 +3,7 @@
 // client, conditions actuelles, offres), rappels, historique.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle, ArrowDownLeft, Clock, ArrowLeft, ArrowUpRight, Bell, Building2, CalendarPlus, Check, CheckCircle2, Circle, ExternalLink,
+  AlertTriangle, ArrowDownLeft, Clock, ArrowUpRight, Bell, Building2, CalendarPlus, Check, CheckCircle2, Circle, ExternalLink,
   FileCheck2, FileText, Inbox, MailPlus, MessageSquarePlus, MoreHorizontal, Paperclip, Pencil, Plus, RotateCw, Send, SendHorizontal, StickyNote, Trash2,
   Trophy, Upload, X, XCircle,
 } from "lucide-react";
@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
-import { ConfirmDialog, Field, FieldGroup, PageHeader, toastError, useDebounced } from "@/components/common";
+import { ConfirmDialog, Field, FieldGroup, PageHeader, toastError, useDebounced, BackButton, useUrlState } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -79,7 +79,7 @@ export function QuoteDetailPage() {
 
   return (
     <>
-      <PageHeader back={<Button variant="ghost" size="sm" className="-ml-2" asChild><Link to="/quotes"><ArrowLeft /> Dossiers</Link></Button>}
+      <PageHeader back={<BackButton to="/quotes" label="Dossiers" />}
         title={<span className="flex flex-wrap items-center gap-x-3 gap-y-1"><DossierName name={data.client_name} saving={update.isPending}
           onSave={(client_name) => update.mutateAsync({ client_name })} /><StageBadge stage={data.stage} /></span>}
         description={<span className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -795,7 +795,7 @@ const FILE_TABS: { kind: QuoteFileKind; label: string; empty: string }[] = [
 
 function FilesCard({ q, onChange }: { q: QuoteDetail; onChange: (d: QuoteDetail) => void }) {
   const input = useRef<HTMLInputElement>(null);
-  const [tab, setTab] = useState<QuoteFileKind>("client");
+  const [tab, setTab] = useUrlState<QuoteFileKind>("pieces", "client");
   const [label, setLabel] = useState("");
   const [insurerId, setInsurerId] = useState<number | null>(null);
   const upload = useMutation({

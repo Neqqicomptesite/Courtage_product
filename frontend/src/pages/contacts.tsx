@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { openComposer } from "@/components/composer";
 import { openSendSequence } from "@/components/send-sequence";
 import { ContactForm } from "@/components/contact-form";
-import { ConfirmDialog, ContactStatus, KindBadge, EmptyState, EnrollmentStatus, PageHeader, ReliabilityDot, toastError, useDebounced } from "@/components/common";
+import { BackButton, ConfirmDialog, ContactStatus, KindBadge, EmptyState, EnrollmentStatus, PageHeader, ReliabilityDot, toastError, useDebounced } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -147,8 +147,25 @@ export function ContactsPage() {
     onError: (e) => toastError(e),
   });
 
+  // V4 : quand on regarde une liste, la page devient celle de la liste : son nom, ses chiffres,
+  // ses actions ; les compteurs généraux (« 256 prospects »…) et les boutons de la page Contacts disparaissent
+  const inList = !!filters.list_id;
+  const listShown = currentList ? currentList.count : null;
   return (
     <>
+      {inList ? (
+        <PageHeader back={<BackButton to="/contacts/lists" label="Listes" />}
+          title={currentList ? currentList.name : "Liste"}
+          description={currentList ? <>
+            {listShown} contact{listShown === 1 ? "" : "s"}{currentList.lot ? ` · lot ${currentList.lot}` : ""}
+            {` · ${currentList.shared ? "partagée avec l'équipe" : "perso"}`}
+            {currentList.assigned_by && currentList.mine ? ` · confiée par ${currentList.assigned_by}` : ""}
+          </> : undefined}
+          actions={<>
+            <Button variant="ghost" onClick={() => setParam("list_id", "")}><X /> Voir tous les contacts</Button>
+            {currentList && <Button disabled={!currentList.count} onClick={() => navigate(`/campaigns/new?list_id=${currentList.id}`)}><Rocket /> Lancer une campagne</Button>}
+          </>} />
+      ) : (
       <PageHeader title="Contacts" description={data ? `${data.total} contacts au total` : undefined}
         actions={<>
           <Button variant="ghost" asChild><Link to="/contacts/exclusions"><ShieldOff /> Exclusions</Link></Button>
@@ -164,8 +181,9 @@ export function ContactsPage() {
           </DropdownMenu>
           <Button onClick={() => setParam("new", "1")}><UserPlus /> Nouveau contact</Button>
         </>} />
+      )}
 
-      {data && <KindCards counts={data.kind_counts} value={filters.kind ?? ""} allLabel="Tous les contacts"
+      {data && !inList && <KindCards counts={data.kind_counts} value={filters.kind ?? ""} allLabel="Tous les contacts"
         onChange={(k) => setParams((p) => {
           const allowed = new Set([...KEEP_PARAMS, ...(FILTERS_BY_KIND[k] ?? []).map((f) => f.key)]);
           const n = new URLSearchParams();

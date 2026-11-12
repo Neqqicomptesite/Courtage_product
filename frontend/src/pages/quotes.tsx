@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
-import { EmptyState, Field, FieldGroup, PageHeader, fieldError, toastError, useDebounced } from "@/components/common";
+import { EmptyState, Field, FieldGroup, PageHeader, fieldError, toastError, useDebounced, useUrlState } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -49,7 +49,7 @@ export function QuotesPage() {
   const view = params.get("vue") === "liste" ? "list" : "board";
   const branch = params.get("branche") ?? "";
   const owner = params.get("resp") ?? "";
-  const [q, setQ] = useState("");
+  const [q, setQ] = useUrlState<string>("q", "");
   const [showClosed, setShowClosed] = useState(false);
   const setParam = (k: string, v: string) => setParams((p) => { const n = new URLSearchParams(p); if (v) n.set(k, v); else n.delete(k); return n; }, { replace: true });
   const { data } = useQuery({ queryKey: ["quotes"], queryFn: () => api.quotes() });

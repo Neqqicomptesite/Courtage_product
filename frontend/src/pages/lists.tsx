@@ -2,12 +2,12 @@
 // Elle se remplit à l'import, depuis Contacts (« Ajouter à une liste ») ou depuis une campagne
 // (les sans-réponse), et sert à lancer une campagne sur ces contacts.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ListPlus, ListChecks, MoreHorizontal, Pencil, Rocket, Share2, Lock, Trash2, Upload, UserRoundCheck, Users } from "lucide-react";
+import { ListPlus, ListChecks, MoreHorizontal, Pencil, Rocket, Share2, Lock, Trash2, Upload, UserRoundCheck, Users } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
-import { ConfirmDialog, EmptyState, PageHeader, toastError } from "@/components/common";
+import { ConfirmDialog, EmptyState, PageHeader, toastError, BackButton } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -183,7 +183,7 @@ export function ListsPage() {
 
   return (
     <>
-      <PageHeader title="Listes" back={<Button variant="ghost" size="sm" className="-ml-2" asChild><Link to="/contacts"><ArrowLeft /> Contacts</Link></Button>}
+      <PageHeader title="Listes" back={<BackButton to="/contacts" label="Contacts" />}
         description="Des groupes de contacts à votre nom (un fichier importé, un salon, une sélection…), pour lancer une campagne sur eux."
         actions={<Button onClick={() => setCreating(true)}><ListPlus /> Nouvelle liste</Button>} />
       {!data ? <Skeleton className="h-64 rounded-xl" /> : data.items.length === 0 ? (

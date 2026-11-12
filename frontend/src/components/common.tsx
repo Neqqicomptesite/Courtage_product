@@ -1,7 +1,8 @@
 // Petites briques réutilisées par toutes les pages : en-tête, état vide, pastilles de statut,
 // confirmation, enregistrement différé.
-import type { LucideIcon } from "lucide-react";
+import { ArrowLeft, type LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { Badge, type BadgeProps } from "@/components/ui/badge";
@@ -181,5 +182,43 @@ export function FieldGroup({ label, hint, error, children, className }: { label:
       {children}
       {error ? <span className="block text-xs text-destructive">{error}</span> : hint ? <span className="block text-xs text-muted-foreground">{hint}</span> : null}
     </div>
+  );
+}
+
+
+/** V4 : « Retour » ramène là d'où l'on vient (la liste filtrée, le contact, l'onglet ouvert…),
+ *  comme le bouton du navigateur ; sans page précédente dans l'appli (lien ouvert directement),
+ *  il mène à la page parente `to`. */
+export function BackButton({ to, label }: { to: string; label: string }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const inApp = location.key !== "default";
+  return (
+    <Button variant="ghost" size="sm" className="-ml-2" onClick={() => (inApp ? navigate(-1) : navigate(to))}>
+      <ArrowLeft /> {inApp ? "Retour" : label}
+    </Button>
+  );
+}
+
+/** V4 : un onglet, un filtre ou une recherche gardés dans l'adresse de la page : en revenant
+ *  (bouton Retour, lien, rechargement), on retrouve la page telle qu'on l'avait laissée.
+ *  La valeur par défaut n'apparaît pas dans l'adresse ; les autres paramètres sont gardés. */
+export function useUrlState<T extends string>(key: string, fallback: T): [T, (v: T) => void] {
+  const [params, setParams] = useSearchParams();
+  const value = (params.get(key) as T | null) ?? fallback;
+  const set = useCallback((v: T) => setParams((p) => {
+    const n = new URLSearchParams(p);
+    if (!v || v === fallback) n.delete(key); else n.set(key, v);
+    return n;
+  }, { replace: true }), [key, fallback, setParams]);
+  return [value, set];
+}
+
+/** Même chose que BackButton, en icône seule (en-tête de l'éditeur de séquence). */
+export function BackIcon({ to }: { to: string }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return (
+    <Button variant="ghost" size="icon" aria-label="Retour" onClick={() => (location.key !== "default" ? navigate(-1) : navigate(to))}><ArrowLeft /></Button>
   );
 }

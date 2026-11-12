@@ -6,7 +6,7 @@ import {
   FileCheck2,
   FileStack,
   Inbox,
-  LayoutDashboard,
+  LayoutDashboard, ListChecks,
   LogOut,
   ListOrdered,
   Menu,
@@ -21,7 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet, useLocation, ScrollRestoration } from "react-router-dom";
 import { toast } from "sonner";
 
 import { CommandPalette } from "@/components/command-palette";
@@ -52,6 +52,7 @@ const NAV = [
   { to: "/campaigns", label: "Campagnes", icon: Rocket },
   { to: "/companies", label: "Entreprises", icon: Building2 },
   { to: "/contacts", label: "Contacts", icon: Users },
+  { to: "/contacts/lists", label: "Listes", icon: ListChecks, sub: true },  // V4 : les listes mises en avant
   { to: "/settings", label: "Réglages", icon: Settings },
 ];
 
@@ -159,9 +160,12 @@ function Sidebar({ status, onNavigate }: { status: Status | undefined; onNavigat
         {nav.map((n) => {
           const count = "unread" in n && n.unread ? unread : 0;
           const alsoActive = "also" in n && n.also?.some((p) => location.pathname.startsWith(p));
+          // une liste ouverte (Contacts filtré sur une liste) allume « Listes », pas « Contacts »
+          const inList = location.pathname.startsWith("/contacts/lists") || (location.pathname === "/contacts" && new URLSearchParams(location.search).has("list_id"));
+          const forced = n.to === "/contacts/lists" ? inList : n.to === "/contacts" && inList ? false : null;
           return (
             <NavLink key={n.to} to={n.to} end={n.end} onClick={onNavigate}
-              className={({ isActive: active }) => { const isActive = active || alsoActive; return cn("flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+              className={({ isActive: active }) => { const isActive = forced ?? (active || alsoActive); return cn("flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors", "sub" in n && n.sub && "ml-4 py-1.5",
                 isActive ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"); }}>
               <n.icon className="size-4 shrink-0" />
               <span className="flex-1">{n.label}</span>
@@ -272,6 +276,7 @@ export function Layout() {
         </header>
         <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:py-7">
           <Outlet />
+          <ScrollRestoration />  {/* V4 : en revenant, on retrouve la page là où on l'avait laissée */}
         </main>
         <CommandPalette onSync={() => sync.mutate()} />
         <Composer />

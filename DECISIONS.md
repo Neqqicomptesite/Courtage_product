@@ -615,3 +615,7 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
      étape » sur le tableau de bord, vos propres emails jamais affichés comme ceux d'un prospect, copie
      « Envoyés » jamais dans la réception (et file des copies en attente par boîte), Multirisque bureau :
      valeur du bâtiment au lieu de la superficie. Migration 0025.
+306. **Repris d'ODDO V3.9 (12/11)** : retour automatique à la version d'avant si une mise à jour empêche
+     l'appli de démarrer (version refusée notée, cloche de l'administrateur ; réinstaller une fois
+     deploy/update.sh), boutons « Retour » vers la page d'origine, onglets et recherches gardés dans
+     l'adresse, vraie page par liste sans les bandeaux globaux, « Listes » dans le menu.

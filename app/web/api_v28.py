@@ -338,7 +338,36 @@ def build_notifications(s, now: datetime | None = None) -> list[dict]:
         if err:
             out.append({"key": f"{key}:{zlib.crc32(str(err).encode()):x}", "type": "error", "level": "error", "title": label,
                         "detail": str(err)[:200], "href": href, "at": None})
+    out += _rollback_notice()
     return out
+
+
+def _rollback_notice() -> list[dict]:
+    """V4 : une mise à jour qui empêchait l'appli de démarrer a été annulée par le serveur
+    (deploy/update.sh écrit ce fichier) : l'administrateur est prévenu pendant 14 jours."""
+    import json as _json
+    from datetime import datetime as _dt
+
+    from app.current import is_admin
+    from app.paths import data_dir
+    from app.timeutil import utcnow
+    f = data_dir() / "mise_a_jour_annulee.json"
+    if not is_admin() or not f.exists():
+        return []
+    try:
+        r = _json.loads(f.read_text(encoding="utf-8"))
+        at = _dt.fromisoformat(str(r["at"]).replace("Z", "+00:00"))
+    except Exception:  # noqa: BLE001 – fichier illisible : on ne bloque pas les notifications
+        return []
+    if (utcnow() - at).days > 14:
+        return []
+    ok = r.get("back_ok") is True
+    return [{"key": f"rollback:{r.get('refused')}", "type": "error", "level": "warning" if ok else "error",
+             "title": "Mise à jour annulée automatiquement" if ok else "Mise à jour annulée, l'appli a un souci",
+             "detail": (f"La version {r.get('refused')} empêchait l'appli de démarrer : retour à la version {r.get('back_to')}. "
+                        "Rien n'est perdu ; elle sera corrigée.") if ok else
+                       "Même la version précédente ne répond pas : regardez la console du serveur.",
+             "href": "/", "at": at.isoformat()}]
 
 
 @router.get("/notifications")

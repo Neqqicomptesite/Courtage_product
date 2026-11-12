@@ -4,11 +4,11 @@
 // fonction et un secteur, on rédige les deux textes et on voit l'email assemblé en direct.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Briefcase, Check, Copy, Factory, Loader2, Mail, Plus, Trash2 } from "lucide-react";
+import { Briefcase, Check, Copy, Factory, Loader2, Mail, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 
-import { PageHeader, toastError } from "@/components/common";
+
+import { PageHeader, toastError, BackButton } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -72,7 +72,7 @@ export function BlocksPage() {
 function Header() {
   return (
     <PageHeader
-      back={<Button variant="ghost" size="sm" className="-ml-2" asChild><Link to="/sequences"><ArrowLeft /> Séquences</Link></Button>}
+      back={<BackButton to="/sequences" label="Séquences" />}
       title="Textes personnalisés"
       description={<>Chaque email de prospection contient <b>un texte selon la fonction</b> du contact et <b>un texte selon son secteur</b>. Choisissez un profil : vous rédigez ses deux textes et voyez l'email tel qu'il le recevra. Enregistrement automatique.
         <span className="mt-1 block">Pour tester un autre email sur des prospects semblables, créez une <b>variante</b> (ex. « Finance · variante 2 ») : mettez-la sur la fiche des contacts, ou choisissez-la dans une campagne. Les contacts sans fonction ou sans secteur reçoivent le texte <b>générique</b>.</span></>}

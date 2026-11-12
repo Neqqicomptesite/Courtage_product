@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Download, FileSpreadsheet, Loader2, RefreshCw, Rocket, ShieldOff, Upload, UserPlus } from "lucide-react";
 import { useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
-import { PageHeader, toastError } from "@/components/common";
+import { PageHeader, toastError, BackButton } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,7 +36,7 @@ export function ImportPage() {
 
   return (
     <>
-      <PageHeader back={<Button variant="ghost" size="sm" className="-ml-2" asChild><Link to="/contacts"><ArrowLeft /> Contacts</Link></Button>}
+      <PageHeader back={<BackButton to="/contacts" label="Contacts" />}
         title="Importer des contacts" description="Un fichier Excel ou CSV. Rien n'est enregistré avant votre confirmation." />
 
       <ol className="mb-6 flex items-center gap-2 text-sm">

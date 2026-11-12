@@ -2,12 +2,12 @@
 // aperçu payant d'une page (≈ 0,04 $), puis recherche des emails en tâche de fond, importés dans une liste.
 // Réservé à l'administrateur ; le plafond de dépense est le crédit chargé sur le compte looot.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, CircleSlash, KeyRound, Loader2, MoreHorizontal, Rocket, Search, Square, UserRoundCheck, Users, Wallet } from "lucide-react";
+import { CheckCircle2, CircleSlash, KeyRound, Loader2, MoreHorizontal, Rocket, Search, Square, UserRoundCheck, Users, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
-import { EmptyState, PageHeader, toastError } from "@/components/common";
+import { EmptyState, PageHeader, toastError, BackButton } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -203,7 +203,7 @@ export function ProspectingPage() {
 
   return (
     <>
-      <PageHeader title="Trouver des prospects" back={<Button variant="ghost" size="sm" className="-ml-2" asChild><Link to="/contacts"><ArrowLeft /> Contacts</Link></Button>}
+      <PageHeader title="Trouver des prospects" back={<BackButton to="/contacts" label="Contacts" />}
         description="Choisissez une cible : l'application cherche les profils, trouve leurs emails et les importe dans une liste, prête pour une campagne."
         actions={data?.configured && <>
           <Badge variant="secondary" className="h-8 gap-1.5 px-3 text-sm font-normal"><Wallet className="size-3.5" /> Crédit looot : {bal ? usd(bal.balance) : "…"}</Badge>

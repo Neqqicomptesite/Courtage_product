@@ -1,13 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertCircle, ArrowLeft, Braces, CalendarClock, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock, CornerDownRight, Loader2, Mail,
+  AlertCircle, Braces, CalendarClock, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock, CornerDownRight, Loader2, Mail,
   Paperclip, Plus, Send, Split, Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
-import { ConfirmDialog, toastError, useDebounced } from "@/components/common";
+import { BackIcon, ConfirmDialog, toastError, useDebounced } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import { SERVER_MODE } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -145,7 +145,7 @@ function Editor({ initial }: { initial: SequenceFull }) {
     <div className="space-y-5">
       {/* En-tête : nom modifiable directement, état d'enregistrement */}
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="ghost" size="icon" asChild><Link to="/sequences" aria-label="Retour"><ArrowLeft /></Link></Button>
+        <BackIcon to="/sequences" />
         <input value={name} onChange={(e) => { setName(e.target.value); touch(); }} aria-label="Nom de la séquence"
           className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-xl font-semibold tracking-tight outline-none transition-colors hover:border-border focus:border-ring" />
         {initial.shared === false && SERVER_MODE && <Badge variant="info" className="font-normal" title="Vos collègues ne la voient pas">Perso · visible par vous seul</Badge>}

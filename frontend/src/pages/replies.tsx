@@ -5,7 +5,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { openComposer, replySubject } from "@/components/composer";
-import { EmptyState, PageHeader, toastError, useDebounced } from "@/components/common";
+import { EmptyState, PageHeader, toastError, useDebounced, useUrlState } from "@/components/common";
 import { Linkified } from "@/components/linkified";
 import { useSyncNow } from "@/components/layout";
 import { MailTabs } from "@/pages/inbox";
@@ -312,7 +312,7 @@ function Unmatched({ items }: { items: Replies["unmatched"] }) {
 }
 
 export function ContactPicker({ open, onClose, onPick }: { open: boolean; onClose: () => void; onPick: (c: ContactRef) => void }) {
-  const [q, setQ] = useState("");
+  const [q, setQ] = useUrlState<string>("q", "");
   const { data } = useQuery({ queryKey: ["picker", q], queryFn: () => api.picker(q), enabled: open, placeholderData: (p) => p });
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowDownLeft, ArrowLeft, ArrowUpRight, Building2, ExternalLink, GitMerge, Globe, Mail, MoreHorizontal, Pencil, Phone,
+  ArrowDownLeft, ArrowUpRight, Building2, ExternalLink, GitMerge, Globe, Mail, MoreHorizontal, Pencil, Phone,
   CalendarPlus, ImagePlus, Plus, Search, Send, ShieldCheck, SlidersHorizontal, Trash2, UserPlus,
 } from "lucide-react";
 import { useRef, useState } from "react";
@@ -9,7 +9,7 @@ import { toast } from "sonner";
 
 import { openComposer } from "@/components/composer";
 import { KindCards } from "@/components/kind-cards";
-import { ConfirmDialog, ContactStatus, EmptyState, Field, KindBadge, PageHeader, fieldError, toastError, useDebounced } from "@/components/common";
+import { ConfirmDialog, ContactStatus, EmptyState, Field, KindBadge, PageHeader, fieldError, toastError, useDebounced, BackButton, useUrlState } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -213,7 +213,7 @@ export function CompanyPage() {
 
   return (
     <>
-      <PageHeader back={<Button variant="ghost" size="sm" className="-ml-2" asChild><Link to="/companies"><ArrowLeft /> Entreprises</Link></Button>}
+      <PageHeader back={<BackButton to="/companies" label="Entreprises" />}
         title={<span className="flex items-center gap-3">
           <button type="button" onClick={() => logoInput.current?.click()} title={data.logo ? "Changer le logo" : "Ajouter le logo"} className="group relative rounded-lg">
             <Logo name={data.name} kind={data.kind} src={data.logo} className="size-12" />
@@ -308,7 +308,7 @@ export function CompanyPage() {
 }
 
 function MergeDialog({ open, onOpenChange, company, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; company: CompanyDetail; onDone: (id: number) => void }) {
-  const [q, setQ] = useState("");
+  const [q, setQ] = useUrlState<string>("q", "");
   const [target, setTarget] = useState<number | null>(null);
   const { data } = useQuery({ queryKey: ["companies", q, "merge"], queryFn: () => api.companies({ q }), enabled: open, placeholderData: (p) => p });
   const merge = useMutation({
@@ -407,7 +407,7 @@ function PeopleCard({ company }: { company: CompanyDetail; onChanged: () => void
   const location = useLocation();
   const people = company.people;
   const byService = company.kind === "insurer" || people.some((p) => p.department);
-  const [tab, setTab] = useState<string>("all");
+  const [tab, setTab] = useUrlState<string>("service", "all");
   const count = (d: string) => people.filter((p) => (d === "none" ? !p.department : p.department === d)).length;
   const tabs = [
     { value: "all", label: "Tous", n: people.length },

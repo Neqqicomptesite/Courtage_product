@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, AtSign, Fingerprint, Globe, Plus, ShieldOff, Trash2 } from "lucide-react";
+import { AtSign, Fingerprint, Globe, Plus, ShieldOff, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+
 import { toast } from "sonner";
 
-import { EmptyState, PageHeader, toastError } from "@/components/common";
+import { EmptyState, PageHeader, toastError, BackButton } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -37,7 +37,7 @@ export function ExclusionsPage() {
 
   return (
     <>
-      <PageHeader back={<Button variant="ghost" size="sm" className="-ml-2" asChild><Link to="/contacts"><ArrowLeft /> Contacts</Link></Button>}
+      <PageHeader back={<BackButton to="/contacts" label="Contacts" />}
         title="Liste d'exclusion" description="Ces adresses et domaines ne recevront jamais d'email, même s'ils sont réimportés." />
       <Card className="mb-5 p-4">
         <form className="flex flex-col gap-2 sm:flex-row" onSubmit={(e) => { e.preventDefault(); add.mutate(); }}>

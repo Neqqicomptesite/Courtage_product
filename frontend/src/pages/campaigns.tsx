@@ -9,7 +9,7 @@ import { toast } from "sonner";
 
 import { Outcomes, StepFunnel } from "@/components/charts";
 import { EmailCard } from "@/components/send-sequence";
-import { CampaignStatus, ConfirmDialog, EmptyState, EnrollmentStatus, KindBadge, PageHeader, toastError } from "@/components/common";
+import { CampaignStatus, ConfirmDialog, EmptyState, EnrollmentStatus, KindBadge, PageHeader, toastError, BackButton, useUrlState } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -187,7 +187,7 @@ export function CampaignWizardPage() {
 
   return (
     <>
-      <PageHeader back={<Button variant="ghost" size="sm" className="-ml-2" asChild><Link to="/campaigns"><ArrowLeft /> Campagnes</Link></Button>}
+      <PageHeader back={<BackButton to="/campaigns" label="Campagnes" />}
         title="Nouvelle campagne" />
       <ol className="mb-6 flex items-center gap-2">
         {STEPS.map((s, i) => (
@@ -351,7 +351,7 @@ function GroupFilters({ filters, setFilters, prospection }: { filters: Record<st
 
 /** Choisir les personnes une à une : recherche, type, tout cocher. */
 function PeopleChooser({ picked, setPicked, prospection }: { picked: number[]; setPicked: (ids: number[]) => void; prospection: boolean }) {
-  const [q, setQ] = useState("");
+  const [q, setQ] = useUrlState<string>("q", "");
   const [kind, setKind] = useState(prospection ? "prospect" : "");
   const { data } = useQuery({ queryKey: ["contacts", "chooser", q, kind], queryFn: () => api.contacts({ q, kind }), placeholderData: (p) => p });
   const rows = (data?.items ?? []).filter((c) => c.status === "active");
@@ -734,7 +734,7 @@ export function CampaignDetailPage() {
   const navigate = useNavigate();
   const { data } = useQuery({ queryKey: ["campaign", id], queryFn: () => api.campaign(id), refetchInterval: 30_000 });
   const { data: listsData } = useQuery({ queryKey: ["lists"], queryFn: api.lists, enabled: !!data?.filters && "list_id" in data.filters });
-  const [view, setView] = useState("all");
+  const [view, setView] = useUrlState<string>("vue", "all");  // V4 : gardé en revenant
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [checking, setChecking] = useState(false);
   const [overlap, setOverlap] = useState(false);
@@ -776,7 +776,7 @@ export function CampaignDetailPage() {
   return (
     <>
       <PageHeader
-        back={<Button variant="ghost" size="sm" className="-ml-2" asChild><Link to="/campaigns"><ArrowLeft /> Campagnes</Link></Button>}
+        back={<BackButton to="/campaigns" label="Campagnes" />}
         title={<span className="flex items-center gap-3"><CampaignName id={data.id} name={data.name} /><CampaignStatus status={data.status} /></span>}
         description={<>Séquence <Link className="text-primary hover:underline" to={`/sequences/${data.sequence?.id}`}>{data.sequence?.name}</Link>
           {Object.entries(data.filters).map(([k, v]) => <Badge key={k} variant="secondary" className="ml-2">{k === "contact_ids" ? filterValue(k, v)
