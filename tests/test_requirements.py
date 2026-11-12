@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = {"fastapi": "fastapi", "uvicorn": "uvicorn", "jinja2": "jinja2", "multipart": "python-multipart",
            "sqlalchemy": "sqlalchemy", "alembic": "alembic", "apscheduler": "apscheduler", "openpyxl": "openpyxl",
            "keyring": "keyring", "psycopg": "psycopg", "jwt": "pyjwt", "cryptography": "cryptography",
-           "mammoth": "mammoth", "httpx": "httpx", "tzdata": "tzdata",
+           "mammoth": "mammoth", "httpx": "httpx", "xlrd": "xlrd", "tzdata": "tzdata",
            "starlette": None, "pydantic": None, "anyio": None, "typing_extensions": None}
 OPTIONAL = {"win32api", "win32con", "win32gui", "pywintypes", "winreg", "msvcrt", "pythoncom", "webview"}
 

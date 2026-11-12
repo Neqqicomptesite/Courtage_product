@@ -286,6 +286,16 @@ def build_notifications(s, now: datetime | None = None) -> list[dict]:
                     "detail": (m.note or "Demandé dans sa réponse") + (f" · {c.company}" if c.company else ""),
                     "href": f"/contacts?open={c.id}", "at": m.callback_on.isoformat()})
 
+    # V3.10 : clients du portefeuille à rappeler (appels notés par moi)
+    from app import portfolio
+    for cb in portfolio.callbacks(s, today, mine=True):
+        when = date.fromisoformat(cb["callback_on"])
+        late = (today - when).days
+        out.append({"key": f"pfcb:{cb['id']}", "type": "callback", "level": "warning" if late else "info",
+                    "title": f"Rappeler {cb['client']['name']}",
+                    "detail": (cb["note"] or "Client du portefeuille") + (f" · en retard de {late} jour(s)" if late else " · aujourd'hui"),
+                    "href": f"/portfolio?vue=rappels&client={cb['client']['id']}", "at": cb["callback_on"]})
+
     # V3.8 : listes qu'un collègue m'a confiées, tant qu'aucune campagne n'est lancée dessus (30 jours)
     from app import lists_service
     from app.models import AppUser as _U

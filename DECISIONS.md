@@ -626,3 +626,7 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
 308. **Repris d'ODDO (12/11)** : une réponse en « RE: » n'est plus prise pour une réponse automatique quand
      l'objet d'origine contient « congé », « absence »… (la séquence continuait) ; test : seul le contact
      qui répond, même depuis une autre adresse dans le fil, voit ses relances arrêtées.
+309. **Repris d'ODDO V3.10 (12/11)** : page « Portefeuille » (import de l'export DIAMM consolidé par client,
+     tableau de bord, vente croisée, listes d'appels, rappels). Tables portfolio_* (migration 0027).
+     À rapprocher plus tard de la gestion des contrats propre à Cotalis (table contract) : pour l'instant
+     les deux coexistent.

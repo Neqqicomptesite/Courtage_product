@@ -11,7 +11,7 @@ from app import HOST, PORT, scheduler, starter_data, vocab
 from app.db import get_session, init_engine
 from app.logging_setup import setup_logging
 from app.paths import STATIC_DIR, ensure_dirs, is_server_mode
-from app.web import api_contracts, api_lists, api_prospecting, api_quotes, api_users, api_v3
+from app.web import api_contracts, api_lists, api_portfolio, api_prospecting, api_quotes, api_users, api_v3
 from app.web.server_auth import SupabaseAuthMiddleware
 from app import auth
 from app.seed import run_seed
@@ -71,6 +71,7 @@ def create_app(testing: bool = False) -> FastAPI:
     app.include_router(api_quotes.router)
     app.include_router(api_lists.router)  # listes de contacts (repris d'ODDO V3.6)
     app.include_router(api_prospecting.router)  # recherche de prospects (repris d'ODDO V3.7)
+    app.include_router(api_portfolio.router)  # portefeuille clients (DIAMM), vente croisée (repris d'ODDO V3.10)
     app.include_router(api_contracts.router)
     for r in (api.router, api_companies.router, api_mailbox.router, api_contacts.router, api_sequences.router, api_campaigns.router, api_misc.router, api_v28.router):
         app.include_router(r)

@@ -20,6 +20,7 @@ import { ExclusionsPage } from "@/pages/exclusions";
 import { ImportPage } from "@/pages/import";
 import { ListsPage } from "@/pages/lists";
 import { ProspectingPage } from "@/pages/prospecting";
+import { PortfolioPage } from "@/pages/portfolio";
 import { AwaitingPage, DraftsPage, FollowupsPage, InboxPage } from "@/pages/inbox";
 import { QuoteDetailPage } from "@/pages/quote-detail";
 import { QuotesPage } from "@/pages/quotes";
@@ -61,6 +62,7 @@ const router = createBrowserRouter(
         { path: "contacts/import", element: <ImportPage /> },
         { path: "contacts/exclusions", element: <ExclusionsPage /> },
         { path: "contacts/lists", element: <ListsPage /> },  // V3.6
+        { path: "portfolio", element: <PortfolioPage /> },  // V3.10
         { path: "contacts/prospecting", element: <ProspectingPage /> },  // V3.7
         { path: "companies", element: <CompaniesPage /> },
         { path: "companies/:id", element: <CompanyPage /> },

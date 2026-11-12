@@ -662,3 +662,70 @@ class MailDraft(Base):
     data: Mapped[dict] = mapped_column(JSON, default=dict)  # Cc, Cci, réponse à, citation, pièces jointes…
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class PortfolioClient(Base):
+    """V3.10 : un client du portefeuille (import de l'export DIAMM), commun à l'équipe du cabinet.
+    Un client par nom (consolidé : toutes ses polices). Sans email, il reste ici (listes d'appels) ;
+    avec email, il est aussi un contact « client » de l'appli (campagnes), via contact_id."""
+    __tablename__ = "portfolio_client"
+    __table_args__ = (UniqueConstraint("org_id", "key", name="uq_portfolio_client_key"),
+                      _in("segment", ("particulier", "pro")))
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    org_id: Mapped[int] = mapped_column(Integer, default=_current_org, server_default="1", index=True)
+    key: Mapped[str] = mapped_column(String(255))      # nom normalisé (sans accents, espaces, ponctuation)
+    name: Mapped[str] = mapped_column(String(255))     # tel qu'écrit dans DIAMM
+    segment: Mapped[str] = mapped_column(String(12), default="particulier")
+    email: Mapped[str | None] = mapped_column(String(254))
+    phones: Mapped[list] = mapped_column(JSON, default=list)  # [{"number": "0661…", "label": "Leila"}]
+    note: Mapped[str] = mapped_column(Text, default="")       # colonne « Responsable » de DIAMM
+    contact_id: Mapped[int | None] = mapped_column(ForeignKey("contact.id", ondelete="SET NULL"), index=True)
+    seen_at: Mapped[datetime | None] = mapped_column(UTCDateTime)  # dernier import où il figurait
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class PortfolioContract(Base):
+    """V3.10 : une police du portefeuille. Clé : compagnie + n° de police."""
+    __tablename__ = "portfolio_contract"
+    __table_args__ = (UniqueConstraint("org_id", "insurer", "policy", name="uq_portfolio_contract"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    org_id: Mapped[int] = mapped_column(Integer, default=_current_org, server_default="1", index=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("portfolio_client.id", ondelete="CASCADE"), index=True)
+    policy: Mapped[str] = mapped_column(String(80))
+    insurer: Mapped[str] = mapped_column(String(120))
+    category: Mapped[str] = mapped_column(String(120), default="")
+    branch: Mapped[str] = mapped_column(String(120), default="")
+    family: Mapped[str] = mapped_column(String(60), default="")  # regroupement (Auto, Habitation…)
+    fixed_term: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")  # contrat ferme
+    fleet: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    cancelled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    cancelled_on: Mapped[date | None] = mapped_column(Date)
+    premium: Mapped[float | None] = mapped_column(Float)      # prime (si l'export la contient)
+    due_date: Mapped[date | None] = mapped_column(Date)       # échéance (si l'export la contient)
+    raw: Mapped[dict] = mapped_column(JSON, default=dict)     # colonnes non reconnues, gardées telles quelles
+    seen_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+CALL_OUTCOMES = ("interested", "callback", "not_interested", "no_answer", "wrong_number", "done")
+
+
+class PortfolioCall(Base):
+    """V3.10 : un appel à un client du portefeuille (listes d'appels de la vente croisée) : résultat,
+    note, date de rappel, et l'opportunité travaillée (règle) pour le suivi. Commun à l'équipe."""
+    __tablename__ = "portfolio_call"
+    __table_args__ = (_in("outcome", CALL_OUTCOMES),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    org_id: Mapped[int] = mapped_column(Integer, default=_current_org, server_default="1", index=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("portfolio_client.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id", ondelete="SET NULL"), index=True)
+    rule: Mapped[str | None] = mapped_column(String(60))
+    outcome: Mapped[str] = mapped_column(String(20))
+    note: Mapped[str] = mapped_column(Text, default="")
+    callback_on: Mapped[date | None] = mapped_column(Date)
+    callback_done: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)

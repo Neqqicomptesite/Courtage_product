@@ -6,7 +6,7 @@ import {
   FileCheck2,
   FileStack,
   Inbox,
-  LayoutDashboard, ListChecks,
+  Briefcase, LayoutDashboard, ListChecks,
   LogOut,
   ListOrdered,
   Menu,
@@ -53,6 +53,7 @@ const NAV = [
   { to: "/companies", label: "Entreprises", icon: Building2 },
   { to: "/contacts", label: "Contacts", icon: Users },
   { to: "/contacts/lists", label: "Listes", icon: ListChecks, sub: true },  // V4 : les listes mises en avant
+  { to: "/portfolio", label: "Portefeuille", icon: Briefcase },  // V3.10 : clients DIAMM, vente croisée
   { to: "/settings", label: "Réglages", icon: Settings },
 ];
 

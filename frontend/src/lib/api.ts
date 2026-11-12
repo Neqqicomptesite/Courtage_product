@@ -153,6 +153,32 @@ export type MailDraft = {
   to: string; cc?: string; bcc?: string; subject: string; body: string; in_reply_to?: string | null; references?: string[];
   signature?: boolean; force?: boolean; attachment_ids?: number[]; draft_id?: number | null;
 };
+/** V3.10 : portefeuille clients (DIAMM), vente croisée, appels. */
+export type PfReach = { count: number; email: number; phone: number };
+export type PfCall = { id: number; outcome: string; label: string; note: string; callback_on: string | null; callback_done: boolean; rule: string | null; at: string | null; by: string | null };
+export type PfOpportunity = PfReach & { key: string; label: string; pitch: string; segment: "particulier" | "pro" | null; called: number; interested: number };
+export type PfSummary = {
+  imported_at: string | null; clients: number; active_clients: number; contracts: number; cancelled: number;
+  segments: Record<"particulier" | "pro", PfReach & { contracts: number; mono: number }>; reach: PfReach;
+  families: { family: string; contracts: number; particulier: { clients: number; pct: number }; pro: { clients: number; pct: number } }[];
+  insurers: { insurer: string; contracts: number; clients: number }[];
+  families_per_client: Record<"particulier" | "pro", Record<string, number>>;
+  premium_total: number | null; due_60: number; opportunities: PfOpportunity[];
+  top_clients: { id: number; name: string; segment: string; contracts: number; families: number }[];
+  all_families: string[]; callbacks_due: number; calls: number;
+};
+export type PfRow = { id: number; name: string; segment: "particulier" | "pro"; email: string | null; phone: string | null; contracts: number;
+  cancelled: number; families: string[]; contact_id: number | null; premium: number | null; last_call: PfCall | null };
+export type PfClients = PfReach & { total: number; items: PfRow[] };
+export type PfDetail = PfRow & { phones: { number: string; label: string }[]; note: string; calls: PfCall[]; missing: string[];
+  opportunities: { key: string; label: string; pitch: string }[];
+  items: { id: number; policy: string; insurer: string; category: string; branch: string; family: string; fleet: boolean; fixed_term: boolean;
+    cancelled: boolean; cancelled_on: string | null; premium: number | null; due_date: string | null }[] };
+export type PfImport = { rows: number; clients_new: number; clients_updated: number; contracts_new: number; contracts_updated: number; cancelled: number;
+  particuliers: number; pros: number; with_email: number; with_phone: number; contacts_created: number; contacts_linked: number;
+  prospects_now_clients: number; skipped: number; unknown_branches: string[]; extra_columns: string[]; has_premium: boolean; has_due: boolean;
+  duplicates: string[][] };
+export type PfCallback = PfCall & { client: { id: number; name: string; segment: string; phone: string | null } };
 /** V3.9.2 : brouillon d'email (enregistré pendant la frappe). */
 export type SavedDraftItem = { id: number; to: string; subject: string; snippet: string; updated_at: string | null; attachments_count: number };
 export type SavedDraft = SavedDraftItem & { body: string; cc?: string; bcc?: string; in_reply_to?: string | null; references?: string[];
@@ -697,6 +723,20 @@ export const api = {
   mailSeen: (folder: string, uid: number, seen = true) =>
     request<{ ok: boolean; seen: boolean }>(`/api/mailbox/messages/${uid}/seen${qs({ folder, seen })}`, { method: "POST" }),
   mailSuggest: (q: string) => request<{ items: AddressSuggestion[] }>(`/api/mailbox/suggest?q=${encodeURIComponent(q)}`),
+  pfSummary: () => request<PfSummary>("/api/portfolio/summary"),
+  pfClients: (f: Record<string, string | number | boolean | undefined>) => request<PfClients>(`/api/portfolio/clients${qs(f)}`),
+  pfClient: (id: number) => request<PfDetail>(`/api/portfolio/clients/${id}`),
+  pfEmail: (id: number, email: string | null) => request<PfDetail>(`/api/portfolio/clients/${id}/email`, { method: "PUT", json: { email } }),
+  pfCall: (id: number, body: { outcome: string; note?: string; callback_on?: string | null; rule?: string | null; email?: string | null }) =>
+    request<PfDetail>(`/api/portfolio/clients/${id}/calls`, { method: "POST", json: body }),
+  pfCallbacks: (days = 0) => request<{ items: PfCallback[] }>(`/api/portfolio/callbacks?days=${days}`),
+  pfList: (body: { name: string; q?: string; segment?: string; has?: string; lacks?: string; rule?: string; ids?: number[] }) =>
+    request<{ list_id: number; added: number; without_email: number }>("/api/portfolio/list", { method: "POST", json: body }),
+  pfImport: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<PfImport>("/api/portfolio/import", { method: "POST", body: fd });
+  },
   mailDrafts: () => request<{ items: SavedDraftItem[] }>("/api/mailbox/drafts"),
   mailDraft: (id: number) => request<SavedDraft>(`/api/mailbox/drafts/${id}`),
   mailDraftSave: (d: Record<string, unknown>) => request<{ id: number | null; updated_at?: string }>("/api/mailbox/drafts", { method: "POST", json: d }),

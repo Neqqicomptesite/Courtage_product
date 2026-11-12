@@ -42,11 +42,11 @@ def _apply(state: ORMExecuteState) -> None:
     if not state.is_select or state.execution_options.get("oddo_all"):
         return
     # Dossiers de cotation : tables du cabinet (org_id). Toujours filtrées, employé en cours ou non.
-    from app.models import ContactList, Contract, QuoteCase, QuoteEvent, QuoteFile, QuoteInsurer
+    from app.models import ContactList, Contract, PortfolioCall, PortfolioClient, PortfolioContract, QuoteCase, QuoteEvent, QuoteFile, QuoteInsurer
     org = org_id()
     state.statement = state.statement.options(*(
         with_loader_criteria(m, lambda t: t.org_id == org, include_aliases=True, track_closure_variables=True)
-        for m in (QuoteCase, QuoteInsurer, QuoteEvent, QuoteFile, Contract, ContactList)))
+        for m in (QuoteCase, QuoteInsurer, QuoteEvent, QuoteFile, Contract, ContactList, PortfolioClient, PortfolioContract, PortfolioCall)))
     uid = user_id()
     if uid is None:
         return

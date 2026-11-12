@@ -20,3 +20,4 @@ PyJWT[crypto]==2.15.1
 cryptography==50.0.2
 mammoth==1.13.0   # V3 : aperçu des documents Word reçus
 httpx==0.28.1     # recherche de prospects (API looot), repris d'ODDO V3.7
+xlrd==2.0.2       # lecture de l'export DIAMM (.xls), repris d'ODDO V3.10
