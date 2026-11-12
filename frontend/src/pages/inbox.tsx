@@ -198,7 +198,9 @@ export function InboxPage() {
 }
 
 function Row({ m, active, sent, onClick }: { m: MailItem; active: boolean; sent: boolean; onClick: () => void }) {
-  const who = sent ? `À : ${m.contact ? fullName(m.contact) : m.to[0] ?? "—"}` : (m.contact ? fullName(m.contact) : m.from_name);
+  // V3.8 : un email de vous (copie rangée dans la réception) s'affiche « Vous → destinataire »
+  const toWho = m.contact ? fullName(m.contact) : m.to[0] ?? "—";
+  const who = sent ? `À : ${toWho}` : m.from_me ? `Vous → ${toWho}` : (m.contact ? fullName(m.contact) : m.from_name);
   return (
     <button id={`mail-${m.uid}`} onClick={onClick} className={cn("block w-full px-4 py-3 text-left transition-colors", active ? "bg-accent/70" : "hover:bg-accent/30")}>
       <div className="flex items-center gap-2">
@@ -267,18 +269,25 @@ function Reader({ item, folder, actions, markRead = false }: { item: MailItem; f
       else toastError(e, "Fiche non créée");
     } finally { setQuickCreating(false); }
   };
+  const { data: status } = useQuery({ queryKey: ["status"], queryFn: api.status, staleTime: 60_000 });
+  const me = (status?.mailbox.email ?? "").toLowerCase();
+  // V3.8 : répondre à SON PROPRE email (dossier Envoyés, ou sa copie) écrit aux destinataires d'origine,
+  // pas à soi-même (sinon l'email revenait dans la boîte de réception)
+  const replyTo = () => {
+    if (!m) return "";
+    if (me && m.from_email.toLowerCase() === me) return m.to.filter((a) => a.toLowerCase() !== me).join(", ") || m.from_email;
+    return m.from_email;
+  };
   const reply = () => m && openComposer({
-    to: m.from_email, subject: replySubject(m.subject), inReplyTo: m.message_id,
+    to: replyTo(), subject: replySubject(m.subject), inReplyTo: m.message_id,
     references: [...m.references.filter((r) => r !== m.message_id), ...(m.message_id ? [m.message_id] : [])],
     quote: { from: m.from_name || m.from_email, date: m.date, text: m.text },
   });
   // « Répondre à tous » : l'expéditeur en destinataire, les autres destinataires et copies en Cc
   // (sans votre propre adresse).
-  const { data: status } = useQuery({ queryKey: ["status"], queryFn: api.status, staleTime: 60_000 });
-  const me = (status?.mailbox.email ?? "").toLowerCase();
   const others = m ? [...new Set([...m.to, ...m.cc].map((a) => a.toLowerCase()))].filter((a) => a && a !== me && a !== m.from_email.toLowerCase()) : [];
   const replyAll = () => m && openComposer({
-    to: m.from_email, cc: others.join(", "), subject: replySubject(m.subject), inReplyTo: m.message_id,
+    to: replyTo(), cc: m.from_email.toLowerCase() === me ? m.cc.filter((a) => a.toLowerCase() !== me).join(", ") : others.join(", "), subject: replySubject(m.subject), inReplyTo: m.message_id,
     references: [...m.references.filter((r) => r !== m.message_id), ...(m.message_id ? [m.message_id] : [])],
     quote: { from: m.from_name || m.from_email, date: m.date, text: m.text },
   });
@@ -364,7 +373,7 @@ function Reader({ item, folder, actions, markRead = false }: { item: MailItem; f
       <div className="flex flex-wrap items-start gap-3 border-b p-4">
         <div className="min-w-0 flex-1">
           <p className="font-medium">{item.subject || "(sans objet)"}</p>
-          <p className="truncate text-sm text-muted-foreground">De {item.from_name} &lt;{item.from_email}&gt;</p>
+          <p className="truncate text-sm text-muted-foreground">{item.from_me ? <>De vous ({item.from_email})</> : <>De {item.from_name} &lt;{item.from_email}&gt;</>}</p>
           <p className="text-xs text-muted-foreground">{item.date && formatDayTime(item.date)}{m && m.to.length > 0 && <> · à {m.to.join(", ")}</>}{m && m.cc.length > 0 && <> · cc {m.cc.join(", ")}</>}</p>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
@@ -413,7 +422,9 @@ function Reader({ item, folder, actions, markRead = false }: { item: MailItem; f
           <Button size="sm" variant="outline" className="h-7" onClick={() => openReminder({ contact: person })}><CalendarPlus /> Rappel</Button>
           {person.status === "active" && <Button size="sm" variant="ghost" className="h-7" onClick={() => setEnrolling(true)} title="Ajouter à une campagne déjà lancée"><Rocket /> Campagne</Button>}
           <EnrollDialog open={enrolling} onOpenChange={setEnrolling} contactId={person.id} name={fullName(person)} kind={person.kind} />
-        </> : <>
+        </> : item.from_me ? (
+          <span className="text-muted-foreground">Email envoyé par vous{m && m.to.length > 0 ? <> à {m.to.join(", ")}</> : null}.</span>
+        ) : <>
           <span className="text-muted-foreground">Expéditeur inconnu de vos contacts.</span>
           <span className="flex-1" />
           <Button size="sm" variant="outline" className="h-7" onClick={createContact}><UserPlus /> Créer le contact</Button>

@@ -2,7 +2,7 @@
 // aperçu payant d'une page (≈ 0,04 $), puis recherche des emails en tâche de fond, importés dans une liste.
 // Réservé à l'administrateur ; le plafond de dépense est le crédit chargé sur le compte looot.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, CircleSlash, KeyRound, Loader2, MoreHorizontal, Rocket, Search, Square, Users, Wallet } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CircleSlash, KeyRound, Loader2, MoreHorizontal, Rocket, Search, Square, UserRoundCheck, Users, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -18,6 +18,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, type ProspectCriteria, type ProspectOption, type ProspectSearch } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { AssignListDialog } from "@/pages/lists";
 import { useMe } from "@/pages/login";
 
 const usd = (n: number) => `${n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`;
@@ -153,6 +154,7 @@ function Running({ id }: { id: number }) {
   useEffect(() => {  // le crédit looot baisse pendant la recherche : on le relit à chaque étape
     if (status) qc.invalidateQueries({ queryKey: ["prospecting-balance"] });
   }, [status, s?.imported, qc]);
+  const [assigning, setAssigning] = useState(false);
   const stop = useMutation({ mutationFn: () => api.prospectingStop(id), onSuccess: () => { qc.invalidateQueries({ queryKey: ["prospecting"] }); } });
   if (!s) return <Skeleton className="h-40 rounded-xl" />;
   const running = s.status === "running";
@@ -173,6 +175,8 @@ function Running({ id }: { id: number }) {
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" asChild><Link to={`/contacts?list_id=${s.list_id}`}><Users /> Voir les {s.imported} contacts</Link></Button>
           {!running && <Button onClick={() => navigate(`/campaigns/new?list_id=${s.list_id}`)}><Rocket /> Créer une campagne pour eux</Button>}
+          {!running && <Button variant="outline" onClick={() => setAssigning(true)}><UserRoundCheck /> Confier à un collègue</Button>}
+          <AssignListDialog list={{ id: s.list_id, name: s.summary, count: s.imported }} open={assigning} onOpenChange={setAssigning} />
         </div>
       )}
     </Card>

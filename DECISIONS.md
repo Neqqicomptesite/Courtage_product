@@ -611,3 +611,7 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
      « Boîte mail », email ouvert d'un clic = lu sur le serveur (celui affiché tout seul reste non lu), bouton Lu / Non lu. Migrations 0022 à 0024.
 304. **Repris d'ODDO V3.7.2 (12/11)** : vider « Envoyés sans réponse » (cases, « Tout sélectionner »,
      « Retirer de la liste », bouton « Retirer », Annuler) ; la personne revient si on lui écrit de nouveau.
+305. **Repris d'ODDO V3.8 (12/11)** : confier une liste à un collègue (cloche + email relu), « Votre prochaine
+     étape » sur le tableau de bord, vos propres emails jamais affichés comme ceux d'un prospect, copie
+     « Envoyés » jamais dans la réception (et file des copies en attente par boîte), Multirisque bureau :
+     valeur du bâtiment au lieu de la superficie. Migration 0025.

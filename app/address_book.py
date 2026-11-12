@@ -81,12 +81,24 @@ def record_seen(people: list[tuple[str, str]], own: set[str] | None = None) -> N
         s.commit()
 
 
+def _own_addresses(s: Session) -> set[str]:
+    from app.models import AppUser, Mailbox
+    uid = _uid()
+    q = select(Mailbox.email, Mailbox.username)
+    if uid is not None:
+        q = q.where(Mailbox.user_id == uid)
+    own = {a.lower() for row in s.execute(q) for a in row if a}
+    if uid is not None and (u := s.get(AppUser, uid)) is not None and u.email:
+        own.add(u.email.lower())
+    return own
+
+
 def suggest(s: Session, q: str, limit: int = 8, exclude: list[str] | None = None) -> list[dict]:
     from app.models import AddressBook, AppUser, Contact
     q = (q or "").strip().lower()
     if len(q) < 2:
         return []
-    exclude = {e.lower() for e in exclude or ()}
+    exclude = {e.lower() for e in exclude or ()} | _own_addresses(s)  # V3.8 : jamais soi-même
     like = f"%{q}%"
     out: dict[str, dict] = {}
 

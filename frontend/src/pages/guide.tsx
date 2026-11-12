@@ -25,6 +25,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { toastError } from "@/components/common";
+import { openComposer } from "@/components/composer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -181,6 +182,49 @@ export function GuideBanner() {
           </div>
         </div>
         <Button asChild><Link to="/guide/bien-demarrer">Continuer <ArrowRight /></Link></Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** V3.8 : « Votre prochaine étape » : les 9 étapes de la prise en main (les mêmes que dans le suivi de
+ *  l'administrateur), et un seul bouton pour faire la suivante. Disparaît quand tout est fait. */
+const NEXT: Record<string, { title: string; text: string; cta: string; to?: string; compose?: boolean }> = {
+  mailbox: { title: "Brancher votre boîte mail", text: "Pour que vos emails partent de votre propre adresse, et que vos réponses arrivent ici.", cta: "Brancher ma boîte", to: "/settings?s=mailbox" },
+  signature: { title: "Ajouter votre signature", text: "Nom, poste, téléphone : elle s'ajoute toute seule à chacun de vos emails. Deux minutes.", cta: "Ajouter ma signature", to: "/settings?s=mailbox" },
+  test: { title: "Faire un essai", text: "Envoyez-vous un email : il arrive dans votre boîte, rien ne part chez un client.", cta: "Écrire un essai", compose: true },
+  contacts: { title: "Ajouter vos prospects", text: "Importez votre fichier Excel : l'appli repère les doublons et range tout dans une liste.", cta: "Importer un fichier", to: "/contacts/import" },
+  real: { title: "Passer en envois réels", text: "Relisez un de vos essais : s'il vous plaît, activez les envois réels. Tant que vous êtes en mode test, rien ne part chez vos clients.", cta: "Passer en réel", to: "/settings?s=test" },
+  real_send: { title: "Envoyer votre premier vrai email", text: "Une relance, une demande de cotation : écrivez-la depuis l'appli, elle part de votre boîte.", cta: "Écrire un email", compose: true },
+  campaign: { title: "Lancer votre première campagne", text: "Choisissez une liste et une séquence : l'appli envoie et relance pour vous.", cta: "Nouvelle campagne", to: "/campaigns/new" },
+  classified: { title: "Classer votre première réponse", text: "Intéressé, à rappeler, pas intéressé : un clic, et la suite se fait toute seule.", cta: "Voir les réponses", to: "/replies" },
+  quote: { title: "Ouvrir votre premier dossier de cotation", text: "Les demandes aux compagnies et leurs relances automatiques, au même endroit.", cta: "Dossiers", to: "/quotes" },
+};
+
+export function NextStepCard() {
+  const { data } = useQuery({ queryKey: ["next-step"], queryFn: api.nextStep, refetchInterval: 60_000 });
+  if (!data?.next) return null;
+  const n = NEXT[data.next.key];
+  if (!n) return null;
+  return (
+    <Card className="border-primary/30 bg-primary/5">
+      <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-3 p-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium uppercase tracking-wide text-primary">Votre prochaine étape · {data.done} sur {data.total} faites</p>
+          <p className="mt-1 font-medium">{n.title}</p>
+          <p className="mt-0.5 max-w-2xl text-sm text-muted-foreground">{n.text}</p>
+          <div className="mt-2.5 flex gap-1" aria-label={`${data.done} étapes faites sur ${data.total}`}>
+            {data.steps.map((s) => (
+              <span key={s.key} title={`${s.label}${s.done ? " ✓" : ""}`}
+                className={cn("h-1.5 w-6 rounded-full", s.done ? "bg-primary" : s.key === data.next?.key ? "bg-primary/40" : "bg-primary/15")} />
+            ))}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="ghost" asChild><Link to="/guide/bien-demarrer">Le guide</Link></Button>
+          {n.compose ? <Button onClick={() => openComposer()}>{n.cta} <ArrowRight /></Button>
+            : <Button asChild><Link to={n.to!}>{n.cta} <ArrowRight /></Link></Button>}
+        </div>
       </CardContent>
     </Card>
   );

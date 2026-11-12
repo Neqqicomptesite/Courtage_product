@@ -581,6 +581,10 @@ class ContactList(Base):
     shared: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     source: Mapped[str] = mapped_column(String(10), default="manual", server_default="manual")
     lot_number: Mapped[int | None] = mapped_column(Integer)  # V3.7 : lot créé par un import ou une recherche
+    # V3.8 : liste confiée à un collègue (il en devient le propriétaire ; celui qui confie la voit toujours)
+    assigned_by: Mapped[int | None] = mapped_column(ForeignKey("app_user.id", ondelete="SET NULL"))
+    assigned_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    assign_note: Mapped[str | None] = mapped_column(String(2000))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 

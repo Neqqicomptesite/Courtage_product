@@ -69,6 +69,8 @@ def _read_mailbox_form(form) -> tuple[dict, dict]:
     }
     if v["smtp_security"] not in ("ssl", "starttls"):
         errors["smtp_security"] = "Sécurité SMTP inconnue."
+    if (v["sent_folder"] or "").upper() == "INBOX":  # V3.8 : sinon chaque email envoyé revient dans la réception
+        errors["sent_folder"] = "Le dossier des envoyés ne peut pas être la boîte de réception : choisissez « Envoyés » (ou « Sent »)."
     _server_guard(v, errors)
     return v, errors
 

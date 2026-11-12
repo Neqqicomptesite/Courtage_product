@@ -127,6 +127,7 @@ export type Option = { value: string; label: string };
 export type MailPerson = ContactRef & { kind: Kind; status: ContactRow["status"]; company_ref: { id: number; name: string } | null };
 export type MailItem = {
   uid: number; from_name: string; from_email: string; to: string[]; subject: string; date: string | null; seen: boolean;
+  from_me?: boolean;  // V3.8 : email de vous (copie rangée dans la réception)
   message_id: string | null; has_attachments: boolean; size: number | null;
   contact: MailPerson | null; campaign_reply: { id: number; kind: string; classification: string | null } | null;
 };
@@ -195,7 +196,11 @@ export type Followup = {
   message: { id: number; message_id: string | null; body: string; references: string[]; test_mode: boolean } | null;
   days: number;
 };
+export type NextStepItem = { key: string; label: string; done: boolean };
+export type NextStep = { steps: NextStepItem[]; done: number; total: number; next: NextStepItem | null; test_mode: boolean };
+export type Colleague = { id: number; name: string; email: string; has_mailbox: boolean };
 export type ContactListItem = { id: number; name: string; count: number; source: "manual" | "import" | "campaign"; shared: boolean;
+  lot?: number | null; assigned_by?: string | null; assigned_at?: string | null; assigned_by_me?: boolean;
   owner: string | null; mine: boolean; editable: boolean; created_at: string | null; updated_at: string | null };
 export type ImportDone = { new: number; update: number; ignore: number; list?: { id: number; name: string; count: number; prospects: number; lot?: number | null } };
 
@@ -380,7 +385,7 @@ export type ReminderInput = {
   contact_id?: number | null; company_id?: number | null; done?: boolean;
 };
 export type Notification = {
-  key: string; type: "reminder" | "callback" | "followup" | "replies" | "error" | "update"; level: "info" | "warning" | "error";
+  key: string; type: "reminder" | "list" | "callback" | "followup" | "replies" | "error" | "update"; level: "info" | "warning" | "error";
   title: string; detail: string; href: string; at: string | null; seen: boolean; reminder_id?: number;
 };
 
@@ -623,6 +628,7 @@ export const api = {
   status: () => request<Status>("/api/status"),
   dashboard: () => request<Dashboard>("/api/dashboard"),
   guide: () => request<GuideProgress>("/api/guide"),
+  nextStep: () => request<NextStep>("/api/me/next-step"),
   update: () => request<UpdateStatus>("/api/update"),
   backups: () => request<Backups>("/api/backups"),
   backupNow: () => request<Backups>("/api/backups/now", { method: "POST" }),
@@ -712,6 +718,9 @@ export const api = {
   prospectingGet: (id: number) => request<ProspectSearch>(`/api/prospecting/${id}`),
   prospectingStart: (id: number, wanted: number) => request<ProspectSearch>(`/api/prospecting/${id}/start`, { method: "POST", json: { wanted } }),
   prospectingStop: (id: number) => request<ProspectSearch>(`/api/prospecting/${id}/stop`, { method: "POST" }),
+  listColleagues: () => request<{ items: Colleague[] }>("/api/lists/colleagues"),
+  listAssign: (id: number, b: { user_id: number; note?: string; email?: boolean; subject?: string }) =>
+    request<ContactListItem & { assigned_to: string; email_sent: boolean; email_error: string | null }>(`/api/lists/${id}/assign`, { method: "POST", json: b }),
   campaignNoReplyList: (id: number) => request<ContactListItem>(`/api/campaigns/${id}/no-reply-list`, { method: "POST" }),
   importCancel: (token: string) => request(`/api/import/${token}`, { method: "DELETE" }),
   exclusions: () => request<Exclusion[]>("/api/exclusions"),

@@ -62,7 +62,9 @@ def _apply(state: ORMExecuteState) -> None:
         with_loader_criteria(Sequence, lambda q: or_(q.owner_id.is_(None), q.owner_id == uid),
                              include_aliases=True, track_closure_variables=True),
         # V3.6 : ses listes, et celles que l'équipe partage
-        with_loader_criteria(ContactList, lambda cl: or_(cl.owner_id == uid, cl.shared.is_(True), cl.owner_id.is_(None)),
+        # V3.8 : et celles qu'il a confiées à un collègue
+        with_loader_criteria(ContactList, lambda cl: or_(cl.owner_id == uid, cl.shared.is_(True), cl.owner_id.is_(None),
+                                                         cl.assigned_by == uid),
                              include_aliases=True, track_closure_variables=True),
     )
 

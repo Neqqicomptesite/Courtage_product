@@ -18,8 +18,16 @@ def _unavailable(exc: mbx.MailboxUnavailable) -> HTTPException:
     return HTTPException(503, str(exc))
 
 
-def _people(emails: set[str]) -> dict[str, dict]:
+def _own() -> set[str]:
+    """V3.8 : vos propres adresses (jamais affichées comme un prospect ou un contact)."""
+    from app import address_book
+    with get_session() as s:
+        return address_book._own_addresses(s)
+
+
+def _people(emails: set[str], own: set[str] | None = None) -> dict[str, dict]:
     """Expéditeurs connus : contact, entreprise et type, pour les badges de la liste."""
+    emails = {e for e in emails if e} - (own if own is not None else _own())
     if not emails:
         return {}
     with get_session() as s:
@@ -61,13 +69,15 @@ def messages(folder: str = "INBOX", days: int = 30, refresh: bool = False, q: st
         data = mbx.list_messages(folder, max(1, min(days, 365)), refresh, criteria=crit)
     except mbx.MailboxUnavailable as exc:
         raise _unavailable(exc) from None
-    people = _people({m["from_email"] for m in data["items"]} | {a for m in data["items"] for a in m["to"]})
+    own = _own()
+    people = _people({m["from_email"] for m in data["items"]} | {a for m in data["items"] for a in m["to"]}, own)
     replies = _campaign_replies({m["message_id"] for m in data["items"]})
     items = []
     for m in data["items"]:
-        # Dans « Envoyés », la personne intéressante est le destinataire, pas Omar.
+        # Dans « Envoyés » (ou un email de vous rangé ailleurs), la personne intéressante est le destinataire.
+        mine = m["from_email"].lower() in own
         who = m["from_email"] if m["from_email"] in people or not m["to"] else next((a for a in m["to"] if a in people), m["from_email"])
-        items.append({**m, "contact": people.get(who), "campaign_reply": replies.get(m["message_id"])})
+        items.append({**m, "from_me": mine, "contact": people.get(who), "campaign_reply": replies.get(m["message_id"])})
     return {**data, "items": items}
 
 
@@ -77,8 +87,10 @@ def message(uid: int, folder: str = "INBOX"):
         m = mbx.get_message(folder, uid)
     except mbx.MailboxUnavailable as exc:
         raise _unavailable(exc) from None
-    people = _people({m["from_email"], *m["to"], *m["cc"]})
-    return {**m, "contact": people.get(m["from_email"]) or next((people[a] for a in m["to"] if a in people), None),
+    own = _own()
+    people = _people({m["from_email"], *m["to"], *m["cc"]}, own)
+    return {**m, "from_me": m["from_email"].lower() in own,
+            "contact": people.get(m["from_email"]) or next((people[a] for a in m["to"] if a in people), None),
             "campaign_reply": _campaign_replies({m["message_id"]}).get(m["message_id"])}
 
 

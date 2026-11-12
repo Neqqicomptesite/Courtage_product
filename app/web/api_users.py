@@ -97,6 +97,18 @@ def me():
         return {**_user_json(u, mb), "server_mode": True}
 
 
+@router.get("/me/next-step")
+def my_next_step():
+    """V3.8 : « Votre prochaine étape » sur le tableau de bord : les 9 étapes de la prise en main
+    (les mêmes que l'administrateur voit), et la première qui reste à faire."""
+    from app import adoption
+    with get_session() as s:
+        data = adoption.for_current_user(s, user_id())
+    steps = [{"key": k, "label": label, "done": bool(data["steps"].get(k))} for k, label in adoption.STEPS]
+    nxt = next((x for x in steps if not x["done"]), None)
+    return {"steps": steps, "done": data["done"], "total": data["total"], "next": nxt, "test_mode": data["test_mode"]}
+
+
 @router.get("/admin/adoption")
 def team_adoption():
     """V3.3.5 : prise en main de chaque employé (administrateur)."""

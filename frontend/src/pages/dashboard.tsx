@@ -32,7 +32,7 @@ import { api, type Dashboard, type Status } from "@/lib/api";
 import { formatDayLabel, formatDayTime, formatTime, fullName, localDay, pct, relativeTime } from "@/lib/format";
 import { PRODUCT_NAME } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { GuideBanner } from "@/pages/guide";
+import { NextStepCard } from "@/pages/guide";
 
 export function DashboardPage() {
   const { data: status } = useStatus();
@@ -60,7 +60,7 @@ export function DashboardPage() {
       </div>
 
       <Alerts status={status} />
-      <GuideBanner />
+      <NextStepCard />
       <StatusRow status={status} toClassify={status?.to_classify ?? 0} />
 
       {isError && (

@@ -2,7 +2,7 @@
 // personnes à rappeler, emails restés sans réponse (un par personne, cliquable vers l'email),
 // réponses à trier et envois bloqués. La pastille compte ce qui n'a pas encore été vu.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Bell, CalendarClock, CheckCheck, Clock, Download, MailQuestion, PhoneCall } from "lucide-react";
+import { AlertTriangle, Bell, CalendarClock, CheckCheck, Clock, Download, ListChecks, MailQuestion, PhoneCall } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -12,13 +12,13 @@ import { api, type Notification } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const ICON: Record<Notification["type"], typeof Bell> = {
-  reminder: CalendarClock, callback: PhoneCall, followup: Clock, replies: MailQuestion, error: AlertTriangle, update: Download,
+  reminder: CalendarClock, list: ListChecks, callback: PhoneCall, followup: Clock, replies: MailQuestion, error: AlertTriangle, update: Download,
 };
 const TONE: Record<Notification["level"], string> = {
   info: "bg-primary/10 text-primary", warning: "bg-warning/15 text-warning", error: "bg-destructive/10 text-destructive",
 };
 const GROUPS: { title: string; types: Notification["type"][] }[] = [
-  { title: "À faire", types: ["error", "update", "reminder", "callback", "replies"] },
+  { title: "À faire", types: ["error", "update", "list", "reminder", "callback", "replies"] },
   { title: "Sans réponse", types: ["followup"] },
 ];
 

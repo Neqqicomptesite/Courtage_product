@@ -93,7 +93,15 @@ def to_json(s: Session, cl: ContactList, n: int | None = None, names: dict | Non
         owner = (u.full_name or u.email) if u else None
     else:
         owner = names.get(cl.owner_id)
+    by = None
+    if cl.assigned_by:
+        if names is not None:
+            by = names.get(cl.assigned_by)
+        elif (u2 := s.get(AppUser, cl.assigned_by)) is not None:
+            by = u2.full_name or u2.email
     return {"id": cl.id, "name": cl.name, "count": n, "source": cl.source, "shared": cl.shared, "lot": cl.lot_number,
+            "assigned_by": by, "assigned_at": cl.assigned_at.isoformat() if cl.assigned_at else None,
+            "assigned_by_me": cl.assigned_by is not None and cl.assigned_by == user_id() and cl.owner_id != user_id(),
             "owner": owner, "mine": cl.owner_id is not None and cl.owner_id == user_id(),
             "editable": can_edit(cl), "created_at": cl.created_at.isoformat() if cl.created_at else None,
             "updated_at": cl.updated_at.isoformat() if cl.updated_at else None}
@@ -133,3 +141,47 @@ def stamp_lot(s: Session, cl: ContactList, new_ids) -> int | None:
     for c in s.scalars(select(Contact).where(Contact.id.in_(ids), Contact.lot_number.is_(None))):
         c.lot_number = cl.lot_number
     return cl.lot_number
+
+
+# --------------------------------------------------------------------------- V3.8 : confier une liste
+
+def colleagues(s: Session) -> list[dict]:
+    """Collègues actifs à qui confier une liste (sans soi-même), avec ou sans boîte mail branchée."""
+    from app.models import Mailbox
+    me = user_id()
+    has_box = set(s.scalars(select(Mailbox.user_id).where(Mailbox.user_id.is_not(None)).execution_options(oddo_all=True)))
+    rows = s.scalars(select(AppUser).where(AppUser.active.is_(True)).order_by(AppUser.full_name, AppUser.email)
+                     .execution_options(oddo_all=True))
+    return [{"id": u.id, "name": u.full_name or u.email, "email": u.email, "has_mailbox": u.id in has_box}
+            for u in rows if u.id != me]
+
+
+def assign(s: Session, cl: ContactList, target_id: int, note: str | None = None) -> AppUser:
+    """Confie la liste : le collègue en devient propriétaire (il lance la campagne depuis SA boîte) ;
+    celui qui confie la garde en vue. Il est prévenu par sa cloche (et par email si demandé)."""
+    if not can_edit(cl):
+        raise ListError("Seul le propriétaire de la liste (ou l'administrateur) peut la confier.")
+    u = s.get(AppUser, target_id)
+    if u is None or not u.active:
+        raise ListError("Collègue introuvable ou désactivé.")
+    if u.id == cl.owner_id:
+        raise ListError(f"La liste est déjà à {u.full_name or u.email}.")
+    cl.assigned_by = user_id() if user_id() is not None else cl.owner_id
+    cl.owner_id = u.id
+    cl.assigned_at = utcnow()
+    cl.assign_note = (note or "").strip()[:2000] or None
+    return u
+
+
+def assigned_to_me(s: Session, since) -> list[ContactList]:
+    """Listes que l'on m'a confiées récemment et pour lesquelles je n'ai pas encore lancé de campagne."""
+    from app.models import Campaign
+    me = user_id()
+    if me is None:
+        return []
+    rows = list(s.scalars(select(ContactList).where(ContactList.owner_id == me, ContactList.assigned_by.is_not(None),
+                                                    ContactList.assigned_at >= since)))
+    if not rows:
+        return []
+    used = {str((c.filters or {}).get("list_id")) for c in s.scalars(select(Campaign)) if (c.filters or {}).get("list_id")}
+    return [r for r in rows if str(r.id) not in used]

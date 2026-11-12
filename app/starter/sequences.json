@@ -1,5 +1,5 @@
 {
- "version": 6,
+ "version": 7,
  "remove_sequences": [
   "Prospection PME – 3 étapes",
   "PME",
@@ -655,7 +655,7 @@
      "delay_days": 0,
      "business_days": true,
      "same_thread": false,
-     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation multirisque bureau au profit de notre client [Nom du client].\n\nActivité : [Activité]\nAdresse : [Adresse]\nSuperficie : [Superficie] m²\nValeur du contenu : [Valeur du contenu] MAD\nValeur du matériel informatique : [Valeur du matériel informatique] MAD\nStatut : [Propriétaire / Locataire]\nDate d'effet souhaitée : [Date d'effet]\n\nMerci de nous adresser votre meilleure proposition (garanties, franchises, prime), ainsi que la liste des éléments complémentaires éventuellement nécessaires.\n\nBien cordialement,",
+     "body": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation multirisque bureau au profit de notre client [Nom du client].\n\nActivité : [Activité]\nAdresse : [Adresse]\nValeur du bâtiment : [Valeur du bâtiment] MAD\nValeur du contenu : [Valeur du contenu] MAD\nValeur du matériel informatique : [Valeur du matériel informatique] MAD\nStatut : [Propriétaire / Locataire]\nDate d'effet souhaitée : [Date d'effet]\n\nMerci de nous adresser votre meilleure proposition (garanties, franchises, prime), ainsi que la liste des éléments complémentaires éventuellement nécessaires.\n\nBien cordialement,",
      "subjects": [
       "Demande de cotation Multirisque bureau – [Nom du client]"
      ]
@@ -751,6 +751,12 @@
    "position": 1,
    "old": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation flotte automobile au profit de notre client [Nom du client].\n\nActivité : [Activité]\nNombre de véhicules : [Nombre de véhicules]\nGaranties souhaitées : [Garanties souhaitées]\nDate d'effet souhaitée : [Date d'effet]\n\nVous trouverez ci-joint la liste du parc (immatriculation, marque et modèle, usage, date de mise en circulation, valeur) et, si disponible, le relevé de sinistralité des 3 dernières années.\n\nMerci de nous adresser votre meilleure proposition (garanties, franchises, prime), ainsi que la liste des éléments complémentaires éventuellement nécessaires.\n\nBien cordialement,",
    "new": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation flotte automobile au profit de notre client [Nom du client].\n\nActivité : [Activité]\nNombre de véhicules : [Nombre de véhicules]\nDate d'effet souhaitée : [Date d'effet]\n\nVous trouverez ci-joint la liste du parc (immatriculation, marque et modèle, usage, date de mise en circulation, valeur, garanties souhaitées par véhicule).\n\nMerci de nous adresser votre meilleure proposition (garanties, franchises, prime), ainsi que la liste des éléments complémentaires éventuellement nécessaires.\n\nBien cordialement,"
+  },
+  {
+   "name": "C12 · Cotation Multirisque bureau",
+   "position": 1,
+   "old": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation multirisque bureau au profit de notre client [Nom du client].\n\nActivité : [Activité]\nAdresse : [Adresse]\nSuperficie : [Superficie] m²\nValeur du contenu : [Valeur du contenu] MAD\nValeur du matériel informatique : [Valeur du matériel informatique] MAD\nStatut : [Propriétaire / Locataire]\nDate d'effet souhaitée : [Date d'effet]\n\nMerci de nous adresser votre meilleure proposition (garanties, franchises, prime), ainsi que la liste des éléments complémentaires éventuellement nécessaires.\n\nBien cordialement,",
+   "new": "Bonjour {{ prenom | \"Madame, Monsieur\" }},\n\nNous vous sollicitons pour une cotation multirisque bureau au profit de notre client [Nom du client].\n\nActivité : [Activité]\nAdresse : [Adresse]\nValeur du bâtiment : [Valeur du bâtiment] MAD\nValeur du contenu : [Valeur du contenu] MAD\nValeur du matériel informatique : [Valeur du matériel informatique] MAD\nStatut : [Propriétaire / Locataire]\nDate d'effet souhaitée : [Date d'effet]\n\nMerci de nous adresser votre meilleure proposition (garanties, franchises, prime), ainsi que la liste des éléments complémentaires éventuellement nécessaires.\n\nBien cordialement,"
   }
  ]
 }

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import imaplib
 import logging
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -19,10 +20,36 @@ log = logging.getLogger(__name__)
 MAX_AGE_S = 7 * 24 * 3600
 
 
-def queue_dir() -> Path:
+def queue_dir(owner: str | None = None) -> Path:
+    """V3.8 : une file PAR BOÎTE. Avant, sur le serveur, la file était commune à toute l'équipe :
+    une copie en attente d'un employé aurait pu être rangée dans la boîte d'un autre."""
     d = data_dir() / "envoyes_a_copier"
+    if owner:
+        d = d / re.sub(r"[^a-z0-9._@-]", "_", owner.lower())
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def _owner(cfg) -> str | None:
+    return getattr(cfg, "username", None) or None
+
+
+def _sender(raw: bytes) -> str:
+    """Adresse de l'expéditeur d'un email en attente (pour les fichiers d'avant la V3.8)."""
+    from email import message_from_bytes
+    from email.utils import parseaddr
+    try:
+        return parseaddr(message_from_bytes(raw).get("From", ""))[1].lower()
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def safe_folder(folder: str | None) -> str | None:
+    """V3.8 : jamais de copie « Envoyés » dans la boîte de réception (elle y apparaîtrait comme un
+    email reçu de soi-même). Un réglage « INBOX » est ignoré : pas de copie plutôt qu'une fausse."""
+    if not folder or folder.strip().upper() == "INBOX":
+        return None
+    return folder
 
 
 def _quote(name: str) -> str:
@@ -37,6 +64,9 @@ def _append(conn, folder: str, raw: bytes, when: datetime) -> None:
 
 def copy_or_queue(cfg, folder: str, raw: bytes, when: datetime, imap_factory) -> str | None:
     """Copie tout de suite ; en cas d'échec, met en file et renvoie le message d'erreur."""
+    folder = safe_folder(folder)
+    if folder is None:
+        return "dossier des envoyés réglé sur la boîte de réception : copie non faite (Réglages → Boîte mail)"
     try:
         conn = imap_factory(cfg)
         try:
@@ -49,17 +79,24 @@ def copy_or_queue(cfg, folder: str, raw: bytes, when: datetime, imap_factory) ->
         return None
     except Exception as exc:  # noqa: BLE001
         name = f"{int(when.timestamp())}-{time.time_ns()}.eml"
-        (queue_dir() / name).write_bytes(raw)
+        (queue_dir(_owner(cfg)) / name).write_bytes(raw)
         return str(exc)
 
 
-def pending() -> list[Path]:
-    return sorted(queue_dir().glob("*.eml"))
+def pending(owner: str | None = None) -> list[Path]:
+    """Copies en attente de cette boîte ; plus, pour les anciens fichiers communs (avant la V3.8),
+    seulement ceux dont elle est l'expéditeur."""
+    if not owner:  # poste unique (ou vue d'ensemble) : toutes les copies en attente
+        return sorted(queue_dir().rglob("*.eml"))
+    mine = sorted(queue_dir(owner).glob("*.eml"))
+    legacy = [f for f in sorted(queue_dir().glob("*.eml")) if _sender(f.read_bytes()) == owner.lower()]
+    return mine + legacy
 
 
 def flush(cfg, folder: str, imap_factory) -> int:
     """Réessaie les copies en attente. Renvoie le nombre de copies faites."""
-    files = pending()
+    folder = safe_folder(folder)
+    files = pending(_owner(cfg))
     if not files or not folder:
         return 0
     done = 0

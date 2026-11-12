@@ -38,6 +38,13 @@ class ShareIn(BaseModel):
     shared: bool
 
 
+class AssignIn(BaseModel):
+    user_id: int
+    note: str | None = Field(default=None, max_length=2000)
+    email: bool = True                      # le prévenir aussi par email (depuis votre boîte)
+    subject: str | None = Field(default=None, max_length=300)
+
+
 @router.get("/lists")
 def lists_index():
     with get_session() as s:
@@ -102,6 +109,40 @@ def list_share(lid: int, body: ShareIn):
         cl.shared = body.shared
         s.commit()
         return ls.to_json(s, cl)
+
+
+@router.get("/lists/colleagues")
+def list_colleagues():
+    """V3.8 : à qui confier une liste."""
+    with get_session() as s:
+        return {"items": ls.colleagues(s)}
+
+
+@router.post("/lists/{lid:int}/assign")
+def list_assign(lid: int, body: AssignIn):
+    """V3.8 : confier la liste à un collègue. Il est prévenu dans sa cloche, et par un email envoyé
+    depuis votre boîte (le texte est celui que vous avez relu dans la fenêtre)."""
+    from app import manual_mail
+    with get_session() as s:
+        cl = _list(s, lid)
+        try:
+            u = ls.assign(s, cl, body.user_id, body.note)
+        except ls.ListError as exc:
+            raise HTTPException(422, str(exc)) from None
+        s.commit()
+        out = {**ls.to_json(s, cl), "assigned_to": u.full_name or u.email, "email_sent": False, "email_error": None}
+        if body.email and (body.note or "").strip():
+            d = manual_mail.Draft(to=[u.email], subject=body.subject or f"Je vous confie la liste « {cl.name} »",
+                                  body=body.note.strip(), signature=True)
+            try:
+                manual_mail.send(s, d)
+                s.commit()
+                out["email_sent"] = True
+            except manual_mail.SendRefused as exc:
+                out["email_error"] = str(exc)
+            except Exception as exc:  # noqa: BLE001 – la liste est confiée même si l'email ne part pas
+                out["email_error"] = f"Email non envoyé : {exc}"
+        return out
 
 
 @router.post("/campaigns/{cid:int}/no-reply-list")

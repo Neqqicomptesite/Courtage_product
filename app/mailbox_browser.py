@@ -11,6 +11,7 @@ Règles, les mêmes que la synchronisation :
 from __future__ import annotations
 
 import imaplib
+import logging
 import re
 import threading
 import time
@@ -34,6 +35,9 @@ _lock = threading.Lock()
 
 class MailboxUnavailable(Exception):
     """Boîte non configurée, mot de passe absent ou serveur injoignable : message lisible."""
+
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -85,6 +89,21 @@ def _date(value) -> datetime | None:
         return None
 
 
+def _heal_sent_folder(ctx: _Ctx, items) -> _Ctx:
+    """V3.8 : dossier des envoyés réglé sur la boîte de réception (chaque email envoyé y
+    revenait « de vous-même ») : on le remplace par le vrai dossier Envoyés du serveur s'il existe."""
+    found = transport.detect_special(items, "\\Sent", transport._SENT_GUESSES)
+    if not found or found.upper() == "INBOX":
+        return ctx
+    with get_session() as s:
+        mb = get_primary(s)
+        if mb is not None and (mb.sent_folder or "").strip().upper() == "INBOX":
+            log.warning("Dossier des envoyés corrigé : %r -> %r", mb.sent_folder, found)
+            mb.sent_folder = found
+            s.commit()
+    return _Ctx(ctx.cfg, found, ctx.watched)
+
+
 def folders(imap_factory=None) -> dict:
     ctx = _context()
     conn = _open(ctx, imap_factory)
@@ -92,6 +111,8 @@ def folders(imap_factory=None) -> dict:
         items = transport.list_folders(conn)
     finally:
         _close(conn)
+    if (ctx.sent_folder or "").strip().upper() == "INBOX":  # (vide = choix volontaire, ex. Gmail : on n'y touche pas)
+        ctx = _heal_sent_folder(ctx, items)
     out = [{"raw": f.raw_name, "display": f.display_name, **folder_label(f.raw_name, f.display_name, ctx.sent_folder)}
            for f in items]
     return {"items": sorted(out, key=lambda f: (f["rank"], f["label"].lower())), "sent": ctx.sent_folder, "watched": ctx.watched}

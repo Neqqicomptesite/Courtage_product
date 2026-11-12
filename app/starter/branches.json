@@ -602,11 +602,11 @@
      "placeholder": "Adresse"
     },
     {
-     "key": "superficie",
-     "label": "Superficie",
+     "key": "valeur_batiment",
+     "label": "Valeur du bâtiment",
      "type": "number",
-     "unit": "m²",
-     "placeholder": "Superficie"
+     "unit": "MAD",
+     "placeholder": "Valeur du bâtiment"
     },
     {
      "key": "valeur_contenu",
