@@ -23,6 +23,7 @@ FREE_MAIL_DOMAINS = {
 }
 FREE_MAIL_PREFIXES = ("hotmail.", "outlook.", "live.", "msn.", "yahoo.")
 
+REPLY_PREFIX_RE = re.compile(r"^\s*(re|aw|sv|antw|rif)\s*(\[\d+\])?\s*:")
 AUTO_SUBJECT_WORDS = ["absence", "absent", "out of office", "reponse automatique", "automatic reply",
                       "conge", "auto-reply", "autoreply", "abwesenheit"]
 # Formes « repliées » (minuscules, sans accents). Recherchées seulement dans un message TRÈS
@@ -167,6 +168,11 @@ def _is_auto_reply(msg: EmailMessage) -> bool:
     if (msg.get("Precedence") or "").strip().lower() in ("auto_reply", "bulk", "junk"):
         return True
     subject = fold(str(msg.get("Subject") or ""))
+    # V3.9.2 : « RE: <votre objet> » est une vraie réponse, même si votre objet contient « congé » ou
+    # « absence » (sinon la séquence continuerait). Les vraies réponses automatiques s'annoncent par
+    # leurs en-têtes (ci-dessus) ou commencent par « Réponse automatique », « Absent du bureau »…
+    if REPLY_PREFIX_RE.match(subject):
+        return False
     return any(w in subject for w in AUTO_SUBJECT_WORDS)
 
 

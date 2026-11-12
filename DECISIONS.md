@@ -623,3 +623,6 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
      (séquence, aperçu, lancer), aperçu des vrais emails de 3 personnes avant tout lancement, campagnes
      de la liste affichées, brouillon de vérification supprimé si on quitte ; brouillons d'emails
      enregistrés pendant la frappe (Boîte mail → Brouillons), supprimés à l'envoi. Migration 0026.
+308. **Repris d'ODDO (12/11)** : une réponse en « RE: » n'est plus prise pour une réponse automatique quand
+     l'objet d'origine contient « congé », « absence »… (la séquence continuait) ; test : seul le contact
+     qui répond, même depuis une autre adresse dans le fil, voit ses relances arrêtées.
