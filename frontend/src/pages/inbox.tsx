@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  AlertTriangle, Archive, Ban, Building2, CalendarClock, CalendarPlus, CheckCheck, Clock, FileStack, Forward, Phone, Inbox, Loader2, Mail, MailOpen, Paperclip, PenSquare, RefreshCw, Reply, ReplyAll, Rocket, Search, Send, UserPlus, Users,
+  AlertTriangle, Archive, Ban, Building2, CalendarClock, CalendarPlus, CheckCheck, Clock, FilePen, FileStack, Forward, Phone, Inbox, Trash2, Loader2, Mail, MailOpen, Paperclip, PenSquare, RefreshCw, Reply, ReplyAll, Rocket, Search, Send, UserPlus, Users,
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -30,10 +30,12 @@ export function MailTabs() {
   const { data: status } = useStatus();
   const { data: follow } = useQuery({ queryKey: ["followups"], queryFn: api.followups, refetchInterval: 120_000 });
   const { data: awaiting } = useQuery({ queryKey: ["awaiting"], queryFn: () => api.awaiting(), refetchInterval: 300_000, retry: false });
+  const { data: drafts } = useQuery({ queryKey: ["mail-drafts"], queryFn: api.mailDrafts, refetchInterval: 300_000 });
+  const onDrafts = useLocation().pathname.startsWith("/inbox/drafts");
   const tab = ({ isActive }: { isActive: boolean }) => cn("inline-flex items-center gap-2 border-b-2 px-1 pb-2.5 text-sm transition-colors",
     isActive ? "border-primary font-medium text-foreground" : "border-transparent text-muted-foreground hover:text-foreground");
   return (
-    <div className="mb-3 flex gap-6 border-b">
+    <div className="mb-3 flex gap-6 overflow-x-auto border-b">
       <NavLink to="/inbox" end className={tab}><Inbox className="size-4" /><span className="sm:hidden">Réception</span><span className="hidden sm:inline">Boîte de réception</span></NavLink>
       <NavLink to="/inbox/awaiting" className={tab}>
         <Reply className="size-4" /><span className="sm:hidden">À répondre</span><span className="hidden sm:inline">À répondre</span>
@@ -43,6 +45,12 @@ export function MailTabs() {
         <Clock className="size-4" /><span className="sm:hidden">Sans réponse</span><span className="hidden sm:inline">Envoyés sans réponse</span>
         {!!follow?.length && <span className="rounded-full bg-warning/15 px-1.5 text-[11px] font-semibold text-warning tabular">{follow.length}</span>}
       </NavLink>
+      {(!!drafts?.items.length || onDrafts) && (
+        <NavLink to="/inbox/drafts" className={tab}>
+          <FilePen className="size-4" /><span>Brouillons</span>
+          {!!drafts?.items.length && <span className="rounded-full bg-muted px-1.5 text-[11px] font-semibold text-muted-foreground tabular">{drafts.items.length}</span>}
+        </NavLink>
+      )}
       <NavLink to="/replies" className={tab}>
         <Mail className="size-4" /><span className="sm:hidden">Campagnes</span><span className="hidden sm:inline">Réponses aux campagnes</span>
         {!!status?.to_classify && <span className="rounded-full bg-destructive px-1.5 text-[11px] font-semibold text-destructive-foreground tabular">{status.to_classify}</span>}
@@ -453,6 +461,55 @@ function Reader({ item, folder, actions, markRead = false }: { item: MailItem; f
 /* =============================================================== envoyés sans réponse */
 
 /** Emails partis il y a au moins N jours ouvrés (Réglages), sans réponse : relancer depuis ici. */
+/** V3.9.2 : les brouillons des emails écrits dans l'appli. Un clic rouvre la fenêtre d'écriture telle quelle. */
+export function DraftsPage() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ["mail-drafts"], queryFn: api.mailDrafts });
+  const items = data?.items ?? [];
+  const remove = async (id: number) => {
+    try {
+      await api.mailDraftDelete(id);
+      qc.invalidateQueries({ queryKey: ["mail-drafts"] });
+      toast.success("Brouillon supprimé");
+    } catch (e) { toastError(e, "Brouillon non supprimé"); }
+  };
+  return (
+    <>
+      <PageHeader title="Boîte mail" className="-mt-2 mb-3 lg:-mt-4"
+        description="Les emails commencés dans l'appli et pas encore envoyés. Ils s'enregistrent tout seuls pendant que vous écrivez."
+        actions={<Button onClick={() => openComposer()}><PenSquare /> Nouveau message</Button>} />
+      <MailTabs />
+      {isLoading ? <Skeleton className="h-64 rounded-xl" /> : items.length === 0 ? (
+        <Card className="flex flex-col items-center gap-2 p-12 text-center">
+          <FilePen className="size-8 text-muted-foreground" />
+          <p className="font-medium">Aucun brouillon</p>
+          <p className="max-w-md text-sm text-muted-foreground">Un email commencé puis fermé sans l'envoyer arrive ici, prêt à être repris.</p>
+        </Card>
+      ) : (
+        <Card className="divide-y overflow-hidden">
+          {items.map((d) => (
+            <div key={d.id} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-accent/30">
+              <button className="min-w-0 flex-1 text-left" onClick={() => openComposer({ draftId: d.id })}>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-destructive">Brouillon</span>
+                  <span className="truncate text-sm font-medium">{d.to ? `À ${d.to}` : "(sans destinataire)"}</span>
+                  <span className="ml-auto shrink-0 text-xs text-muted-foreground">{d.updated_at ? relativeTime(d.updated_at) : ""}</span>
+                </div>
+                <p className="truncate text-sm">{d.subject || <span className="text-muted-foreground">(sans objet)</span>}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {d.attachments_count > 0 && <><Paperclip className="mr-1 inline size-3" />{d.attachments_count} · </>}{d.snippet || "(vide)"}
+                </p>
+              </button>
+              <Button variant="ghost" size="icon" className="size-8 shrink-0 text-muted-foreground" title="Supprimer le brouillon" aria-label="Supprimer le brouillon"
+                onClick={() => void remove(d.id)}><Trash2 /></Button>
+            </div>
+          ))}
+        </Card>
+      )}
+    </>
+  );
+}
+
 /** V2.12 : emails reçus auxquels je n'ai pas répondu depuis N jours ouvrés (le pendant de
  *  « Envoyés sans réponse »). Clic : l'email s'ouvre à droite, avec Répondre / Séquence / Rappel. */
 export function AwaitingPage() {

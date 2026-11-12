@@ -2,8 +2,10 @@
 // V2.7 : fenêtre ancrée en bas à droite (comme une messagerie), réductible, et envoi « en
 // arrière-plan » : la fenêtre se ferme tout de suite, un bandeau suit l'envoi, et en cas d'échec
 // le brouillon revient intact.
+// V3.9.2 : brouillons enregistrés pendant la frappe (Boîte mail → Brouillons) : fermer la fenêtre ne
+// perd plus rien ; l'envoi supprime le brouillon ; « Supprimer le brouillon » pour l'abandonner.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, FileText, FlaskConical, Loader2, Maximize2, Minimize2, Paperclip, Send, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, FileText, FlaskConical, Loader2, Maximize2, Minimize2, Paperclip, Send, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -29,6 +31,10 @@ export type ComposeRequest = {
   /** V2.19 : pièces jointes déjà prêtes (transfert d'un email) */
   attachments?: Attachment[];
   forward?: boolean;
+  /** V3.9.2 : rouvrir un brouillon enregistré */
+  draftId?: number;
+  withQuote?: boolean;
+  signature?: boolean;
 };
 
 export function openComposer(req: ComposeRequest = {}) {
@@ -80,6 +86,14 @@ export function AttachmentChips({ items, onRemove }: { items: Attachment[]; onRe
   );
 }
 
+/** Ce qu'on enregistre d'un brouillon (les adresses tapées pas encore en pastille comprises). */
+function draftPayload(x: State): Record<string, unknown> {
+  const merge = (k: "to" | "cc" | "bcc") => joinAddresses([...splitAddresses(x.d[k] ?? ""), ...splitAddresses(x.drafts[k])]);
+  return { to: merge("to"), cc: merge("cc"), bcc: merge("bcc"), subject: x.d.subject, body: x.d.body,
+           in_reply_to: x.req.inReplyTo ?? null, references: x.req.references ?? [], quote: x.req.quote ?? null, forward: !!x.req.forward,
+           with_quote: x.withQuote, signature: x.signature, attachment_ids: x.atts.map((a) => a.id) };
+}
+
 export function Composer() {
   const qc = useQueryClient();
   const { data: status } = useStatus();
@@ -122,11 +136,76 @@ export function Composer() {
   const body = useRef<HTMLTextAreaElement>(null);
   const toInput = useRef<RecipientInputHandle>(null);
 
+  // V3.9.2 : brouillon. Un numéro par fenêtre ; enregistré 1,5 s après la dernière frappe, et tout de
+  // suite à la fermeture. Rien n'est enregistré tant qu'on n'a rien changé (Répondre puis fermer).
+  const draftId = useRef<number | null>(null);
+  const pristine = useRef<string>("");          // l'état à l'ouverture
+  const latest = useRef<State | null>(null);     // l'état à enregistrer
+  const timer = useRef<number | null>(null);
+  const saving = useRef<Promise<unknown>>(Promise.resolve());
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const saveNow = useCallback((): Promise<unknown> => {
+    if (timer.current) { window.clearTimeout(timer.current); timer.current = null; }
+    const x = latest.current;
+    latest.current = null;
+    if (!x) return saving.current;
+    const payload = draftPayload(x);
+    if (!draftId.current && JSON.stringify(payload) === pristine.current) return saving.current;
+    saving.current = saving.current.then(async () => {
+      try {
+        const r = await api.mailDraftSave({ ...payload, id: draftId.current });
+        draftId.current = r.id;
+        setSavedAt(r.id ? new Date().toISOString() : null);
+        qc.invalidateQueries({ queryKey: ["mail-drafts"] });
+      } catch { /* hors ligne : on réessaiera à la prochaine frappe */ }
+    });
+    return saving.current;
+  }, [qc]);
   useEffect(() => {
-    const onCompose = (e: Event) => {
-      const r = (e as CustomEvent<ComposeRequest>).detail ?? {};
-      setSt({ req: r, d: { to: r.to ?? "", cc: r.cc ?? "", bcc: r.bcc ?? "", subject: r.subject ?? "", body: r.body ?? "" },
-              showCc: !!r.cc, showBcc: !!r.bcc, drafts: NO_DRAFTS, withQuote: true, signature: true, atts: r.attachments ?? [] });
+    if (!open) return;
+    latest.current = st;
+    if (timer.current) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => void saveNow(), 1500);
+  }, [st, open, saveNow]);
+  const close = async () => {
+    await saveNow();
+    setOpen(false);
+    const id = draftId.current;
+    if (id) toast("Brouillon enregistré", { description: "Boîte mail → Brouillons", action: { label: "Rouvrir", onClick: () => openComposer({ draftId: id }) } });
+  };
+  const discard = async () => {
+    if (timer.current) { window.clearTimeout(timer.current); timer.current = null; }
+    latest.current = null;
+    await saving.current;
+    const id = draftId.current;
+    draftId.current = null;
+    setOpen(false);
+    if (id) {
+      await api.mailDraftDelete(id).catch(() => undefined);
+      qc.invalidateQueries({ queryKey: ["mail-drafts"] });
+      toast.success("Brouillon supprimé");
+    }
+  };
+
+  useEffect(() => {
+    const onCompose = async (e: Event) => {
+      let r = (e as CustomEvent<ComposeRequest>).detail ?? {};
+      await saveNow();  // la fenêtre précédente garde son brouillon
+      if (r.draftId) {
+        try {
+          const dr = await api.mailDraft(r.draftId);
+          r = { draftId: dr.id, to: dr.to, cc: dr.cc ?? "", bcc: dr.bcc ?? "", subject: dr.subject, body: dr.body,
+                inReplyTo: dr.in_reply_to ?? null, references: dr.references ?? [], quote: dr.quote ?? undefined,
+                forward: !!dr.forward, attachments: dr.attachments, withQuote: dr.with_quote ?? true, signature: dr.signature ?? true };
+        } catch (err) { toastError(err, "Brouillon introuvable"); qc.invalidateQueries({ queryKey: ["mail-drafts"] }); return; }
+      }
+      const next: State = { req: r, d: { to: r.to ?? "", cc: r.cc ?? "", bcc: r.bcc ?? "", subject: r.subject ?? "", body: r.body ?? "" },
+              showCc: !!r.cc, showBcc: !!r.bcc, drafts: NO_DRAFTS, withQuote: r.withQuote ?? true, signature: r.signature ?? true, atts: r.attachments ?? [] };
+      draftId.current = r.draftId ?? null;
+      pristine.current = JSON.stringify(draftPayload(next));
+      latest.current = null;
+      setSavedAt(null);
+      setSt(next);
       setErrors({});
       setMode("normal");
       setOpen(true);
@@ -136,9 +215,10 @@ export function Composer() {
         if (el === body.current && body.current) body.current.setSelectionRange(0, 0);  // écrire au-dessus du message transféré
       });
     };
-    window.addEventListener("oddo-compose", onCompose);
-    return () => window.removeEventListener("oddo-compose", onCompose);
-  }, []);
+    const handler = (e: Event) => void onCompose(e);
+    window.addEventListener("oddo-compose", handler);
+    return () => window.removeEventListener("oddo-compose", handler);
+  }, [saveNow, qc]);
 
   // Envoi en arrière-plan : on ferme tout de suite, on rouvre le brouillon si ça échoue.
   const send = useCallback(async (raw: State, force = false, checked = false) => {
@@ -160,18 +240,26 @@ export function Composer() {
       ];
       if (issues.length) { setWarn({ message: issues.join(" "), state, force }); return; }
     }
+    // V3.9.2 : plus d'enregistrement pour cette fenêtre ; on attend celui en cours, puis l'envoi supprime le brouillon
+    if (timer.current) { window.clearTimeout(timer.current); timer.current = null; }
+    latest.current = null;
     setOpen(false);
+    await saving.current;
+    const sentDraft = draftId.current;
+    draftId.current = null;
     const others = splitAddresses(d.cc).length + splitAddresses(d.bcc).length;
     const id = toast.loading(`Envoi à ${d.to}${others ? ` (+ ${others} en copie)` : ""}…`);
     try {
       const r = await api.mailSend({
         ...d, body: d.body + (req.quote && state.withQuote ? quoted(req.quote) : ""), signature: state.signature, force,
         in_reply_to: req.inReplyTo ?? null, references: req.references ?? [], attachment_ids: state.atts.map((a) => a.id),
+        draft_id: sentDraft,
       });
       toast.success(r.test_mode ? "Envoyé vers votre propre adresse (mode test)" : `Envoyé à ${r.to}`, { id });
-      ["mail", "contact", "company", "followups"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      ["mail", "contact", "company", "followups", "mail-drafts"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
     } catch (e) {
       toast.dismiss(id);
+      draftId.current = sentDraft;  // pas parti : le brouillon reste le même
       if (e instanceof ApiError && e.data.confirm) { setConfirm({ message: e.message, state }); return; }
       setSt(state);
       setErrors(e instanceof ApiError ? e.fields : {});
@@ -210,7 +298,7 @@ export function Composer() {
                 {mode === "max" ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
               </button>
             )}
-            <button className="rounded p-1 hover:bg-white/15" aria-label="Fermer" onClick={(e) => { e.stopPropagation(); setOpen(false); }}><X className="size-4" /></button>
+            <button className="rounded p-1 hover:bg-white/15" aria-label="Fermer" onClick={(e) => { e.stopPropagation(); void close(); }} title="Fermer (le brouillon est gardé)"><X className="size-4" /></button>
           </div>
 
           {mode !== "min" && (
@@ -296,7 +384,12 @@ export function Composer() {
                 </DropdownMenu>
                 <input ref={fileInput} type="file" multiple className="hidden" onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.target.value = ""; }} />
                 <span className="flex-1" />
-                <span className="truncate text-xs text-muted-foreground">{status?.test_mode ? "Mode test : part vers votre adresse" : `Depuis ${settings?.mailbox.email ?? "votre boîte"}`}</span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {savedAt && <span className="mr-2 inline-flex items-center gap-1"><Check className="size-3" />Brouillon enregistré</span>}
+                  <span className="hidden sm:inline">{status?.test_mode ? "Mode test : part vers votre adresse" : `Depuis ${settings?.mailbox.email ?? "votre boîte"}`}</span>
+                </span>
+                <Button type="button" variant="ghost" size="icon" className="size-9 shrink-0 rounded-full text-muted-foreground" title="Supprimer le brouillon" aria-label="Supprimer le brouillon"
+                  onClick={() => void discard()}><Trash2 /></Button>
               </div>
             </form>
           )}

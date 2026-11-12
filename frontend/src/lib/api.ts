@@ -103,6 +103,9 @@ export type ReviewEmail = { position: number; subject: string; body: string; pla
 export type ReviewPerson = { contact: ContactRef; to: string; refused: string | null; problems: string[]; overlap: unknown[]; emails: ReviewEmail[] };
 export type SequenceReview = { sequence: { id: number; name: string }; steps: number; total_steps: number; ab_subjects: boolean; test_mode: boolean;
   from: { name: string; email: string } | null; people: ReviewPerson[] };
+/** V3.9 : avant le lancement, les vrais emails de quelques contacts (aperçu). */
+export type CampaignSample = { items: { contact: ContactRef; to: string; variant: string | null; code: string | null; lot: number | null; emails: ReviewEmail[] }[];
+  test_mode: boolean; ab_subjects: boolean; from: { name: string; email: string } | null };
 /** V3 : prochains envois d'une campagne, rendus comme par le moteur. */
 export type CampaignUpcoming = { total: number; test_mode: boolean; campaign_status: string; from: { name: string; email: string } | null;
   items: { enrollment_id: number; contact: ContactRef; to: string; status: string; variant: string | null; emails: ReviewEmail[] }[] };
@@ -148,8 +151,12 @@ export type MailFolders = { items: { raw: string; display: string; label: string
 export type AddressSuggestion = { email: string; name: string | null; company: string | null; kind: string | null; uses: number; contact_id: number | null };
 export type MailDraft = {
   to: string; cc?: string; bcc?: string; subject: string; body: string; in_reply_to?: string | null; references?: string[];
-  signature?: boolean; force?: boolean; attachment_ids?: number[];
+  signature?: boolean; force?: boolean; attachment_ids?: number[]; draft_id?: number | null;
 };
+/** V3.9.2 : brouillon d'email (enregistré pendant la frappe). */
+export type SavedDraftItem = { id: number; to: string; subject: string; snippet: string; updated_at: string | null; attachments_count: number };
+export type SavedDraft = SavedDraftItem & { body: string; cc?: string; bcc?: string; in_reply_to?: string | null; references?: string[];
+  quote?: { from: string; date: string | null; text: string } | null; forward?: boolean; with_quote?: boolean; signature?: boolean; attachments: Attachment[] };
 export type ContactList = {
   total: number;
   items: ContactRow[];
@@ -681,6 +688,7 @@ export const api = {
     request<{ ok: boolean }>("/api/mailbox/unarchive", { method: "POST", json: { message_id, folder, kind } }),
   mailSpam: (folder: string, uid: number) => request<{ archive_folder: string; message_id: string }>(`/api/mailbox/messages/${uid}/spam${qs({ folder })}`, { method: "POST" }),
   campaignSent: (id: number) => request<CampaignSent>(`/api/campaigns/${id}/sent`),
+  campaignSample: (id: number, n = 3) => request<CampaignSample>(`/api/campaigns/${id}/sample?n=${n}`),
   campaignUpcoming: (id: number, enrollmentId?: number) =>
     request<CampaignUpcoming>(`/api/campaigns/${id}/upcoming${enrollmentId ? `?enrollment_id=${enrollmentId}` : ""}`),
   mailPreview: (partUrl: string) => request<AttachmentPreview>(partUrl.replace("/part/", "/preview/")),
@@ -689,6 +697,10 @@ export const api = {
   mailSeen: (folder: string, uid: number, seen = true) =>
     request<{ ok: boolean; seen: boolean }>(`/api/mailbox/messages/${uid}/seen${qs({ folder, seen })}`, { method: "POST" }),
   mailSuggest: (q: string) => request<{ items: AddressSuggestion[] }>(`/api/mailbox/suggest?q=${encodeURIComponent(q)}`),
+  mailDrafts: () => request<{ items: SavedDraftItem[] }>("/api/mailbox/drafts"),
+  mailDraft: (id: number) => request<SavedDraft>(`/api/mailbox/drafts/${id}`),
+  mailDraftSave: (d: Record<string, unknown>) => request<{ id: number | null; updated_at?: string }>("/api/mailbox/drafts", { method: "POST", json: d }),
+  mailDraftDelete: (id: number) => request<{ ok: boolean }>(`/api/mailbox/drafts/${id}`, { method: "DELETE" }),
   mailSend: (d: MailDraft) => request<{ id: number; test_mode: boolean; to: string }>("/api/mailbox/send", { method: "POST", json: d }),
   picker: (q: string) => request<(ContactRef & { job_title?: string | null })[]>(`/api/contacts-picker${qs({ q })}`),
 

@@ -604,8 +604,8 @@ function ReviewView({ seqId, body, onReady, onRemove }: { seqId: number; body: S
   );
 }
 
-export function EmailCard({ email, to, name, from, ab, sentAt }: {
-  email: ReviewEmail; to: string; name: string; from: { name: string; email: string } | null; ab: boolean; sentAt?: string;
+export function EmailCard({ email, to, name, from, ab, sentAt, abNote }: {
+  email: ReviewEmail; to: string; name: string; from: { name: string; email: string } | null; ab: boolean; sentAt?: string; abNote?: string;
 }) {
   return (
     <article className="overflow-hidden rounded-xl border bg-card shadow-sm" aria-label={`Aperçu : ${email.subject}`}>
@@ -618,7 +618,7 @@ export function EmailCard({ email, to, name, from, ab, sentAt }: {
           {email.planned_at && <><dt className="text-muted-foreground">Prévu</dt><dd>{formatDayTime(email.planned_at)}{email.position > 1 ? " · seulement s'il n'y a pas de réponse" : ""}</dd></>}
         </dl>
         {email.same_thread && email.position > 1 && <p className="text-xs text-muted-foreground">Dans la même conversation que le 1er email (« Re: »).</p>}
-        {ab && <p className="text-xs text-muted-foreground">Objet A/B : chaque personne reçoit l'objet A ou B, tiré au sort. L'aperçu montre l'objet A.</p>}
+        {ab && <p className="text-xs text-muted-foreground">{abNote ?? "Objet A/B : chaque personne reçoit l'objet A ou B, tiré au sort. L'aperçu montre l'objet A."}</p>}
       </header>
       <div className="max-h-[34vh] overflow-y-auto whitespace-pre-wrap px-4 py-3 text-sm leading-relaxed">{email.body}</div>
       {(email.attachments.length > 0 || email.problems.length > 0 || email.warnings.length > 0) && (

@@ -2,7 +2,7 @@
 // Elle se remplit à l'import, depuis Contacts (« Ajouter à une liste ») ou depuis une campagne
 // (les sans-réponse), et sert à lancer une campagne sur ces contacts.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ListPlus, ListChecks, MoreHorizontal, Pencil, Rocket, Share2, Lock, Trash2, Upload, UserRoundCheck, Users } from "lucide-react";
+import { ListPlus, ListChecks, MoreHorizontal, Pencil, Send, Share2, Lock, Trash2, Upload, UserRoundCheck, Users } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -103,7 +103,7 @@ export function AssignListDialog({ list, open, onOpenChange, onDone }: {
   const draft = (p: typeof who) => list && p ? [
     `Bonjour ${p.name.split(" ")[0]},`, "",
     `Je te confie la liste « ${list.name} » : ${list.count} contact${list.count > 1 ? "s" : ""}, prêts pour une campagne dans Cotalis.`,
-    "", "Pour la lancer depuis ta boîte : Contacts → Listes → « Lancer une campagne », ou directement ici :",
+    "", "Pour l'envoyer : Listes → ouvre la liste → « Envoyer une séquence », ou directement ici :",
     `${window.location.origin}/v2/campaigns/new?list_id=${list.id}`, "", "Merci,", myName,
   ].join("\n") : "";
   const assign = useMutation({
@@ -210,7 +210,7 @@ export function ListsPage() {
                   {l.updated_at && ` · mise à jour le ${new Date(l.updated_at).toLocaleDateString("fr-FR")}`}
                 </div>
               </Link>
-              <Button size="sm" variant="outline" disabled={!l.count} onClick={() => navigate(`/campaigns/new?list_id=${l.id}`)}><Rocket /> Lancer une campagne</Button>
+              <Button size="sm" variant="outline" disabled={!l.count} onClick={() => navigate(`/campaigns/new?list_id=${l.id}`)}><Send /> Envoyer une séquence</Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" aria-label={`Actions pour ${l.name}`}><MoreHorizontal /></Button></DropdownMenuTrigger>
                 <DropdownMenuContent align="end">

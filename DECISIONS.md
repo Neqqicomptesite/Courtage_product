@@ -619,3 +619,7 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
      l'appli de démarrer (version refusée notée, cloche de l'administrateur ; réinstaller une fois
      deploy/update.sh), boutons « Retour » vers la page d'origine, onglets et recherches gardés dans
      l'adresse, vraie page par liste sans les bandeaux globaux, « Listes » dans le menu.
+307. **Repris d'ODDO V3.9.1 et V3.9.2 (12/11)** : « Envoyer une séquence » depuis la page d'une liste
+     (séquence, aperçu, lancer), aperçu des vrais emails de 3 personnes avant tout lancement, campagnes
+     de la liste affichées, brouillon de vérification supprimé si on quitte ; brouillons d'emails
+     enregistrés pendant la frappe (Boîte mail → Brouillons), supprimés à l'envoi. Migration 0026.

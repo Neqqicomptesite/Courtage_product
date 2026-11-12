@@ -647,3 +647,18 @@ class AddressBook(Base):
     uses: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # emails que vous lui avez écrits
     last_used: Mapped[datetime | None] = mapped_column(UTCDateTime)
     last_seen: Mapped[datetime | None] = mapped_column(UTCDateTime)          # dernier email reçu de lui
+
+
+class MailDraft(Base):
+    """V3.9.2 : brouillon d'un email écrit dans l'appli (Nouveau message, Répondre, Transférer),
+    enregistré tout seul pendant la frappe et propre à chaque employé. Supprimé à l'envoi."""
+    __tablename__ = "mail_draft"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id", ondelete="CASCADE"), index=True)
+    to_addr: Mapped[str] = mapped_column(Text, default="")
+    subject: Mapped[str] = mapped_column(String(500), default="")
+    body: Mapped[str] = mapped_column(Text, default="")
+    data: Mapped[dict] = mapped_column(JSON, default=dict)  # Cc, Cci, réponse à, citation, pièces jointes…
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)

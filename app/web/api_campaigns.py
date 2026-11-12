@@ -240,6 +240,29 @@ def campaign_upcoming(cid: int, limit: int = 50, enrollment_id: int | None = Non
                 "campaign_status": camp.status}
 
 
+@router.get("/campaigns/{cid:int}/sample")
+async def campaign_sample(cid: int, n: int = 3):
+    """V3.9 : avant le lancement, les vrais emails de quelques contacts (3 par défaut)."""
+    from app import settings_store
+
+    def build():
+        with get_session() as s:
+            camp = _camp(s, cid)
+            if camp.status != "draft":
+                raise HTTPException(400, "L'aperçu avant lancement concerne les brouillons ; voir « À venir ».")
+            items = camp_svc.sample(s, camp, max(1, min(n, 10)))
+            mb = get_primary(s)
+            seq = s.get(Sequence, camp.sequence_id)
+            first = ss.steps_of(s, seq)[:1] if seq else []
+            ab = bool(first) and len(ss.variants_of(s, first[0])) > 1
+            return {"items": [{"contact": contact_ref(x["contact"]), "to": x["contact"].email, "variant": x["variant"],
+                               "code": x["code"], "lot": x["lot"],
+                               "emails": [{**e, "planned_at": iso(e["planned_at"])} for e in x["emails"]]} for x in items],
+                    "test_mode": bool(settings_store.get(s, "test_mode")), "ab_subjects": ab,
+                    "from": {"name": mb.display_name, "email": mb.email} if mb else None}
+    return await run_in_threadpool(build)
+
+
 @router.get("/campaigns/{cid:int}")
 def campaign_detail(cid: int):
     with get_session() as s:

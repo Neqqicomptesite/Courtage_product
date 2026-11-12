@@ -3,7 +3,7 @@ import {
   AlertTriangle, ArrowLeft, ArrowRight, CalendarCheck, CalendarClock, CheckCircle2, Download, Filter, ListOrdered, Loader2, MoreHorizontal,
   Eye, FileText, Layers, ListPlus, Pause, Plus, Pencil, Play, Rocket, Search, Send, ShieldCheck, SkipForward, Trash2, UserMinus, Users,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -124,9 +124,23 @@ export function CampaignWizardPage() {
   const [draft, setDraft] = useState<{ id: number; key: string } | null>(null);
   const [overlap, setOverlap] = useState(false);
   const [recent, setRecent] = useState(false);
+  // V3.9 : le brouillon préparé pour la vérification et l'aperçu disparaît si on quitte sans lancer
+  // ni « Garder en brouillon » (sinon il s'accumule dans Campagnes et sur la page de la liste).
+  const draftRef = useRef<number | null>(null);
+  const keepRef = useRef(false);
+  useEffect(() => { draftRef.current = draft?.id ?? null; }, [draft]);
+  useEffect(() => () => {
+    const id = draftRef.current;
+    if (id && !keepRef.current) api.campaignAction(id, "delete").then(() => qc.invalidateQueries({ queryKey: ["campaigns"] })).catch(() => undefined);
+  }, [qc]);
 
   const { data: seqs } = useQuery({ queryKey: ["sequences"], queryFn: api.sequences });
   const seq = seqs?.items.find((q) => q.id === sequenceId);
+  // V3.9 : arrivée depuis la page d'une liste (« Envoyer une séquence ») : séquence, aperçu, lancer.
+  const fromList = params.get("list_id");
+  const { data: lists } = useQuery({ queryKey: ["lists"], queryFn: api.lists, enabled: !!fromList });
+  const currentList = lists?.items.find((l) => String(l.id) === filters.list_id);
+  const listOnly = !!fromList && mode === "group" && !!currentList && Object.keys(filters).length === 1;
   const seqCat: SequenceCategory = seq?.category ?? category;
   const seqItems = (seqs?.items ?? []).filter((q) => (q.category ?? "prospection") === category);
   // Les filtres réellement envoyés : un groupe, ou la liste des personnes cochées.
@@ -148,9 +162,10 @@ export function CampaignWizardPage() {
   }, [seqs, wanted]);
   const suggestedName = useMemo(() => {
     if (mode === "people") return `${seq?.name ?? "Campagne"} – ${picked.length} personne${picked.length > 1 ? "s" : ""}`;
+    if (listOnly) return `${seq?.name ?? "Campagne"} – ${currentList!.name}`.slice(0, 200);
     const parts = [lot(filters.wave), filters.sequence_code ?? filters.target_segment ?? filters.sector_family].filter(Boolean);
     return parts.length ? parts.join(" – ") : `${seq?.name ?? "Campagne"} – ${new Date().toLocaleDateString("fr-FR")}`;
-  }, [filters, mode, picked, seq]);
+  }, [filters, mode, picked, seq, listOnly, currentList]);
 
   // Étape 3 : on enregistre un brouillon (rien n'est envoyé) pour obtenir le contrôle complet.
   const key = JSON.stringify({ effective, sequenceId, name: name || suggestedName, stopDomain, startAt });
@@ -172,6 +187,7 @@ export function CampaignWizardPage() {
   const launch = useMutation({
     mutationFn: () => api.activate(draft!.id, overlap, recent),
     onSuccess: (r) => {
+      keepRef.current = true;
       qc.invalidateQueries();
       toast.success("Campagne lancée", { description: `${r.enrolled} contact${r.enrolled > 1 ? "s" : ""} inscrit${r.enrolled > 1 ? "s" : ""}. ${startAt ? `Aucun email avant ${formatDayTime(startAt)}.` : "Premier envoi à la prochaine ouverture de la plage d'envoi."}` });
       navigate(`/campaigns/${draft!.id}`);
@@ -187,8 +203,14 @@ export function CampaignWizardPage() {
 
   return (
     <>
-      <PageHeader back={<BackButton to="/campaigns" label="Campagnes" />}
-        title="Nouvelle campagne" />
+      {fromList ? (
+        <PageHeader back={<BackButton to={`/contacts?list_id=${fromList}`} label="Liste" />}
+          title={currentList ? `Envoyer une séquence à « ${currentList.name} »` : "Envoyer une séquence à une liste"}
+          description={currentList ? `${currentList.count} contact${currentList.count > 1 ? "s" : ""} : choisissez la séquence, regardez les emails, lancez.` : undefined} />
+      ) : (
+        <PageHeader back={<BackButton to="/campaigns" label="Campagnes" />}
+          title="Nouvelle campagne" />
+      )}
       <ol className="mb-6 flex items-center gap-2">
         {STEPS.map((s, i) => (
           <li key={s.key} className="flex flex-1 items-center gap-2 last:flex-none">
@@ -241,9 +263,21 @@ export function CampaignWizardPage() {
               </label>
             </div>
             <StartPicker value={startAt} onChange={setStartAt} />
-            <div className="flex justify-end">
-              <Button disabled={!sequenceId} onClick={() => go(1)}>À qui ? <ArrowRight /></Button>
-            </div>
+            {listOnly ? (
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <p className="mr-auto text-sm text-muted-foreground">
+                  {!sequenceId ? "Choisissez une séquence."
+                    : <><b className="text-foreground tabular">{count?.active ?? "…"}</b> {seqCat === "prospection" ? "prospect" : "contact"}{(count?.active ?? 0) > 1 ? "s" : ""} de la liste la recevr{(count?.active ?? 0) > 1 ? "ont" : "a"}
+                      {count && count.matching > count.active ? ` (${count.matching - count.active} écarté${count.matching - count.active > 1 ? "s" : ""} : déjà répondu, désinscrits, clients…)` : ""}.</>}
+                </p>
+                <Button variant="ghost" disabled={!sequenceId} onClick={() => go(1)}><Filter /> Ajuster les destinataires</Button>
+                <Button disabled={!sequenceId || !count?.active} onClick={() => go(2)}><Eye /> Voir les emails et vérifier <ArrowRight /></Button>
+              </div>
+            ) : (
+              <div className="flex justify-end">
+                <Button disabled={!sequenceId} onClick={() => go(1)}>À qui ? <ArrowRight /></Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -288,10 +322,11 @@ export function CampaignWizardPage() {
           ) : (
             <ActivationSummary report={report} sequenceId={sequenceId!} overlap={overlap} onOverlap={setOverlap} recent={recent} onRecent={setRecent} />
           )}
+          {draft && !prepare.isPending && report && report.eligible > 0 && <SampleEmails campaignId={draft.id} listName={currentList?.name} />}
           <div className="flex flex-wrap justify-between gap-2">
-            <Button variant="outline" onClick={() => setStep(1)}><ArrowLeft /> Retour</Button>
+            <Button variant="outline" onClick={() => setStep(listOnly ? 0 : 1)}><ArrowLeft /> Retour</Button>
             <div className="flex gap-2">
-              {draft && <Button variant="outline" onClick={() => navigate(`/campaigns/${draft.id}`)}>Garder en brouillon</Button>}
+              {draft && <Button variant="outline" onClick={() => { keepRef.current = true; navigate(`/campaigns/${draft.id}`); }}>Garder en brouillon</Button>}
               <Button variant={report && !report.test_mode ? "destructive" : "brand"} disabled={!report || report.blocked || launch.isPending} onClick={() => launch.mutate()}>
                 <Rocket /> {report?.test_mode === false ? "Lancer : envois réels" : "Lancer la campagne"}
               </Button>
@@ -447,6 +482,59 @@ export function ActivationSummary({ report, sequenceId, overlap, onOverlap, rece
         </details>
       )}
     </>
+  );
+}
+
+/** V3.9 : « Aperçu des emails » avant le lancement : les vrais emails de 3 personnes qui recevront la
+ *  séquence (nom, entreprise, texte de leur lot, objet A ou B), un email à la fois. */
+export function SampleEmails({ campaignId, listName }: { campaignId: number; listName?: string | null }) {
+  const { data, isLoading, isError } = useQuery({ queryKey: ["campaign-sample", campaignId], queryFn: () => api.campaignSample(campaignId, 3) });
+  const [who, setWho] = useState(0);
+  const [pos, setPos] = useState(0);
+  const it = data?.items[Math.min(who, (data?.items.length ?? 1) - 1)];
+  const email = it?.emails[Math.min(pos, it.emails.length - 1)];
+  const stepLabel = (p: number) => (p === 1 ? "1er email" : `Relance ${p - 1}`);
+  return (
+    <Card>
+      <CardHeader className="space-y-1">
+        <CardTitle className="flex items-center gap-2"><Eye className="size-4" /> Aperçu des emails</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Les vrais emails de {data && data.items.length < 3 ? data.items.length : 3} personne{data && data.items.length === 1 ? "" : "s"}{listName ? " de la liste" : ""}, exactement comme ils partiront.
+          {data?.test_mode && <> <b>Mode test</b> : ils arriveront dans votre propre boîte.</>}
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {isLoading ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Préparation des emails…</p>
+          : isError || !data ? <p className="text-sm text-muted-foreground">Aperçu indisponible pour le moment.</p>
+          : !it ? <p className="text-sm text-muted-foreground">Personne ne recevra cette séquence.</p>
+          : <>
+              <div className="flex flex-wrap gap-2" role="tablist" aria-label="Personnes">
+                {data.items.map((x, i) => (
+                  <button key={x.to} role="tab" aria-selected={i === who} onClick={() => setWho(i)}
+                    className={cn("rounded-lg border px-3 py-1.5 text-left text-sm transition-colors", i === who ? "border-primary bg-primary/5 ring-2 ring-primary/15" : "hover:bg-accent/40")}>
+                    <span className="block font-medium">{fullName(x.contact)}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {[x.contact.company, x.lot && x.lot > 1 ? `lot ${x.lot}` : null, x.code ? `texte ${x.code}` : null, data.ab_subjects && x.variant ? `objet ${x.variant}` : null].filter(Boolean).join(" · ")}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {it.emails.length > 1 && (
+                <div className="inline-flex rounded-lg border bg-card p-0.5">
+                  {it.emails.map((e, i) => (
+                    <button key={e.position} onClick={() => setPos(i)}
+                      className={cn("rounded-md px-3 py-1 text-sm transition-colors", i === Math.min(pos, it.emails.length - 1) ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>
+                      {stepLabel(e.position)}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {email && <EmailCard email={email} to={it.to} name={fullName(it.contact)} from={data.from}
+                ab={data.ab_subjects && email.position === 1}
+                abNote={`Objet A/B : chaque personne reçoit l'objet A ou B, tiré au sort au lancement. Ici, l'objet ${it.variant ?? "A"}.`} />}
+            </>}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -797,7 +885,8 @@ export function CampaignDetailPage() {
         checking ? (
           <div className="space-y-4">
             {!report ? <Card className="flex items-center gap-3 p-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Vérification de chaque email…</Card>
-              : <><LotTextsCard camp={data} /><ActivationSummary report={report} sequenceId={data.sequence!.id} overlap={overlap} onOverlap={setOverlap} recent={recent} onRecent={setRecent} /></>}
+              : <><LotTextsCard camp={data} /><ActivationSummary report={report} sequenceId={data.sequence!.id} overlap={overlap} onOverlap={setOverlap} recent={recent} onRecent={setRecent} />
+                {report.eligible > 0 && <SampleEmails campaignId={data.id} />}</>}
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setChecking(false)}>Annuler</Button>
               <Button variant="brand" disabled={!report || report.blocked || launch.isPending} onClick={() => launch.mutate()}><Rocket /> Lancer la campagne</Button>

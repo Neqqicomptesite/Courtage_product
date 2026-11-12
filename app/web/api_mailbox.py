@@ -220,7 +220,57 @@ def send(body: dict):
             if exc.confirm:
                 raise HTTPException(409, {"message": exc.confirm, "confirm": True}) from None
             raise HTTPException(422, {"errors": exc.errors}) from None
-        return {"id": out.id, "test_mode": out.test_mode, "to": out.to_email}
+        res = {"id": out.id, "test_mode": out.test_mode, "to": out.to_email}
+        if str(body.get("draft_id") or "").isdigit():  # V3.9.2 : l'email est parti, son brouillon disparaît
+            from app import mail_drafts
+            if mail_drafts.delete(s, int(body["draft_id"])):
+                s.commit()
+        return res
+
+
+# ---- V3.9.2 : brouillons (enregistrés pendant la frappe, propres à chaque employé)
+
+@router.get("/drafts")
+def drafts_list():
+    from app import mail_drafts
+    with get_session() as s:
+        return {"items": mail_drafts.listing(s)}
+
+
+@router.get("/drafts/{draft_id:int}")
+def draft_get(draft_id: int):
+    from app import mail_drafts
+    with get_session() as s:
+        d = mail_drafts.get(s, draft_id)
+        if d is None:
+            raise HTTPException(404, "Brouillon introuvable (déjà envoyé ou supprimé).")
+        return mail_drafts.as_json(s, d, full=True)
+
+
+@router.post("/drafts")
+def draft_save(body: dict):
+    """Crée (sans id) ou met à jour (avec id) un brouillon ; un brouillon vide n'est pas créé."""
+    from app import mail_drafts
+    raw_id = body.get("id")
+    draft_id = int(raw_id) if str(raw_id or "").isdigit() else None
+    with get_session() as s:
+        if mail_drafts.is_empty(body):
+            if draft_id:
+                mail_drafts.delete(s, draft_id)
+                s.commit()
+            return {"id": None}
+        d = mail_drafts.save(s, body, draft_id)
+        s.commit()
+        return {"id": d.id, "updated_at": d.updated_at.isoformat()}
+
+
+@router.delete("/drafts/{draft_id:int}")
+def draft_delete(draft_id: int):
+    from app import mail_drafts
+    with get_session() as s:
+        ok = mail_drafts.delete(s, draft_id)
+        s.commit()
+        return {"ok": ok}
 
 
 @router.get("/suggest")

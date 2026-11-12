@@ -20,7 +20,7 @@ import { ExclusionsPage } from "@/pages/exclusions";
 import { ImportPage } from "@/pages/import";
 import { ListsPage } from "@/pages/lists";
 import { ProspectingPage } from "@/pages/prospecting";
-import { AwaitingPage, FollowupsPage, InboxPage } from "@/pages/inbox";
+import { AwaitingPage, DraftsPage, FollowupsPage, InboxPage } from "@/pages/inbox";
 import { QuoteDetailPage } from "@/pages/quote-detail";
 import { QuotesPage } from "@/pages/quotes";
 import { ContractDetailPage, ContractsPage } from "@/pages/contracts";
@@ -55,6 +55,7 @@ const router = createBrowserRouter(
         { path: "inbox", element: <InboxPage /> },
         { path: "inbox/followups", element: <FollowupsPage /> },
         { path: "inbox/awaiting", element: <AwaitingPage /> },
+        { path: "inbox/drafts", element: <DraftsPage /> },  // V3.9.2
         { path: "replies", element: <RepliesPage /> },
         { path: "contacts", element: <ContactsPage /> },
         { path: "contacts/import", element: <ImportPage /> },

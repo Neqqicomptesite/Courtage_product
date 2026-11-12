@@ -293,6 +293,60 @@ def activate(s: Session, camp: Campaign, include_overlapping: bool, now: datetim
     return len(report.eligible)
 
 
+def sample(s: Session, camp: Campaign, n: int = 3, now: datetime | None = None) -> list[dict]:
+    """V3.9 : « Aperçu des emails » avant le lancement : les vrais emails de quelques contacts qui
+    recevront la séquence, rendus comme le moteur le fera (nom, entreprise, texte de leur lot ou de
+    la campagne, objet A/B, signature, pièces jointes, dates prévues). On choisit des contacts aussi
+    différents que possible (lot, fonction, secteur) pour voir chaque variante de texte."""
+    from app import attachments_service
+    now = now or utcnow()
+    seq = s.get(Sequence, camp.sequence_id)
+    steps = ss.steps_of(s, seq) if seq else []
+    if not steps:
+        return []
+    pool = [c for c in candidates(s, camp, check_render=False, now=now) if not c.excluded]
+    pool.sort(key=lambda c: (bool(c.other_campaigns) or bool(c.recent), c.contact.id))  # ceux qui partiront d'abord
+    chosen, seen = [], set()
+    for c in pool:  # 1er passage : un contact par (lot, code) différent
+        k = (c.contact.lot_number or 1, (c.contact.sequence_code or "").upper())
+        if k not in seen:
+            seen.add(k)
+            chosen.append(c)
+        if len(chosen) >= n:
+            break
+    for c in pool:
+        if len(chosen) >= n:
+            break
+        if c not in chosen:
+            chosen.append(c)
+    window = SendWindow.from_settings(s)
+    unsubscribe = ss.unsubscribe_for(s, seq)
+    labels = sorted(ss.variants_of(s, steps[0]))
+    keys = ss.block_keys(s)
+    counters: dict = {}
+    base_atts = {st.position: attachments_service.of_step(s, st.id) for st in steps}
+    first_due = first_due_for(s, camp, steps[0], now)
+    out = []
+    for i, cand in enumerate(chosen):
+        c = cand.contact
+        code = ss.resolve_code(camp.block_map, c.sequence_code, i, counters, c.lot_number, keys)
+        ctx = ss.build_context(s, c, code)
+        variant = labels[i % len(labels)] if labels else None  # objets A/B : un contact sur deux, pour voir les deux
+        emails, first_subject, prev = [], "", None
+        for st in steps:
+            when = first_due if prev is None else window.step_due(prev, st)
+            prev = when
+            r = ss.compose_step(ctx, st, ss.variants_of(s, st), variant, first_subject, unsubscribe)
+            if st.position == 1:
+                first_subject = r.subject
+            emails.append({"position": st.position, "subject": r.subject, "body": r.body, "planned_at": when,
+                           "same_thread": st.same_thread, "problems": r.problems, "warnings": r.warnings,
+                           "attachments": [attachments_service.as_json(a) for a in base_atts.get(st.position, [])]})
+        out.append({"contact": c, "variant": variant, "code": code or (c.sequence_code or None),
+                    "lot": c.lot_number, "emails": emails})
+    return out
+
+
 def delete(s: Session, camp: Campaign) -> int:
     """Supprime une campagne, brouillon ou lancée (V3.4.3) ; renvoie le nombre d'emails déjà partis.
     Les envois prévus disparaissent. Les emails partis et les réponses restent dans la boîte mail et

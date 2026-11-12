@@ -151,6 +151,9 @@ export function ContactsPage() {
   // ses actions ; les compteurs généraux (« 256 prospects »…) et les boutons de la page Contacts disparaissent
   const inList = !!filters.list_id;
   const listShown = currentList ? currentList.count : null;
+  // V3.9 : les campagnes lancées sur cette liste
+  const { data: allCamps } = useQuery({ queryKey: ["campaigns"], queryFn: api.campaigns, enabled: inList });
+  const listCamps = (allCamps ?? []).filter((c) => !c.direct && c.filters?.list_id === filters.list_id);
   return (
     <>
       {inList ? (
@@ -160,10 +163,15 @@ export function ContactsPage() {
             {listShown} contact{listShown === 1 ? "" : "s"}{currentList.lot ? ` · lot ${currentList.lot}` : ""}
             {` · ${currentList.shared ? "partagée avec l'équipe" : "perso"}`}
             {currentList.assigned_by && currentList.mine ? ` · confiée par ${currentList.assigned_by}` : ""}
+            {listCamps.length > 0 && (
+              <span className="mt-1 block">Campagne{listCamps.length > 1 ? "s" : ""} sur cette liste :{" "}
+                {listCamps.map((c, i) => <span key={c.id}>{i > 0 ? ", " : ""}<Link to={`/campaigns/${c.id}`} className="text-primary hover:underline">{c.name}</Link>{c.status === "draft" ? " (brouillon)" : c.status === "paused" ? " (en pause)" : c.status === "finished" ? " (terminée)" : ""}</span>)}
+              </span>
+            )}
           </> : undefined}
           actions={<>
             <Button variant="ghost" onClick={() => setParam("list_id", "")}><X /> Voir tous les contacts</Button>
-            {currentList && <Button disabled={!currentList.count} onClick={() => navigate(`/campaigns/new?list_id=${currentList.id}`)}><Rocket /> Lancer une campagne</Button>}
+            {currentList && <Button disabled={!currentList.count} onClick={() => navigate(`/campaigns/new?list_id=${currentList.id}`)}><Send /> Envoyer une séquence</Button>}
           </>} />
       ) : (
       <PageHeader title="Contacts" description={data ? `${data.total} contacts au total` : undefined}
@@ -248,7 +256,7 @@ export function ContactsPage() {
               <span className="font-medium">{sel.size} sélectionné{sel.size > 1 ? "s" : ""}</span>
               <span className="flex-1" />
               <Button size="sm" onClick={() => openSendSequence({ contacts: chosen.filter((c) => canSend(c.status)) })} disabled={!chosen.some((c) => canSend(c.status))}>
-                <Send /> Envoyer une séquence
+                <Send /> {inList ? "Envoyer à la sélection" : "Envoyer une séquence"}
               </Button>
               <Button size="sm" variant="outline" onClick={() => openReminder({ contacts: chosen })}><CalendarPlus /> Ajouter un rappel</Button>
               <AssignMenu ids={chosen.map((c) => c.id)} onDone={() => setSel(new Set())} />
