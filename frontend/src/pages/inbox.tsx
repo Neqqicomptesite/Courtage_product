@@ -543,6 +543,24 @@ export function FollowupsPage() {
   const items = data ?? [];
   const current = items.find((r) => r.contact.id === selected) ?? items[0] ?? null;
   const days = settings?.sending.followup_days ?? items[0]?.days ?? 3;
+  // V3.7.2 : vider la liste (une, plusieurs ou toutes les personnes), avec Annuler ; elles reviennent
+  // si vous leur écrivez de nouveau
+  const qc = useQueryClient();
+  const [checked, setChecked] = useState<Set<number>>(new Set());
+  const allChecked = items.length > 0 && items.every((r) => checked.has(r.contact.id));
+  const refreshAll = () => { qc.invalidateQueries({ queryKey: ["followups"] }); qc.invalidateQueries({ queryKey: ["status"] }); qc.invalidateQueries({ queryKey: ["notifications"] }); };
+  const dismiss = async (ids: number[]) => {
+    if (!ids.length) return;
+    try {
+      await api.followupsDismiss(ids);
+      setChecked(new Set());
+      refreshAll();
+      toast.success(ids.length > 1 ? `${ids.length} personnes retirées de la liste` : "Retiré de la liste", {
+        description: "Elles reviendront si vous leur écrivez de nouveau et qu'elles ne répondent pas.",
+        action: { label: "Annuler", onClick: () => void api.followupsRestore(ids).then(refreshAll) },
+      });
+    } catch (e) { toastError(e, "Impossible de retirer ces personnes"); }
+  };
 
   return (
     <>
@@ -557,10 +575,24 @@ export function FollowupsPage() {
         </Card>
       ) : (
         <Card className="grid overflow-hidden lg:h-[calc(100vh-15.5rem)] lg:min-h-[480px] lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
-          <div className="max-h-96 divide-y overflow-y-auto border-b lg:max-h-none lg:border-b-0 lg:border-r">
+          <div className="flex max-h-96 min-h-0 flex-col border-b lg:max-h-none lg:border-b-0 lg:border-r">
+            <div className="flex items-center gap-2 border-b bg-muted/30 px-4 py-2 text-xs">
+              <input type="checkbox" className="accent-[hsl(var(--primary))]" checked={allChecked} aria-label="Tout sélectionner"
+                onChange={() => setChecked(allChecked ? new Set() : new Set(items.map((r) => r.contact.id)))} />
+              <span className="text-muted-foreground">{checked.size ? `${checked.size} sélectionné${checked.size > 1 ? "s" : ""}` : "Tout sélectionner"}</span>
+              <span className="flex-1" />
+              {checked.size > 0 && (
+                <Button size="sm" variant="outline" className="h-7" onClick={() => void dismiss([...checked])}>
+                  <CheckCheck /> Retirer de la liste{checked.size > 1 ? ` (${checked.size})` : ""}
+                </Button>
+              )}
+            </div>
+            <div className="min-h-0 flex-1 divide-y overflow-y-auto">
             {items.map((r) => (
-              <button key={r.contact.id} id={`fu-${r.contact.id}`} onClick={() => setSelected(r.contact.id)}
-                className={cn("block w-full px-4 py-3 text-left transition-colors", current?.contact.id === r.contact.id ? "bg-accent/70" : "hover:bg-accent/30")}>
+              <div key={r.contact.id} className={cn("flex items-start gap-3 px-4 py-3 transition-colors", current?.contact.id === r.contact.id ? "bg-accent/70" : "hover:bg-accent/30")}>
+              <input type="checkbox" className="mt-1 accent-[hsl(var(--primary))]" checked={checked.has(r.contact.id)} aria-label={`Sélectionner ${fullName(r.contact)}`}
+                onChange={() => setChecked((s) => { const n = new Set(s); if (n.has(r.contact.id)) n.delete(r.contact.id); else n.add(r.contact.id); return n; })} />
+              <button id={`fu-${r.contact.id}`} onClick={() => setSelected(r.contact.id)} className="block min-w-0 flex-1 text-left">
                 <div className="flex items-center gap-2">
                   <span className="truncate text-sm font-medium">{fullName(r.contact)}</span>
                   <span className={cn("ml-auto shrink-0 rounded-full px-2 text-[11px] font-medium tabular", r.business_days >= days * 2 ? "bg-destructive/10 text-destructive" : "bg-warning/15 text-warning")}>
@@ -579,16 +611,18 @@ export function FollowupsPage() {
                   </p>
                 )}
               </button>
+              </div>
             ))}
+            </div>
           </div>
-          {current && <FollowupReader key={current.contact.id} r={current} />}
+          {current && <FollowupReader key={current.contact.id} r={current} onDismiss={() => void dismiss([current.contact.id])} />}
         </Card>
       )}
     </>
   );
 }
 
-function FollowupReader({ r }: { r: Followup }) {
+function FollowupReader({ r, onDismiss }: { r: Followup; onDismiss: () => void }) {
   const me = useStatus().data?.mailbox.display_name ?? "";
   const relaunch = () => openComposer({
     to: r.contact.email, subject: replySubject(r.subject),
@@ -607,6 +641,7 @@ function FollowupReader({ r }: { r: Followup }) {
         <div className="flex gap-2">
           {r.contact.phone && <Button variant="outline" asChild><a href={`tel:${r.contact.phone}`}><Phone /> Appeler</a></Button>}
           <Button variant="outline" onClick={() => openReminder({ contact: r.contact, kind: "call" })} title="Ajouter un rappel à l'agenda"><CalendarPlus /> Rappel</Button>
+          <Button variant="outline" onClick={onDismiss} title="Retirer de « Envoyés sans réponse » : déjà relancé autrement, ou à laisser"><CheckCheck /> Retirer</Button>
           <Button onClick={relaunch}><Reply /> Relancer</Button>
         </div>
       </div>

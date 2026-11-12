@@ -125,6 +125,40 @@ def dashboard():
         }
 
 
+@router.post("/followups/dismiss")
+def followups_dismiss(body: dict):
+    """V3.7.2 : retirer des personnes de « Envoyés sans réponse » (déjà relancées autrement, ou à laisser).
+    Elles reviennent si vous leur écrivez de nouveau."""
+    from sqlalchemy import func, select
+
+    from app.models import Message
+    ids = [int(i) for i in body.get("contact_ids") or [] if str(i).isdigit()]
+    with get_session() as s:
+        d = dict(settings_store.get(s, "followups_dismissed") or {})
+        rows = s.execute(select(Message.contact_id, func.max(Message.sent_at))
+                         .where(Message.contact_id.in_(ids), Message.direction == "out", Message.sent_at.is_not(None))
+                         .group_by(Message.contact_id)).all() if ids else []
+        for cid, last in rows:
+            d[str(cid)] = last.isoformat()
+        if len(d) > 5000:  # on garde les plus récents
+            d = dict(sorted(d.items(), key=lambda kv: kv[1])[-5000:])
+        settings_store.set_(s, "followups_dismissed", d)
+        s.commit()
+        return {"dismissed": len(rows)}
+
+
+@router.post("/followups/restore")
+def followups_restore(body: dict):
+    """Annuler « Retirer de la liste »."""
+    with get_session() as s:
+        d = dict(settings_store.get(s, "followups_dismissed") or {})
+        for i in body.get("contact_ids") or []:
+            d.pop(str(i), None)
+        settings_store.set_(s, "followups_dismissed", d)
+        s.commit()
+    return {"ok": True}
+
+
 @router.get("/followups")
 def followups(days: int | None = None):
     """Contacts à relancer à la main : dernier email il y a au moins N jours ouvrés (Réglages), aucune réponse."""

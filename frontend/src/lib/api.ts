@@ -647,6 +647,8 @@ export const api = {
   contactCreate: (body: ContactInput) => request<{ id: number; warnings: string[] }>("/api/contacts", { method: "POST", json: body }),
   contactUpdate: (id: number, body: ContactInput) => request<{ changed: string[] }>(`/api/contacts/${id}`, { method: "PUT", json: body }),
   followups: () => request<Followup[]>("/api/followups"),
+  followupsDismiss: (ids: number[]) => request<{ dismissed: number }>("/api/followups/dismiss", { method: "POST", json: { contact_ids: ids } }),
+  followupsRestore: (ids: number[]) => request<{ ok: boolean }>("/api/followups/restore", { method: "POST", json: { contact_ids: ids } }),
   awaitingDismiss: (items: { from_email: string; date: string | null }[]) =>
     request<{ dismissed: number }>("/api/mailbox/awaiting/dismiss", { method: "POST", json: { items } }),
   awaitingRestore: (senders: string[]) => request("/api/mailbox/awaiting/restore", { method: "POST", json: { senders } }),

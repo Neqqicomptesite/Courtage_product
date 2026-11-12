@@ -38,6 +38,7 @@ def _defaults() -> dict[str, Any]:
         "starter_insurers_version": 0,
         "starter_sequences_version": 0,  # V2.15 : séquences modèles et textes fonction / secteur
         "cleanup_v352_done": False,  # V3.5.2 : transferts et messages de collègues retirés des réponses
+        "followups_dismissed": {},  # V3.7.2 : « Envoyés sans réponse » retirés à la main {contact_id: date ISO du dernier email retiré}
         "awaiting_dismissed": {},  # V2.13 : « À répondre » rangés à la main {expéditeur: date ISO du dernier rangé}  # V2.12 : version de la liste d'assureurs de départ déjà appliquée
         "digest_time": "18:00",
         "digest_recipient": "",  # vide = adresse de la boîte mail

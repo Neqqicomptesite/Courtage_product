@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from datetime import datetime
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -188,10 +190,14 @@ def followups(s: Session, now, window, days: int = 3) -> list[dict]:
             .where(Message.direction == "out", Message.sent_at.is_not(None))
             .group_by(Message.contact_id).subquery())
     today = to_local(now).date()
+    from app import settings_store
+    hidden = settings_store.get(s, "followups_dismissed") or {}  # V3.7.2 : retirés à la main
     out = []
     for c, last_sent in s.execute(select(Contact, last.c.last).join(last, last.c.contact_id == Contact.id)
                                   .where(Contact.global_status == "active")
                                   .order_by(last.c.last)):
+        if (h := hidden.get(str(c.id))) and last_sent is not None and last_sent <= datetime.fromisoformat(h):
+            continue  # retiré de la liste ; revient si un nouvel email lui est envoyé
         if s.scalar(select(Message.id).where(Message.contact_id == c.id, Message.direction == "in",
                                              Message.kind.in_(STOPPING_KINDS),
                                              Message.received_at >= last_sent).limit(1)):

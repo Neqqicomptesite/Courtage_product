@@ -609,3 +609,5 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
      des textes, avec « Rédiger FIN4 » depuis la campagne ; destinataires en pastilles, suggestions
      d'adresses (carnet appris + contacts + collègues), Cc et Cci multiples ; nombre de non lus à côté de
      « Boîte mail », email ouvert d'un clic = lu sur le serveur (celui affiché tout seul reste non lu), bouton Lu / Non lu. Migrations 0022 à 0024.
+304. **Repris d'ODDO V3.7.2 (12/11)** : vider « Envoyés sans réponse » (cases, « Tout sélectionner »,
+     « Retirer de la liste », bouton « Retirer », Annuler) ; la personne revient si on lui écrit de nouveau.
