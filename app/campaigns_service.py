@@ -559,3 +559,35 @@ def direct_campaign(s: Session, seq: Sequence, now: datetime | None = None) -> C
     s.add(camp)
     s.flush()
     return camp
+
+
+# ---------------------------------------------------------------- V3.11.3 : emails douteux d'une campagne lancée
+
+def doubtful_open(s: Session, camp: Campaign) -> list[tuple[Enrollment, Contact, str]]:
+    """Inscrits encore en cours (pas répondu, pas terminé) dont l'email est douteux : fiabilité « À vérifier »,
+    « Moyenne », « Générique », ou déjà un rebond temporaire."""
+    soft = set(s.scalars(select(Message.contact_id).where(Message.direction == "in", Message.kind == "bounce_soft",
+                                                          Message.contact_id.is_not(None)).execution_options(oddo_all=True)))
+    out = []
+    for enr, c in s.execute(select(Enrollment, Contact).join(Contact, Contact.id == Enrollment.contact_id)
+                            .where(Enrollment.campaign_id == camp.id, Enrollment.status.in_(engine.OPEN_STATUSES))
+                            .order_by(Contact.company, Contact.email)):
+        why = _doubtful_label(c) or ("a déjà rebondi" if c.id in soft else None)
+        if why:
+            out.append((enr, c, why))
+    return out
+
+
+def remove_doubtful(s: Session, camp: Campaign, enrollment_ids: list[int] | None = None) -> int:
+    """Retire de la campagne les inscrits à l'email douteux (tous, ou ceux choisis). Ils ne reçoivent plus rien ;
+    ils restent dans les contacts et dans leurs listes."""
+    n = 0
+    for enr, c, _ in doubtful_open(s, camp):
+        if enrollment_ids is not None and enr.id not in enrollment_ids:
+            continue
+        if cs.remove_from_campaign(s, c, enr.id):
+            n += 1
+    if n:
+        s.add(EventLog(level="info", entity="campaign", entity_id=camp.id,
+                       text=f"{n} contact(s) à l'email douteux retiré(s) de la campagne « {camp.name} »"))
+    return n

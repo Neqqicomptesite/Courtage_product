@@ -640,3 +640,6 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
 312. **Repris d'ODDO V3.11.2 (13/11)** : protection du domaine d'envoi : rebonds envoyés par notre propre
      serveur (mailer-daemon@…) enfin traités, avis « trop d'échecs dans l'heure » de l'hébergeur = pause
      d'une heure et renvoi, disjoncteur à 3 rebonds par heure, emails douteux excluables avant lancement.
+313. **Repris d'ODDO V3.11.3 (13/11)** : sur une campagne lancée, encadré « N contacts encore en cours ont un
+     email douteux » : voir qui, décocher ceux qu'on garde, les retirer d'un coup (confirmation). Ils restent
+     dans les contacts et les listes.

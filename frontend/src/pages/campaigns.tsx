@@ -920,6 +920,7 @@ export function CampaignDetailPage() {
         )
       ) : (
         <div className="space-y-6">
+          {data.status !== "finished" && <DoubtfulCard campId={data.id} />}
           <MiniKpis i={data.indicators} counts={data.counts}
             onSent={() => { setView("sent"); requestAnimationFrame(() => document.getElementById("campaign-people")?.scrollIntoView({ behavior: "smooth", block: "start" })); }}
             onBounced={() => { setView("bounced"); requestAnimationFrame(() => document.getElementById("campaign-people")?.scrollIntoView({ behavior: "smooth", block: "start" })); }} />
@@ -1009,6 +1010,66 @@ function RowActions({ e, onAct }: { e: CampaignDetail["enrollments"][number]; on
         <DropdownMenuItem destructive onSelect={() => onAct("remove")}><UserMinus /> Retirer de la campagne</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/** V3.11.3 : contacts encore en cours dont l'email est douteux — on peut les retirer d'une campagne déjà lancée. */
+function DoubtfulCard({ campId }: { campId: number }) {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["campaign-doubtful", campId], queryFn: () => api.campaignDoubtful(campId) });
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<Set<number> | null>(null);  // null = tous
+  const [confirm, setConfirm] = useState(false);
+  const items = q.data?.items ?? [];
+  const chosen = picked ? items.filter((i) => picked.has(i.enrollment_id)) : items;
+  const remove = useMutation({
+    mutationFn: (_?: undefined) => api.removeDoubtful(campId, picked ? [...picked] : undefined),
+    onSuccess: (r) => {
+      setConfirm(false); setPicked(null); setOpen(false);
+      toast.success(`${r.removed} contact${r.removed > 1 ? "s" : ""} retiré${r.removed > 1 ? "s" : ""} de la campagne`);
+      qc.invalidateQueries({ queryKey: ["campaign", campId] }); qc.invalidateQueries({ queryKey: ["campaign-doubtful", campId] });
+      qc.invalidateQueries({ queryKey: ["campaign-upcoming", campId] });
+    },
+    onError: toastError,
+  });
+  if (!items.length) return null;
+  const toggle = (id: number) => setPicked((p) => {
+    const n = new Set(p ?? items.map((i) => i.enrollment_id));
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+  return (
+    <div className="rounded-xl border border-warning/40 bg-warning/5" id="campaign-doubtful">
+      <div className="flex flex-wrap items-center gap-3 p-4">
+        <AlertTriangle className="size-5 shrink-0 text-warning" />
+        <div className="min-w-0 flex-1 text-sm">
+          <p className="font-medium">{items.length} contact{items.length > 1 ? "s" : ""} encore en cours {items.length > 1 ? "ont" : "a"} un email douteux</p>
+          <p className="text-muted-foreground">Trop d'adresses qui rebondissent et votre fournisseur bloque les envois du domaine pendant une heure. Vous pouvez les retirer : ils ne recevront plus rien, mais restent dans vos contacts et vos listes.</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setOpen((o) => !o)}><Eye className="size-4" />{open ? "Masquer" : "Voir qui"}</Button>
+        <Button size="sm" variant="destructive" disabled={!chosen.length} onClick={() => setConfirm(true)}>
+          <UserMinus className="size-4" />Les retirer ({chosen.length})
+        </Button>
+      </div>
+      {open && (
+        <div className="divide-y border-t border-warning/30 bg-background/60">
+          {items.map((i) => (
+            <label key={i.enrollment_id} className="flex cursor-pointer items-center gap-3 px-4 py-2 text-sm">
+              <input type="checkbox" className="size-4 accent-[hsl(var(--primary))]" checked={!picked || picked.has(i.enrollment_id)} onChange={() => toggle(i.enrollment_id)} />
+              <span className="min-w-0 flex-1 truncate"><span className="font-medium">{fullName(i.contact)}</span>
+                {i.contact.company && <span className="text-muted-foreground"> · {i.contact.company}</span>}
+                <span className="ml-2 font-mono text-xs text-muted-foreground">{i.email}</span></span>
+              <Badge variant="warning">{i.reason}</Badge>
+            </label>
+          ))}
+          <p className="px-4 py-2 text-xs text-muted-foreground">Décochez ceux que vous voulez garder. Pour un contact en particulier, le menu « … » de sa ligne plus bas propose aussi « Retirer de la campagne ».</p>
+        </div>
+      )}
+      <ConfirmDialog open={confirm} onOpenChange={setConfirm} destructive pending={remove.isPending}
+        title={`Retirer ${chosen.length} contact${chosen.length > 1 ? "s" : ""} de la campagne ?`}
+        description="Ils ne recevront plus aucun email de cette campagne. Les emails déjà partis restent dans l'historique ; les contacts restent dans vos listes."
+        confirmLabel="Retirer" onConfirm={() => remove.mutate(undefined)} />
+    </div>
   );
 }
 

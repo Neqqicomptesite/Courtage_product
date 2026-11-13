@@ -24,6 +24,8 @@ export type Backups = { items: { name: string; date: string; label: string; size
 export type GuideKey = "mailbox" | "signature" | "test" | "contacts" | "real";
 export type GuideProgress = { steps: Record<GuideKey, boolean>; done: number; total: number };
 
+export type DoubtfulEnrollment = { enrollment_id: number; contact: ContactRef; email: string; reason: string };
+
 export type ContactRef = {
   id: number;
   first_name: string | null;
@@ -715,6 +717,9 @@ export const api = {
     request<{ ok: boolean }>("/api/mailbox/unarchive", { method: "POST", json: { message_id, folder, kind } }),
   mailSpam: (folder: string, uid: number) => request<{ archive_folder: string; message_id: string }>(`/api/mailbox/messages/${uid}/spam${qs({ folder })}`, { method: "POST" }),
   campaignSent: (id: number) => request<CampaignSent>(`/api/campaigns/${id}/sent`),
+  campaignDoubtful: (id: number) => request<{ items: DoubtfulEnrollment[] }>(`/api/campaigns/${id}/doubtful`),
+  removeDoubtful: (id: number, enrollment_ids?: number[]) =>
+    request<{ removed: number }>(`/api/campaigns/${id}/remove-doubtful`, { method: "POST", json: { enrollment_ids: enrollment_ids ?? null } }),
   campaignSample: (id: number, n = 3) => request<CampaignSample>(`/api/campaigns/${id}/sample?n=${n}`),
   campaignUpcoming: (id: number, enrollmentId?: number) =>
     request<CampaignUpcoming>(`/api/campaigns/${id}/upcoming${enrollmentId ? `?enrollment_id=${enrollmentId}` : ""}`),

@@ -340,6 +340,28 @@ def campaign_blocks(cid: int, body: dict):
         return {"block_map": camp.block_map or {}}
 
 
+class DoubtfulIn(BaseModel):
+    enrollment_ids: list[int] | None = None
+
+
+@router.get("/campaigns/{cid:int}/doubtful")
+def campaign_doubtful(cid: int):
+    """V3.11.3 : inscrits encore en cours dont l'email est douteux (pour les retirer d'une campagne lancée)."""
+    with get_session() as s:
+        camp = _camp(s, cid)
+        return {"items": [{"enrollment_id": e.id, "contact": contact_ref(c), "email": c.email, "reason": why}
+                          for e, c, why in camp_svc.doubtful_open(s, camp)]}
+
+
+@router.post("/campaigns/{cid:int}/remove-doubtful")
+def campaign_remove_doubtful(cid: int, body: DoubtfulIn):
+    with get_session() as s:
+        camp = _camp(s, cid)
+        n = camp_svc.remove_doubtful(s, camp, body.enrollment_ids)
+        s.commit()
+        return {"removed": n}
+
+
 @router.post("/campaigns/{cid:int}/{action}")
 def campaign_action(cid: int, action: str):
     with get_session() as s:
@@ -387,3 +409,4 @@ def skip(eid: int):
         s.add(EventLog(level="info", entity="enrollment", entity_id=enr.id, text=f"Étape {skipped} sautée"))
         s.commit()
     return {"skipped": skipped}
+
