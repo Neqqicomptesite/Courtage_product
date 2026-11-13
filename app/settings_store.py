@@ -57,6 +57,7 @@ def _defaults() -> dict[str, Any]:
         "imap_folders_cache": [],  # dernière liste de dossiers vue lors d'un test de connexion
         "custom_field_labels": {},  # clé -> libellé d'origine (« accroche_suggeree » -> « Accroche suggérée »)
         "engine_next_allowed_at": None,  # ISO UTC : pas d'envoi avant (délai aléatoire entre 2 envois)
+        "engine_paused_until": None,     # V3.11.2 : ISO UTC, pause du disjoncteur (rebonds, limite de l'hébergeur)
         "engine_last_tick": None,        # ISO UTC : dernière exécution du moteur
         "engine_last_error": "",         # erreur globale (ex. mot de passe refusé) affichée au tableau de bord
         "last_imap_sync": None,          # ISO UTC : dernière synchronisation IMAP réussie

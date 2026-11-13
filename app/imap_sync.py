@@ -257,9 +257,37 @@ def team_addresses(s: Session) -> tuple[set[str], set[str]]:
     return emails, {d for d in domains if not inbound.is_free_mail(d)}
 
 
+SYSTEM_SENDERS = ("mailer-daemon", "postmaster", "mail-daemon", "maildaemon", "bounce", "bounces", "mdaemon")
+
+
 def is_internal(sender: str, team: tuple[set[str], set[str]]) -> bool:
     sender = (sender or "").lower()
+    # V3.11.2 : un avis de non-remise envoyé par NOTRE serveur (mailer-daemon@oddo.ma) n'est pas un
+    # collègue : sans cette règle, ces rebonds étaient ignorés et les relances continuaient vers des
+    # adresses mortes, ce qui faisait encore monter le taux d'échec du domaine.
+    if sender.split("@", 1)[0] in SYSTEM_SENDERS:
+        return False
     return sender in team[0] or sender.rsplit("@", 1)[-1] in team[1]
+
+
+def _sender_limit(s: Session, m: Match, received_at: datetime) -> None:
+    """V3.11.2 : l'hébergeur a jeté l'email (trop d'échecs dans l'heure pour tout le domaine). Pause
+    d'une heure, et l'email jeté repart après la pause (l'adresse du contact n'y est pour rien)."""
+    from app import sending_guard
+    until = received_at + sending_guard.PAUSE  # la limite de l'hébergeur porte sur l'heure qui suit l'avis
+    sending_guard.pause(s, until, "L'hébergeur a jeté des emails : trop d'échecs dans l'heure pour le domaine.")
+    enr, sent = m.enrollment, m.sent
+    if enr is None or sent is None or sent.step_position is None:
+        return
+    if enr.status in ("waiting", "completed") and enr.current_step == sent.step_position + 1:
+        enr.current_step = sent.step_position
+        enr.status = "scheduled" if sent.step_position == 1 else "waiting"
+        enr.next_due_at = until
+        camp = s.get(Campaign, enr.campaign_id)
+        if camp is not None and camp.status == "finished":
+            camp.status = "active"  # c'était son dernier email : la campagne reprend le temps de le renvoyer
+        _event(s, f"Email de l'étape {sent.step_position} jeté par l'hébergeur : renvoyé après la pause "
+                  f"(à partir de {until:%H:%M} UTC)", "warning", entity="enrollment", entity_id=enr.id)
 
 
 def process_raw(s: Session, mb: Mailbox, raw: bytes, folder: str | None, uid: int | None,
@@ -310,6 +338,8 @@ def process_raw(s: Session, mb: Mailbox, raw: bytes, folder: str | None, uid: in
                   to_email=mb.email, mailbox_id=mb.id)
     s.add(msg)
     s.flush()
+    if a.sender_limit and not test_mode:
+        _sender_limit(s, m, a.received_at)
     if m.contact is not None:
         apply_effects(s, msg, m.contact, test_mode, bool(settings_store.get(s, "auto_reply_continues")),
                       precise=m.how == "message_id")

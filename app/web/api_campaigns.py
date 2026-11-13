@@ -89,10 +89,10 @@ def campaign_create(body: CampaignIn):
 
 def _report_json(r: camp_svc.ActivationReport) -> dict:
     cand = lambda c: {**contact_ref(c.contact), "excluded": c.excluded, "other_campaigns": c.other_campaigns,  # noqa: E731
-                      "recent": c.recent,
+                      "recent": c.recent, "doubtful": c.doubtful, "reliability": c.contact.email_reliability,
                       "problems": c.problems[:4], "problem_count": len(c.problems)}
     return {"eligible": len(r.eligible), "excluded": [cand(c) for c in r.excluded],
-            "overlapping": [cand(c) for c in r.overlapping], "recent": [cand(c) for c in r.recent], "with_problems": [cand(c) for c in r.with_problems[:50]],
+            "overlapping": [cand(c) for c in r.overlapping], "recent": [cand(c) for c in r.recent], "doubtful": [cand(c) for c in r.doubtful], "with_problems": [cand(c) for c in r.with_problems[:50]],
             "with_problems_count": len(r.with_problems), "reliability_ratio": r.reliability_ratio,
             "reliability_warn": r.reliability_ratio > camp_svc.RELIABILITY_WARN_RATIO,
             "link_warnings": r.link_warnings, "first_send": iso(r.first_send), "last_send": iso(r.last_send),
@@ -100,19 +100,21 @@ def _report_json(r: camp_svc.ActivationReport) -> dict:
 
 
 @router.get("/campaigns/{cid:int}/activation")
-async def activation(cid: int, overlap: bool = False, recent: bool = False):
+async def activation(cid: int, overlap: bool = False, recent: bool = False, doubtful: bool = True):
     def build():
         with get_session() as s:
             camp = _camp(s, cid)
             if camp.status not in ("draft", "active", "paused"):
                 raise HTTPException(400, "Cette campagne est terminée.")
-            return _report_json(camp_svc.activation_report(s, camp, include_overlapping=overlap, include_recent=recent))
+            return _report_json(camp_svc.activation_report(s, camp, include_overlapping=overlap, include_recent=recent,
+                                                           include_doubtful=doubtful))
     return await run_in_threadpool(build)  # rend chaque email de chaque contact : quelques secondes
 
 
 class ActivateIn(BaseModel):
     overlap: bool = False
     recent: bool = False
+    doubtful: bool = True  # V3.11.2 : inscrire aussi les emails douteux (décision de l'employé)
 
 
 class NameIn(BaseModel):
@@ -157,7 +159,8 @@ async def activate(cid: int, body: ActivateIn):
         with get_session() as s:
             camp = _camp(s, cid)
             try:
-                n = camp_svc.activate(s, camp, include_overlapping=body.overlap, include_recent=body.recent)
+                n = camp_svc.activate(s, camp, include_overlapping=body.overlap, include_recent=body.recent,
+                                      include_doubtful=body.doubtful)
             except ValueError as exc:
                 raise HTTPException(409, str(exc)) from None
             s.commit()

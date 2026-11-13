@@ -123,6 +123,7 @@ export function CampaignWizardPage() {
   const [startAt, setStartAt] = useState<string | null>(null);  // ISO, ou null = dès le lancement
   const [draft, setDraft] = useState<{ id: number; key: string } | null>(null);
   const [overlap, setOverlap] = useState(false);
+  const [doubtful, setDoubtful] = useState(true);  // V3.11.2 : emails douteux inscrits, sauf si on les exclut
   const [recent, setRecent] = useState(false);
   // V3.9 : le brouillon préparé pour la vérification et l'aperçu disparaît si on quitte sans lancer
   // ni « Garder en brouillon » (sinon il s'accumule dans Campagnes et sur la page de la liste).
@@ -180,12 +181,12 @@ export function CampaignWizardPage() {
     onError: (e) => toastError(e),
   });
   const { data: report, isFetching: checking } = useQuery({
-    queryKey: ["activation", draft?.id, overlap, recent],
-    queryFn: () => api.activation(draft!.id, overlap, recent),
+    queryKey: ["activation", draft?.id, overlap, recent, doubtful],
+    queryFn: () => api.activation(draft!.id, overlap, recent, doubtful),
     enabled: step === 2 && !!draft && draft.key === key,
   });
   const launch = useMutation({
-    mutationFn: () => api.activate(draft!.id, overlap, recent),
+    mutationFn: () => api.activate(draft!.id, overlap, recent, doubtful),
     onSuccess: (r) => {
       keepRef.current = true;
       qc.invalidateQueries();
@@ -320,7 +321,7 @@ export function CampaignWizardPage() {
           {!report || checking || prepare.isPending ? (
             <Card className="flex items-center gap-3 p-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Vérification de chaque email, pour chaque contact…</Card>
           ) : (
-            <ActivationSummary report={report} sequenceId={sequenceId!} overlap={overlap} onOverlap={setOverlap} recent={recent} onRecent={setRecent} />
+            <ActivationSummary report={report} sequenceId={sequenceId!} overlap={overlap} onOverlap={setOverlap} recent={recent} onRecent={setRecent} doubtful={doubtful} onDoubtful={setDoubtful} />
           )}
           {draft && !prepare.isPending && report && report.eligible > 0 && <SampleEmails campaignId={draft.id} listName={currentList?.name} />}
           <div className="flex flex-wrap justify-between gap-2">
@@ -431,7 +432,7 @@ function PeopleChooser({ picked, setPicked, prospection }: { picked: number[]; s
 }
 
 /** Résumé du contrôle avant lancement, partagé par l'assistant et la page d'une campagne brouillon. */
-export function ActivationSummary({ report, sequenceId, overlap, onOverlap, recent, onRecent }: { report: Activation; sequenceId: number; overlap: boolean; onOverlap: (v: boolean) => void; recent: boolean; onRecent: (v: boolean) => void }) {
+export function ActivationSummary({ report, sequenceId, overlap, onOverlap, recent, onRecent, doubtful = true, onDoubtful }: { report: Activation; sequenceId: number; overlap: boolean; onOverlap: (v: boolean) => void; recent: boolean; onRecent: (v: boolean) => void; doubtful?: boolean; onDoubtful?: (v: boolean) => void }) {
   return (
     <>
       <div className={cn("flex items-start gap-3 rounded-xl border p-4 text-sm", report.test_mode ? "border-warning/40 bg-warning/5" : "border-destructive/40 bg-destructive/5")}>
@@ -467,6 +468,12 @@ export function ActivationSummary({ report, sequenceId, overlap, onOverlap, rece
           {Math.round(report.reliability_ratio * 100)} % des contacts ont un email dont la qualité n'est pas « Bonne ». Beaucoup de rebonds peuvent nuire à la réputation du domaine du cabinet.</p>
       )}
       {report.link_warnings.map((w) => <p key={w} className="rounded-xl border border-warning/40 bg-warning/5 p-4 text-sm">{w}</p>)}
+      {!!report.doubtful?.length && onDoubtful && (
+        <AsideGroup items={report.doubtful} on={doubtful} onChange={onDoubtful} detail={(c) => `${c.email} · ${c.doubtful ?? ""}`}
+          onLabel="Ils seront inscrits quand même. Attention : au-delà d'environ 25 % d'échecs dans l'heure, beaucoup d'hébergeurs bloquent tout le domaine du cabinet."
+          offLabel="Exclus de cette campagne : ils ne recevront rien. Vous pourrez vérifier leurs adresses puis les relancer plus tard."
+          title={`${report.doubtful.length} contact${report.doubtful.length > 1 ? "s ont" : " a"} un email douteux (à vérifier, moyen, générique, ou qui a déjà rebondi) : risque de rebonds`} />
+      )}
       {report.overlapping.length > 0 && (
         <AsideGroup items={report.overlapping} on={overlap} onChange={onOverlap} detail={(c) => `en cours : ${c.other_campaigns.join(", ")}`}
           title={`${report.overlapping.length} contact${report.overlapping.length > 1 ? "s sont" : " est"} déjà en cours dans une autre campagne (la vôtre ou celle d'un collègue)`} />
@@ -539,12 +546,12 @@ export function SampleEmails({ campaignId, listName }: { campaignId: number; lis
 }
 
 /** V3.5 : contacts mis de côté (déjà en cours ailleurs, ou prospectés récemment), avec le détail et un interrupteur. */
-function AsideGroup({ title, items, on, onChange, detail }: { title: string; items: Candidate[]; on: boolean; onChange: (v: boolean) => void; detail: (c: Candidate) => string }) {
+function AsideGroup({ title, items, on, onChange, detail, onLabel, offLabel }: { title: string; items: Candidate[]; on: boolean; onChange: (v: boolean) => void; detail: (c: Candidate) => string; onLabel?: string; offLabel?: string }) {
   return (
     <div className="rounded-xl border p-4 text-sm">
       <label className="flex items-center justify-between gap-3">
         <span>{title}
-          <span className="block text-xs text-muted-foreground">{on ? "Ils seront inscrits quand même." : "Ils sont mis de côté : ils ne recevront pas cette séquence."}</span></span>
+          <span className="block text-xs text-muted-foreground">{on ? onLabel ?? "Ils seront inscrits quand même." : offLabel ?? "Ils sont mis de côté : ils ne recevront pas cette séquence."}</span></span>
         <Switch checked={on} onCheckedChange={onChange} />
       </label>
       <details className="mt-2">
@@ -826,6 +833,7 @@ export function CampaignDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [checking, setChecking] = useState(false);
   const [overlap, setOverlap] = useState(false);
+  const [doubtful, setDoubtful] = useState(true);  // V3.11.2 : emails douteux inscrits, sauf si on les exclut
   const [recent, setRecent] = useState(false);
   const [planning, setPlanning] = useState(false);
   const refresh = () => qc.invalidateQueries();
@@ -850,9 +858,9 @@ export function CampaignDetailPage() {
     },
     onError: (e) => toastError(e),
   });
-  const { data: report } = useQuery({ queryKey: ["activation", id, overlap, recent], queryFn: () => api.activation(id, overlap, recent), enabled: checking });
+  const { data: report } = useQuery({ queryKey: ["activation", id, overlap, recent, doubtful], queryFn: () => api.activation(id, overlap, recent, doubtful), enabled: checking });
   const launch = useMutation({
-    mutationFn: () => api.activate(id, overlap, recent),
+    mutationFn: () => api.activate(id, overlap, recent, doubtful),
     onSuccess: (r) => { toast.success(`Campagne lancée : ${r.enrolled} contacts`); setChecking(false); refresh(); },
     onError: (e) => toastError(e, "Lancement impossible"),
   });
@@ -885,7 +893,7 @@ export function CampaignDetailPage() {
         checking ? (
           <div className="space-y-4">
             {!report ? <Card className="flex items-center gap-3 p-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Vérification de chaque email…</Card>
-              : <><LotTextsCard camp={data} /><ActivationSummary report={report} sequenceId={data.sequence!.id} overlap={overlap} onOverlap={setOverlap} recent={recent} onRecent={setRecent} />
+              : <><LotTextsCard camp={data} /><ActivationSummary report={report} sequenceId={data.sequence!.id} overlap={overlap} onOverlap={setOverlap} recent={recent} onRecent={setRecent} doubtful={doubtful} onDoubtful={setDoubtful} />
                 {report.eligible > 0 && <SampleEmails campaignId={data.id} />}</>}
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setChecking(false)}>Annuler</Button>

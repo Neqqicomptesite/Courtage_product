@@ -222,6 +222,17 @@ class Analysis:
     bounce: BounceInfo | None = None
     raw_headers: str = ""
     referenced_ids: list[str] = field(default_factory=list)
+    sender_limit: bool = False             # V3.11.2 : l'hébergeur a jeté l'email (trop d'échecs dans l'heure)
+
+
+# V3.11.2 (13/11) : « Domain oddo.ma has exceeded the max defers and failures per hour (16/10 (25%))
+# allowed. Message discarded. » Ce n'est PAS une mauvaise adresse : c'est notre hébergeur qui bloque
+# tout le domaine après trop d'échecs. Le contact n'est pas marqué en rebond ; l'envoi se met en pause.
+SENDER_LIMIT_RE = re.compile(
+    r"max(imum)?\s+(number\s+of\s+)?(defers?\s+and\s+failures|emails?|messages?)\s+per\s+hour"
+    r"|exceeded\s+the\s+max(imum)?\s+(defers|emails?|messages?|sending)"
+    r"|(sending|message|rate)\s+limit\s+(exceeded|reached)|too\s+many\s+(messages|emails|recipients)\s+(per|in\s+the\s+last)\s+hour",
+    re.IGNORECASE)
 
 
 def _ids(value: str | None) -> list[str]:
@@ -251,6 +262,8 @@ def analyse(raw: bytes) -> Analysis:
     if _is_bounce(msg, sender):
         a.bounce = parse_bounce(msg)
         a.kind = "bounce_hard" if a.bounce.hard else "bounce_soft"
+        if SENDER_LIMIT_RE.search(full):
+            a.sender_limit, a.kind = True, "bounce_soft"
         if a.bounce.original_message_id:
             a.referenced_ids.append(a.bounce.original_message_id)
     elif _is_auto_reply(msg):

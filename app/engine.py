@@ -225,6 +225,11 @@ def _tick_locked(now, smtp_factory, imap_factory, rng, force_id) -> TickResult:
                 return TickResult("cap_day", f"Plafond du jour atteint ({c['today']}/{c['daily_cap']})")
             if c["last_hour"] >= c["hourly_cap"]:
                 return TickResult("cap_hour", f"Plafond horaire atteint ({c['last_hour']}/{c['hourly_cap']})")
+            from app import sending_guard  # V3.11.2 : disjoncteur rebonds / limite de l'hébergeur
+            guard = sending_guard.check(s, now)
+            if guard:
+                s.commit()
+                return TickResult("paused", guard)
             not_before = _from_iso(settings_store.get(s, "engine_next_allowed_at"))
             if not_before and now < not_before:
                 return TickResult("gap", f"Prochain envoi possible à {to_local(not_before):%H:%M:%S}")

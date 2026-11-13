@@ -333,7 +333,7 @@ export type CampaignListItem = {
   counts: Record<string, number>;
   indicators: Indicators;
 };
-export type Candidate = ContactRef & { excluded: string | null; other_campaigns: string[]; recent?: string | null; problems?: string[]; problem_count?: number };
+export type Candidate = ContactRef & { excluded: string | null; other_campaigns: string[]; recent?: string | null; doubtful?: string | null; reliability?: string | null; problems?: string[]; problem_count?: number };
 /** V3.7 : textes par lot (le 4e import ou la 4e recherche → variante 4 : FIN4, BTP4…). */
 export type LotText = { kind: "target" | "sector"; root: string; root_label: string; root_id: number; key: string; block_id: number | null };
 export type LotTexts = { lot: number; contacts: number; items: LotText[] }[];
@@ -363,6 +363,7 @@ export type Activation = {
   excluded: Candidate[];
   overlapping: Candidate[];
   recent: Candidate[];
+  doubtful?: Candidate[];
   with_problems: Candidate[];
   with_problems_count: number;
   reliability_ratio: number;
@@ -820,8 +821,8 @@ export const api = {
   campaignCreate: (body: { name: string; sequence_id: number; filters: Record<string, string>; stop_on_domain_reply: boolean; start_at?: string | null }) =>
     request<{ id: number }>("/api/campaigns", { method: "POST", json: body }),
   campaign: (id: number) => request<CampaignDetail>(`/api/campaigns/${id}`),
-  activation: (id: number, overlap: boolean, recent = false) => request<Activation>(`/api/campaigns/${id}/activation${qs({ overlap, recent })}`),
-  activate: (id: number, overlap: boolean, recent = false) => request<{ enrolled: number }>(`/api/campaigns/${id}/activate`, { method: "POST", json: { overlap, recent } }),
+  activation: (id: number, overlap: boolean, recent = false, doubtful = true) => request<Activation>(`/api/campaigns/${id}/activation${qs({ overlap, recent, doubtful })}`),
+  activate: (id: number, overlap: boolean, recent = false, doubtful = true) => request<{ enrolled: number }>(`/api/campaigns/${id}/activate`, { method: "POST", json: { overlap, recent, doubtful } }),
   contactNewAddress: (id: number, email: string) => request<{ id: number }>(`/api/contacts/${id}/new-address`, { method: "POST", json: { email } }),
   campaignAction: (id: number, action: "pause" | "resume" | "delete") => request(`/api/campaigns/${id}/${action}`, { method: "POST" }),
 

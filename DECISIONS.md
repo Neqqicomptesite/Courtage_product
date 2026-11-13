@@ -637,3 +637,6 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
 311. **Repris d'ODDO V3.11.1 (13/11)** : correctif relances : dans l'éditeur, une variable cliquée sans
      curseur va à la fin du message, jamais collée à un mot ; une variable collée à un mot est bloquante
      (lancement refusé, envoi en erreur) ; alerte si le message commence par une colonne importée.
+312. **Repris d'ODDO V3.11.2 (13/11)** : protection du domaine d'envoi : rebonds envoyés par notre propre
+     serveur (mailer-daemon@…) enfin traités, avis « trop d'échecs dans l'heure » de l'hébergeur = pause
+     d'une heure et renvoi, disjoncteur à 3 rebonds par heure, emails douteux excluables avant lancement.

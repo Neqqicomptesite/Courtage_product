@@ -60,6 +60,7 @@ class Candidate:
     other_campaigns: list[str] = field(default_factory=list)  # déjà en cours ailleurs (forçable)
     recent: str | None = None                        # V3.5 : déjà prospecté récemment (forçable)
     problems: list[str] = field(default_factory=list)          # variables non résolues : bloquant
+    doubtful: str | None = None                      # V3.11.2 : email douteux (À vérifier, Moyenne…), à exclure au choix
 
 
 def reprospect_days(s: Session) -> int:
@@ -141,6 +142,10 @@ def candidates(s: Session, camp: Campaign, check_render: bool = True, now: datet
     prospection = ss.is_prospection(seq) and not camp.direct
     recent = recently_prospected(s, camp, now or utcnow()) if prospection else {}
 
+    # V3.11.2 : déjà un rebond temporaire (boîte pleine, serveur refusé…) : adresse à surveiller
+    doubtful = {cid: "a déjà rebondi" for cid in s.scalars(
+        select(Message.contact_id).where(Message.direction == "in", Message.kind == "bounce_soft",
+                                         Message.contact_id.is_not(None)).execution_options(oddo_all=True))}
     out = []
     for c in matching_contacts(s, camp.filters or {}):
         cand = Candidate(c)
@@ -153,6 +158,7 @@ def candidates(s: Session, camp: Campaign, check_render: bool = True, now: datet
         elif suppression.is_suppressed(c.email, supp):
             cand.excluded = "Dans la liste d'exclusion"
         else:
+            cand.doubtful = doubtful.get(c.id) or _doubtful_label(c)
             cand.other_campaigns = busy.get(c.id, [])
             if not cand.other_campaigns:
                 cand.recent = recent.get(c.id)
@@ -221,6 +227,14 @@ def first_due_for(s: Session, camp: Campaign, first_step, now: datetime) -> date
 
 # ---------------------------------------------------------------- activation
 
+DOUBTFUL = ("À vérifier", "Moyenne", "Générique")
+
+
+def _doubtful_label(c: Contact) -> str | None:
+    cat = cs.reliability_category(c.email_reliability)
+    return f"qualité « {cat} »" if cat in DOUBTFUL else None
+
+
 @dataclass
 class ActivationReport:
     eligible: list[Candidate]
@@ -233,6 +247,7 @@ class ActivationReport:
     first_send: datetime | None
     last_send: datetime | None
     test_mode: bool
+    doubtful: list[Candidate] = field(default_factory=list)
 
     @property
     def blocked(self) -> bool:
@@ -240,14 +255,15 @@ class ActivationReport:
 
 
 def activation_report(s: Session, camp: Campaign, include_overlapping: bool, now: datetime | None = None,
-                      include_recent: bool = False) -> ActivationReport:
+                      include_recent: bool = False, include_doubtful: bool = True) -> ActivationReport:
     now = now or utcnow()
     cands = candidates(s, camp, now=now)
     excluded = [c for c in cands if c.excluded]
     overlapping = [c for c in cands if not c.excluded and c.other_campaigns]
     recent = [c for c in cands if not c.excluded and c.recent]
     eligible = [c for c in cands if not c.excluded and (include_overlapping or not c.other_campaigns)
-                and (include_recent or not c.recent)]
+                and (include_recent or not c.recent) and (include_doubtful or not c.doubtful)]
+    doubtful = [c for c in cands if not c.excluded and c.doubtful]
     with_problems = [c for c in eligible if c.problems]
     not_good = sum(1 for c in eligible if cs.reliability_category(c.contact.email_reliability) != "Bonne")
     ratio = not_good / len(eligible) if eligible else 0.0
@@ -262,14 +278,15 @@ def activation_report(s: Session, camp: Campaign, include_overlapping: bool, now
     first, last = estimate(SendWindow.from_settings(s), mb, engine.effective_daily_cap(s, mb, now),
                            start_of(camp, now), len(eligible), steps)
     return ActivationReport(eligible, excluded, overlapping, recent, with_problems, ratio, links, first, last,
-                            bool(settings_store.get(s, "test_mode")))
+                            bool(settings_store.get(s, "test_mode")), doubtful)
 
 
 def activate(s: Session, camp: Campaign, include_overlapping: bool, now: datetime | None = None,
-             rng: random.Random | None = None, include_recent: bool = False) -> int:
+             rng: random.Random | None = None, include_recent: bool = False, include_doubtful: bool = True) -> int:
     """Inscrit les contacts éligibles, tire les variantes A/B et passe la campagne en « active »."""
     now = now or utcnow()
-    report = activation_report(s, camp, include_overlapping, now, include_recent=include_recent)
+    report = activation_report(s, camp, include_overlapping, now, include_recent=include_recent,
+                               include_doubtful=include_doubtful)
     if report.blocked:
         raise ValueError("Activation impossible : contacts avec problèmes ou aucun contact éligible.")
     seq = s.get(Sequence, camp.sequence_id)
