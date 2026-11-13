@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertCircle, Braces, CalendarClock, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock, CornerDownRight, Loader2, Mail,
+  AlertCircle, AlertTriangle, Braces, CalendarClock, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock, CornerDownRight, Loader2, Mail,
   Paperclip, Plus, Send, Split, Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -42,6 +42,19 @@ const VARS: { label: string; text: string; hint: string }[] = [
 
 // V3.5 : enregistrement lancé en quittant l'éditeur ; si on rouvre aussitôt, on l'attend avant de relire.
 const pendingSaves = new Map<number, Promise<unknown>>();
+
+/** V3.11.1 : les mêmes contrôles que le serveur (sequences_service.template_problems / _warnings). */
+const GLUED = /\{\{[^}]*\}\}[\p{L}\p{N}][\p{L}\p{N}_]{0,15}|[\p{L}\p{N}_]{0,15}[\p{L}\p{N}]\{\{[^}]*\}\}/u;
+const GREETING = /^\s*(bonjour|bonsoir|madame|monsieur|cher|ch[eè]re|salut|hello|\{\{\s*(prenom|civilite|nom)\b)/i;
+function bodyIssues(body: string): { text: string; block: boolean }[] {
+  const out: { text: string; block: boolean }[] = [];
+  const g = body.match(GLUED);
+  if (g) out.push({ block: true, text: `Variable collée au texte (« ${g[0].trim()} ») : ajoutez un espace ou un retour à la ligne. Tant que c'est le cas, l'email ne part pas.` });
+  const first = body.split("\n").find((l) => l.trim()) ?? "";
+  const v = first.match(/^\s*\{\{\s*([\w.]+)/);
+  if (first && !GREETING.test(first) && v) out.push({ block: false, text: `Le message commence par {{ ${v[1]} }}, avant « Bonjour » : le texte de cette colonne s'affichera en tête de l'email. Est-ce voulu ?` });
+  return out;
+}
 
 export function SequenceEditorPage() {
   const id = Number(useParams().id);
@@ -375,13 +388,18 @@ function StepEditor({ step, customFields, cumul, onChange, onDelete, prospection
   const [abOpen, setAbOpen] = useState(!!step.subject_b);
   const showSubject = step.position === 1 || !step.same_thread;
 
-  const insert = (text: string) => {
-    const t = target.current ?? (bodyRef.current ? { el: bodyRef.current, field: "body" as const } : null);
+  const insert = (raw: string) => {
+    // V3.11.1 : sans champ choisi, on ajoute à la FIN du message (avant : au tout début, sans qu'on le
+    // voie : « {{ custom.… }}Bonjour » est parti chez des prospects). Jamais collé à un mot.
+    const t = target.current ?? (bodyRef.current ? { el: bodyRef.current, field: "body" as const, end: true } : null);
     if (!t) return;
     const { el, field } = t;
-    const start = el.selectionStart ?? el.value.length;
-    const end = el.selectionEnd ?? el.value.length;
-    const value = el.value.slice(0, start) + text + el.value.slice(end);
+    const atEnd = "end" in t && t.end;
+    const start = atEnd ? el.value.length : el.selectionStart ?? el.value.length;
+    const end = atEnd ? el.value.length : el.selectionEnd ?? el.value.length;
+    const before = el.value.slice(0, start), after = el.value.slice(end);
+    const text = (/[\p{L}\p{N}]$/u.test(before) ? " " : "") + raw + (/^[\p{L}\p{N}]/u.test(after) ? " " : "");
+    const value = before + text + after;
     onChange({ [field]: value } as Partial<StepData>);
     requestAnimationFrame(() => {
       el.focus();
@@ -468,6 +486,11 @@ function StepEditor({ step, customFields, cumul, onChange, onDelete, prospection
           </div>
           <Textarea id="body" ref={bodyRef} value={step.body} onFocus={track("body")} onChange={(e) => onChange({ body: e.target.value })}
             className="min-h-[340px] font-[450]" placeholder="Rédigez votre message…" />
+          {bodyIssues(step.body).map((x) => (
+            <p key={x.text} className={cn("flex items-start gap-2 rounded-lg px-3 py-2 text-xs", x.block ? "bg-destructive/10 text-destructive" : "bg-warning/10 text-warning")}>
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />{x.text}
+            </p>
+          ))}
         </div>
 
         <div className="space-y-2 rounded-lg border border-dashed p-3">

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -204,6 +205,36 @@ def enrollment_code(enr, camp, contact: Contact) -> str | None:
     return resolve_code(getattr(camp, "block_map", None), contact.sequence_code, enr.id or 0, lot=lot, keys=keys)
 
 
+GREETING_RE = re.compile(r"^\s*(bonjour|bonsoir|madame|monsieur|cher|ch[eè]re|salut|hello|\{\{\s*(prenom|civilite|nom)\b)",
+                         re.IGNORECASE)
+GLUED_RE = re.compile(r"\{\{[^}]*\}\}[A-Za-zÀ-ÿ0-9][\wÀ-ÿ]{0,15}|[\wÀ-ÿ]{0,15}[A-Za-zÀ-ÿ0-9]\{\{[^}]*\}\}")
+
+
+def template_problems(body_template: str) -> list[str]:
+    """V3.11.1 (13/11, relance partie avec « …des primesBonjour Fatiha ») : une variable collée à un
+    mot est toujours une erreur de saisie. Bloquant : l'email ne part pas (lancement refusé, envoi
+    en erreur), plutôt que de partir abîmé chez le prospect."""
+    m = GLUED_RE.search(body_template or "")
+    return [f"Une variable est collée au texte (« {m.group(0).strip()} ») : ajoutez un espace ou un retour "
+            "à la ligne dans le texte de l'étape."] if m else []
+
+
+def template_warnings(body_template: str) -> list[str]:
+    """V3.11.1 : ce qui ressemble à une erreur sans en être forcément une (affiché, non bloquant)."""
+    out: list[str] = []
+    t = body_template or ""
+    first = next((line for line in t.splitlines() if line.strip()), "")
+    if first and not GREETING_RE.match(first):
+        var = VAR_START_RE.match(first)
+        if var:
+            out.append(f"Le message commence par {{{{ {var.group(1)} }}}}, avant la formule de politesse : "
+                       "vérifiez que c'est voulu (le texte de cette colonne s'affiche en tête de l'email).")
+    return out
+
+
+VAR_START_RE = re.compile(r"^\s*\{\{\s*([\w.]+)")
+
+
 @dataclass
 class ComposedStep:
     subject: str
@@ -252,6 +283,13 @@ def compose_step(ctx: render.RenderContext, st: Step, variants: dict[str, StepVa
     if holes:  # V2.14 : « [N° de police] » non remplacé
         problems.append("À compléter : " + ", ".join(f"[{h}]" for h in dict.fromkeys(holes)))
     body = render.full_body(body_r.text, body_template, ctx.signature, unsubscribe)
+    problems += template_problems(body_template)
+    warnings += template_warnings(body_template)
+    for var, key, blocks, label in (("bloc_cible", ctx.target_key, ctx.target_blocks, "fonction"),
+                                    ("bloc_secteur", ctx.sector_key, ctx.sector_blocks, "secteur")):
+        text = blocks.get(key or render.GENERIC) if var in body_template else None
+        if text:  # le texte de fonction / secteur inséré dans l'email : même contrôle
+            problems += [f"Texte {label} « {key or 'générique'} » : {p}" for p in template_problems(text)]
     n_links = render.count_links(body)
     if n_links > MAX_LINKS:
         warnings.append(f"{n_links} liens dans l'email : au-delà d'un lien, "

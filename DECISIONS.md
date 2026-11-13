@@ -634,3 +634,6 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
      Portefeuille, Demandes de cotation, Contacts, Listes, Campagnes, Entreprises ; Production : Contrats,
      Assureurs) ; page Assureurs à part ; « Dossiers » devient « Demandes de cotation ». Check-up : une
      ancienne version démarre sur une base plus récente (retour automatique après une mise à jour ratée).
+311. **Repris d'ODDO V3.11.1 (13/11)** : correctif relances : dans l'éditeur, une variable cliquée sans
+     curseur va à la fin du message, jamais collée à un mot ; une variable collée à un mot est bloquante
+     (lancement refusé, envoi en erreur) ; alerte si le message commence par une colonne importée.
