@@ -4,13 +4,14 @@
 // il est aussi un contact « client » pour les campagnes (gestion ou souscription).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle, Briefcase, Building2, CalendarClock, ListPlus, Loader2, Mail, Phone, PhoneCall, Search, Send, Upload, User, Users,
+  AlertTriangle, Ban, Briefcase, ChevronDown, ChevronRight, FileStack, Paperclip, Pencil, Plus, RotateCcw, Trash2, Building2, CalendarClock, ListPlus, Loader2, Mail, Phone, PhoneCall, Search, Send, Upload, User, Users,
 } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
-import { EmptyState, PageHeader, toastError, useUrlState } from "@/components/common";
+import { ConfirmDialog, EmptyState, PageHeader, toastError, useUrlState } from "@/components/common";
+import { AttachmentChips, uploadFiles } from "@/components/composer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { api, type PfDetail, type PfOpportunity, type PfRow, type PfSummary } from "@/lib/api";
+import { ApiError, api, type Attachment, type PfAmendment, type PfContract, type PfContractIn, type PfDetail, type PfOpportunity, type PfRow, type PfSummary } from "@/lib/api";
 import { formatDayTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useMe } from "@/pages/login";
@@ -37,6 +38,7 @@ const OUTCOMES: { value: string; label: string; tone: string }[] = [
   { value: "done", label: "Traité", tone: "" },
 ];
 const dayISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const frDate = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString("fr-FR");
 const fmtDay = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
 
 type View = "tableau" | "opportunites" | "clients" | "rappels";
@@ -47,12 +49,14 @@ export function PortfolioPage() {
   const [view, setView] = useUrlState<View>("vue", "tableau");
   const [params, setParams] = useSearchParams();
   const openId = params.get("client") ? Number(params.get("client")) : null;
-  const setOpen = (id: number | null) => {
+  const setOpen = (id: number | null, addContract = false) => {
     const p = new URLSearchParams(params);
     if (id) p.set("client", String(id)); else p.delete("client");
+    if (addContract) p.set("ajout", "1"); else p.delete("ajout");
     setParams(p, { replace: true });
   };
   const [importing, setImporting] = useState(false);
+  const [creating, setCreating] = useState(false);
   const { data, isLoading } = useQuery({ queryKey: ["pf-summary"], queryFn: api.pfSummary });
   const goClients = (f: Record<string, string>) => {
     const p = new URLSearchParams();
@@ -72,7 +76,10 @@ export function PortfolioPage() {
       <PageHeader title="Portefeuille"
         description={data?.clients ? <>Export DIAMM du {data.imported_at ? formatDayTime(data.imported_at) : "—"} · {n(data.active_clients)} clients, {n(data.contracts)} contrats en cours. Visible par toute l'équipe.</>
           : "Vos clients, leurs contrats, et ce qu'on peut leur proposer."}
-        actions={admin && <Button variant={data?.clients ? "outline" : "default"} onClick={() => setImporting(true)}><Upload /> Importer l'export DIAMM</Button>} />
+        actions={<>
+          {admin && <Button variant="outline" onClick={() => setImporting(true)}><Upload /> Importer l'export DIAMM</Button>}
+          <Button onClick={() => setCreating(true)}><Plus /> Nouveau client</Button>
+        </>} />
       {isLoading ? <Skeleton className="h-96 rounded-xl" /> : !data?.clients ? (
         <EmptyState icon={Briefcase} title="Aucun portefeuille importé"
           text={admin ? "Importez l'export du portefeuille DIAMM (.xls, .xlsx ou .csv), tel quel : une ligne par police."
@@ -97,7 +104,8 @@ export function PortfolioPage() {
         </>
       )}
       <ImportDialog open={importing} onOpenChange={setImporting} />
-      <ClientDialog id={openId} rule={params.get("rule")} onClose={() => setOpen(null)} />
+      <NewClientDialog open={creating} onOpenChange={setCreating} onDone={(id) => { setCreating(false); setOpen(id, true); }} onOpenExisting={(id) => { setCreating(false); setOpen(id); }} />
+      <ClientDialog id={openId} rule={params.get("rule")} addContract={params.get("ajout") === "1"} onClose={() => setOpen(null)} />
     </>
   );
 }
@@ -453,8 +461,15 @@ function ClientRow({ c, onOpen }: { c: PfRow; onOpen: (id: number) => void }) {
 
 /* ================================================================ fiche client + appel */
 
-function ClientDialog({ id, rule, onClose }: { id: number | null; rule: string | null; onClose: () => void }) {
+function ClientDialog({ id, rule, addContract, onClose }: { id: number | null; rule: string | null; addContract: boolean; onClose: () => void }) {
   const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [contractForm, setContractForm] = useState<PfContract | "new" | null>(null);
+  const [cancelling, setCancelling] = useState<number | null>(null);
+  const [unfolded, setUnfolded] = useState<number | null>(null);  // V3.13 : avenants et fichiers du contrat
+  const [showGone, setShowGone] = useState(false);  // V3.13 : polices résiliées, repliées
+  const [cancelOn, setCancelOn] = useState(dayISO(new Date()));
+  useEffect(() => { setEditing(false); setContractForm(addContract ? "new" : null); setCancelling(null); setUnfolded(null); setShowGone(false); }, [id, addContract]);
   const { data: c, isLoading } = useQuery({ queryKey: ["pf-client", id], queryFn: () => api.pfClient(id!), enabled: !!id });
   const [outcome, setOutcome] = useState<string>("");
   const [note, setNote] = useState("");
@@ -472,6 +487,13 @@ function ClientDialog({ id, rule, onClose }: { id: number | null; rule: string |
     onSuccess: (d) => { refresh(d); setOutcome(""); setNote(""); setEmail(""); toast.success("Appel noté"); },
     onError: (e) => toastError(e, "Appel non noté"),
   });
+  const contractAct = useMutation({
+    mutationFn: (a: { kind: "cancel" | "restore" | "delete"; id: number }) =>
+      a.kind === "delete" ? api.pfDeleteContract(a.id)
+        : api.pfUpdateContract(a.id, a.kind === "cancel" ? { cancelled: true, cancelled_on: cancelOn } : { cancelled: false }),
+    onSuccess: (d, a) => { refresh(d); setCancelling(null); toast.success(a.kind === "delete" ? "Contrat supprimé" : a.kind === "cancel" ? "Contrat résilié" : "Contrat réactivé"); },
+    onError: (e) => toastError(e, "Contrat non modifié"),
+  });
   const saveEmail = useMutation({
     mutationFn: () => api.pfEmail(id!, email.trim() || null),
     onSuccess: (d) => { refresh(d); setEmail(""); toast.success("Email enregistré : le client peut recevoir les campagnes"); },
@@ -484,8 +506,12 @@ function ClientDialog({ id, rule, onClose }: { id: number | null; rule: string |
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">{c.segment === "pro" ? <Building2 className="size-4" /> : <User className="size-4" />}{c.name}</DialogTitle>
-              <DialogDescription>{SEG1[c.segment]} · {c.contracts} contrat{c.contracts > 1 ? "s" : ""} en cours{c.cancelled ? ` · ${c.cancelled} résilié${c.cancelled > 1 ? "s" : ""}` : ""}</DialogDescription>
+              <DialogDescription className="flex flex-wrap items-center gap-2">
+                <span>{SEG1[c.segment]} · {c.contracts} contrat{c.contracts > 1 ? "s" : ""} en cours{c.cancelled ? ` · ${c.cancelled} résilié${c.cancelled > 1 ? "s" : ""}` : ""}{c.source === "appli" ? " · saisi dans l'appli" : ""}</span>
+                {!editing && <Button size="sm" variant="ghost" className="h-7" onClick={() => setEditing(true)}><Pencil /> Modifier</Button>}
+              </DialogDescription>
             </DialogHeader>
+            {editing && <ClientForm c={c} onCancel={() => setEditing(false)} onSaved={(d) => { refresh(d); setEditing(false); toast.success("Fiche enregistrée"); }} />}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2 text-sm">
                 <p className="text-xs font-medium text-muted-foreground">Joindre</p>
@@ -493,7 +519,7 @@ function ClientDialog({ id, rule, onClose }: { id: number | null; rule: string |
                   <a key={p.number} href={`tel:${p.number.replace(/[^\d+]/g, "")}`} className="flex items-center gap-2 text-primary hover:underline">
                     <Phone className="size-3.5" />{p.number}{p.label && <span className="text-muted-foreground">· {p.label}</span>}
                   </a>
-                )) : <p className="text-muted-foreground">Pas de téléphone dans DIAMM.</p>}
+                )) : <p className="text-muted-foreground">Pas de téléphone : « Modifier » pour en ajouter un.</p>}
                 {c.email ? (
                   <p className="flex items-center gap-2"><Mail className="size-3.5 text-muted-foreground" />{c.email}
                     {c.contact_id && <Link to={`/contacts?open=${c.contact_id}`} className="text-xs text-primary hover:underline">fiche contact</Link>}</p>
@@ -503,7 +529,7 @@ function ClientDialog({ id, rule, onClose }: { id: number | null; rule: string |
                     <Button size="sm" variant="outline" disabled={!email.trim() || saveEmail.isPending} onClick={() => saveEmail.mutate()}>Enregistrer</Button>
                   </div>
                 )}
-                {c.note && <p className="text-xs text-muted-foreground">Note DIAMM : {c.note}</p>}
+                {c.note && <p className="text-xs text-muted-foreground">Note : {c.note}</p>}
               </div>
               <div className="space-y-2 text-sm">
                 <p className="text-xs font-medium text-muted-foreground">Ce qu'on peut lui proposer</p>
@@ -555,28 +581,441 @@ function ClientDialog({ id, rule, onClose }: { id: number | null; rule: string |
               )}
             </div>
             <div>
-              <p className="mb-2 text-sm font-medium">Contrats</p>
-              <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full text-xs">
-                  <thead className="bg-muted/40 text-left text-muted-foreground">
-                    <tr><th className="px-3 py-1.5 font-medium">Famille</th><th className="px-3 py-1.5 font-medium">Branche</th>
-                      <th className="px-3 py-1.5 font-medium">Compagnie</th><th className="px-3 py-1.5 font-medium">Police</th><th className="px-3 py-1.5 font-medium">État</th></tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {c.items.map((x) => (
-                      <tr key={x.id} className={cn(x.cancelled && "text-muted-foreground")}>
-                        <td className="px-3 py-1.5">{x.family}</td><td className="px-3 py-1.5">{x.branch}{x.fleet ? " (flotte)" : ""}</td>
-                        <td className="px-3 py-1.5">{x.insurer}</td><td className="px-3 py-1.5 font-mono">{x.policy}</td>
-                        <td className="px-3 py-1.5">{x.cancelled ? `Résilié${x.cancelled_on ? ` le ${new Date(x.cancelled_on).toLocaleDateString("fr-FR")}` : ""}`
-                          : x.due_date ? `Échéance ${new Date(x.due_date).toLocaleDateString("fr-FR")}` : x.fixed_term ? "Ferme" : "En cours"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">Contrats</p>
+                {contractForm === null && <Button size="sm" variant="outline" className="h-7" onClick={() => setContractForm("new")}><Plus /> Ajouter un contrat</Button>}
               </div>
+              {contractForm !== null && (
+                <ContractForm clientId={c.id} ct={contractForm === "new" ? null : contractForm} onCancel={() => setContractForm(null)}
+                  onSaved={(d, isNew) => { refresh(d); setContractForm(null); toast.success(isNew ? "Contrat ajouté" : "Contrat enregistré"); }} />
+              )}
+              {(() => {
+                const active = c.items.filter((x) => !x.cancelled), gone = c.items.filter((x) => x.cancelled);
+                const row = (x: PfContract) => {
+                  const soon = !x.cancelled && x.due_date && (new Date(`${x.due_date}T12:00:00`).getTime() - Date.now()) / 864e5 <= 60;
+                  return (<Fragment key={x.id}>
+                    <tr className={cn(x.cancelled && "text-muted-foreground", unfolded === x.id && "bg-muted/30")}>
+                      <td className="px-3 py-1.5 align-top">
+                        <button className="inline-flex items-center gap-1 text-left font-mono hover:text-primary" onClick={() => setUnfolded(unfolded === x.id ? null : x.id)}
+                          aria-expanded={unfolded === x.id} title="Détails, fichiers et avenants">
+                          {unfolded === x.id ? <ChevronDown className="size-3.5 shrink-0" /> : <ChevronRight className="size-3.5 shrink-0" />}{x.policy}
+                        </button>
+                        <span className="ml-5 mt-0.5 flex flex-wrap gap-1 whitespace-nowrap text-[11px] text-muted-foreground">
+                          {x.fleet && <span className="rounded bg-muted px-1">Flotte</span>}
+                          {x.coinsurance && <span className="rounded bg-muted px-1" title={x.aperiteur_no ? `N° apériteur ${x.aperiteur_no}` : undefined}>Co-assurance</span>}
+                          {x.fixed_term && <span className="rounded bg-muted px-1">Ferme</span>}
+                          {x.amendments.length > 0 && <span className="inline-flex items-center gap-0.5"><FileStack className="size-3" />{x.amendments.length}</span>}
+                          {x.files.length > 0 && <span className="inline-flex items-center gap-0.5"><Paperclip className="size-3" />{x.files.length}</span>}
+                        </span>
+                      </td>
+                      <td className="px-3 py-1.5 align-top">{x.branch}<span className="block text-[11px] text-muted-foreground">{x.family}</span></td>
+                      <td className="px-3 py-1.5 align-top">{x.insurer}</td>
+                      <td className="whitespace-nowrap px-3 py-1.5 align-top">
+                        {x.cancelled ? <>Résiliée{x.cancelled_on ? ` le ${frDate(x.cancelled_on)}` : ""}</> : <>
+                          <span className="block">{x.start_date ? `Effet ${frDate(x.start_date)}` : <span className="text-muted-foreground">Effet —</span>}</span>
+                          <span className={cn("block", soon ? "font-medium text-warning" : "text-muted-foreground")}>
+                            {x.due_date ? `Échéance ${frDate(x.due_date)}` : x.fixed_term ? "Ferme" : "Échéance —"}</span></>}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-1.5 text-right align-top">{x.premium != null ? `${n(x.premium)} MAD` : <span className="text-muted-foreground">—</span>}
+                        {x.amendments_premium ? <span className="block text-[11px] text-muted-foreground" title="variation de prime des avenants">avenants {x.amendments_premium > 0 ? "+" : "−"} {n(Math.abs(x.amendments_premium))}</span> : null}</td>
+                      <td className="whitespace-nowrap px-2 py-1 text-right align-top">
+                        {cancelling === x.id ? (
+                          <span className="inline-flex items-center gap-1">
+                            <Input type="date" className="h-7 w-36 text-xs" value={cancelOn} onChange={(e) => setCancelOn(e.target.value)} aria-label="Résilié le" />
+                            <Button size="sm" className="h-7" disabled={contractAct.isPending} onClick={() => contractAct.mutate({ kind: "cancel", id: x.id })}>Résilier</Button>
+                            <Button size="sm" variant="ghost" className="h-7" onClick={() => setCancelling(null)}>Annuler</Button>
+                          </span>
+                        ) : (
+                          <>
+                            <button className="rounded p-1 hover:bg-accent" title="Modifier" aria-label="Modifier le contrat" onClick={() => setContractForm(x)}><Pencil className="size-3.5" /></button>
+                            {x.cancelled
+                              ? <button className="rounded p-1 hover:bg-accent" title="Réactiver" aria-label="Réactiver" onClick={() => contractAct.mutate({ kind: "restore", id: x.id })}><RotateCcw className="size-3.5" /></button>
+                              : <button className="rounded p-1 hover:bg-accent" title="Résilier" aria-label="Résilier" onClick={() => { setCancelOn(dayISO(new Date())); setCancelling(x.id); }}><Ban className="size-3.5" /></button>}
+                            {x.source === "appli" && <button className="rounded p-1 text-destructive hover:bg-destructive/10" title="Supprimer (saisie erronée)" aria-label="Supprimer"
+                              onClick={() => contractAct.mutate({ kind: "delete", id: x.id })}><Trash2 className="size-3.5" /></button>}
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                    {unfolded === x.id && (
+                      <tr><td colSpan={6} className="bg-muted/20 px-3 py-3"><ContractExtras ct={x} subscriber={c.name} onSaved={refresh} /></td></tr>
+                    )}
+                  </Fragment>);
+                };
+                const table = (items: PfContract[], dates: string) => (
+                  <div className="overflow-x-auto rounded-lg border">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/40 text-left text-muted-foreground">
+                        <tr><th className="px-3 py-1.5 font-medium">N° de police</th><th className="px-3 py-1.5 font-medium">Branche</th>
+                          <th className="px-3 py-1.5 font-medium">Compagnie</th><th className="px-3 py-1.5 font-medium">{dates}</th>
+                          <th className="px-3 py-1.5 text-right font-medium">Prime</th><th className="w-24" /></tr>
+                      </thead>
+                      <tbody className="divide-y">{items.map(row)}</tbody>
+                    </table>
+                  </div>
+                );
+                return (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Polices actives ({active.length})</p>
+                    {active.length ? table(active, "Effet / échéance") : <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">Aucune police active.</p>}
+                    {gone.length > 0 && (
+                      <>
+                        <button className="inline-flex items-center gap-1 pt-1 text-xs font-medium text-muted-foreground hover:text-foreground" onClick={() => setShowGone((v) => !v)} aria-expanded={showGone}>
+                          {showGone ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}Polices résiliées ({gone.length})
+                        </button>
+                        {showGone && table(gone, "Résiliation")}
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </>
         )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ================================================================ saisie (relais de DIAMM) */
+
+type Phone = { number: string; label: string };
+
+function PhonesInput({ value, onChange }: { value: Phone[]; onChange: (v: Phone[]) => void }) {
+  const rows = value.length ? value : [{ number: "", label: "" }];
+  const set = (i: number, k: keyof Phone, v: string) => onChange(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+  return (
+    <div className="space-y-1.5">
+      {rows.map((r, i) => (
+        <div key={i} className="flex gap-2">
+          <Input className="h-8" value={r.number} onChange={(e) => set(i, "number", e.target.value)} placeholder="06 61 00 00 00" inputMode="tel" aria-label="Téléphone" />
+          <Input className="h-8 w-40" value={r.label} onChange={(e) => set(i, "label", e.target.value)} placeholder="qui ? (facultatif)" aria-label="Libellé du téléphone" />
+        </div>
+      ))}
+      {rows.length < 4 && <button type="button" className="text-xs text-primary hover:underline" onClick={() => onChange([...rows, { number: "", label: "" }])}>+ autre numéro</button>}
+    </div>
+  );
+}
+
+function SegmentToggle({ value, onChange }: { value: "particulier" | "pro"; onChange: (v: "particulier" | "pro") => void }) {
+  return (
+    <div className="inline-flex rounded-lg border bg-card p-0.5">
+      {(["particulier", "pro"] as const).map((k) => (
+        <button key={k} type="button" onClick={() => onChange(k)}
+          className={cn("rounded-md px-3 py-1 text-sm", value === k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>{SEG1[k]}</button>
+      ))}
+    </div>
+  );
+}
+
+function ClientForm({ c, onCancel, onSaved }: { c: PfDetail; onCancel: () => void; onSaved: (d: PfDetail) => void }) {
+  const [name, setName] = useState(c.name);
+  const [segment, setSegment] = useState(c.segment);
+  const [phones, setPhones] = useState<Phone[]>(c.phones);
+  const [email, setEmail] = useState(c.email ?? "");
+  const [note, setNote] = useState(c.note);
+  const save = useMutation({
+    mutationFn: () => api.pfUpdateClient(c.id, { name, segment, email: email.trim() || null, note, phones: phones.filter((p) => p.number.trim()) }),
+    onSuccess: onSaved, onError: (e) => toastError(e, "Fiche non enregistrée"),
+  });
+  return (
+    <div className="space-y-3 rounded-xl border bg-muted/20 p-3 text-sm">
+      <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+        <label className="space-y-1"><span className="text-xs text-muted-foreground">Nom</span><Input className="h-8" value={name} onChange={(e) => setName(e.target.value)} /></label>
+        <div className="space-y-1"><span className="block text-xs text-muted-foreground">Type</span><SegmentToggle value={segment} onChange={setSegment} /></div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1"><span className="text-xs text-muted-foreground">Téléphones</span><PhonesInput value={phones} onChange={setPhones} /></div>
+        <label className="space-y-1"><span className="text-xs text-muted-foreground">Email</span><Input className="h-8" type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+      </div>
+      <label className="block space-y-1"><span className="text-xs text-muted-foreground">Note</span><Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} /></label>
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="ghost" onClick={onCancel}>Annuler</Button>
+        <Button size="sm" disabled={!name.trim() || save.isPending} onClick={() => save.mutate()}>{save.isPending && <Loader2 className="animate-spin" />} Enregistrer</Button>
+      </div>
+    </div>
+  );
+}
+
+const OTHER = "__autre__";
+
+function ContractForm({ clientId, ct, onCancel, onSaved }: { clientId: number; ct: PfContract | null; onCancel: () => void; onSaved: (d: PfDetail, isNew: boolean) => void }) {
+  const { data: opts } = useQuery({ queryKey: ["pf-options"], queryFn: api.pfOptions, staleTime: 5 * 60_000 });
+  const known = new Set(opts?.families.flatMap((f) => f.branches) ?? []);
+  const [insurer, setInsurer] = useState(ct?.insurer ?? "");
+  const [policy, setPolicy] = useState(ct?.policy ?? "");
+  const [branch, setBranch] = useState(ct?.branch ?? "");
+  const [otherBranch, setOtherBranch] = useState("");
+  const [start, setStart] = useState(ct?.start_date ?? "");
+  const [due, setDue] = useState(ct?.due_date ?? "");
+  const [premium, setPremium] = useState(ct?.premium != null ? String(ct.premium) : "");
+  const [fleet, setFleet] = useState(ct?.fleet ?? false);
+  const [fixed, setFixed] = useState(ct?.fixed_term ?? false);
+  const [subscribed, setSubscribed] = useState(ct?.subscribed_on ?? "");
+  const [coins, setCoins] = useState(ct?.coinsurance ?? false);
+  const [aperiteur, setAperiteur] = useState(ct?.aperiteur_no ?? "");
+  const [lastClaim, setLastClaim] = useState(ct?.last_claim_on ?? "");
+  const [note, setNote] = useState(ct?.note ?? "");
+  const [files, setFiles] = useState<Attachment[]>(ct?.files ?? []);
+  const branchValue = branch === OTHER ? otherBranch.trim() : branch;
+  // échéance proposée : un an après la date d'effet (veille), si elle n'est pas encore remplie
+  const onStart = (v: string) => {
+    setStart(v);
+    if (v && !due) { const d = new Date(`${v}T12:00:00`); d.setFullYear(d.getFullYear() + 1); d.setDate(d.getDate() - 1); setDue(dayISO(d)); }
+  };
+  const body: PfContractIn = { insurer, policy, branch: branchValue, start_date: start || null, due_date: due || null,
+    premium: premium.trim() ? Number(premium.replace(/\s/g, "").replace(",", ".")) : null, fleet, fixed_term: fixed, note,
+    attachment_ids: files.map((f) => f.id), subscribed_on: subscribed || null, coinsurance: coins, aperiteur_no: coins ? aperiteur.trim() : "",
+    last_claim_on: lastClaim || null };
+  const save = useMutation({
+    mutationFn: () => (ct ? api.pfUpdateContract(ct.id, body) : api.pfAddContract(clientId, body)),
+    onSuccess: (d) => onSaved(d, !ct), onError: (e) => toastError(e, "Contrat non enregistré"),
+  });
+  return (
+    <div className="mb-3 space-y-3 rounded-xl border bg-muted/20 p-3 text-sm">
+      <p className="font-medium">{ct ? "Modifier le contrat" : "Nouveau contrat"}</p>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <label className="space-y-1"><span className="text-xs text-muted-foreground">Compagnie</span>
+          <Input className="h-8" list="pf-insurers" value={insurer} onChange={(e) => setInsurer(e.target.value)} placeholder="AXA, Wafa…" />
+          <datalist id="pf-insurers">{opts?.insurers.map((i) => <option key={i} value={i} />)}</datalist>
+        </label>
+        <label className="space-y-1 sm:col-span-2"><span className="text-xs text-muted-foreground">Branche</span>
+          <NativeSelect className="h-8" value={branch && !known.has(branch) && branch !== OTHER ? OTHER : branch}
+            onChange={(e) => { setBranch(e.target.value); if (e.target.value !== OTHER) setOtherBranch(""); }}>
+            <option value="">Choisir…</option>
+            {opts?.families.map((f) => (
+              <optgroup key={f.family} label={f.family}>{f.branches.map((b) => <option key={b} value={b}>{b}</option>)}</optgroup>
+            ))}
+            <option value={OTHER}>Autre branche…</option>
+          </NativeSelect>
+          {(branch === OTHER || (branch && !known.has(branch))) && (
+            <Input className="mt-1 h-8" value={branch === OTHER ? otherBranch : branch} onChange={(e) => { setBranch(OTHER); setOtherBranch(e.target.value); }} placeholder="Nom de la branche" />
+          )}
+        </label>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-5">
+        <label className="space-y-1"><span className="text-xs text-muted-foreground">N° de police</span><Input className="h-8 font-mono" value={policy} onChange={(e) => setPolicy(e.target.value)} /></label>
+        <label className="space-y-1"><span className="text-xs text-muted-foreground">Date de souscription</span><Input className="h-8" type="date" value={subscribed} onChange={(e) => setSubscribed(e.target.value)} /></label>
+        <label className="space-y-1"><span className="text-xs text-muted-foreground">Date d'effet</span><Input className="h-8" type="date" value={start} onChange={(e) => onStart(e.target.value)} /></label>
+        <label className="space-y-1"><span className="text-xs text-muted-foreground">Échéance</span><Input className="h-8" type="date" value={due} onChange={(e) => setDue(e.target.value)} /></label>
+        <label className="space-y-1"><span className="text-xs text-muted-foreground">Prime annuelle (MAD)</span><Input className="h-8" inputMode="decimal" value={premium} onChange={(e) => setPremium(e.target.value)} /></label>
+      </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <label className="inline-flex items-center gap-2"><input type="checkbox" className="accent-[hsl(var(--primary))]" checked={fleet} onChange={(e) => setFleet(e.target.checked)} /> Flotte</label>
+        <label className="inline-flex items-center gap-2"><input type="checkbox" className="accent-[hsl(var(--primary))]" checked={coins} onChange={(e) => setCoins(e.target.checked)} /> Co-assurance</label>
+        {coins && <Input className="h-8 w-44 font-mono" value={aperiteur} onChange={(e) => setAperiteur(e.target.value)} placeholder="N° apériteur" aria-label="N° apériteur" />}
+        <label className="inline-flex items-center gap-2"><input type="checkbox" className="accent-[hsl(var(--primary))]" checked={fixed} onChange={(e) => setFixed(e.target.checked)} /> Contrat ferme (non renouvelable)</label>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-[1fr_11rem]">
+        <label className="space-y-1"><span className="text-xs text-muted-foreground">Note</span>
+          <Input className="h-8" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Facultatif : garanties, conditions…" /></label>
+        <label className="space-y-1"><span className="text-xs text-muted-foreground">Dernier sinistre</span>
+          <Input className="h-8" type="date" value={lastClaim} onChange={(e) => setLastClaim(e.target.value)} aria-label="Date du dernier sinistre" /></label>
+      </div>
+      <FilesField files={files} onChange={setFiles} label="Contrat scanné, conditions particulières…" />
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="ghost" onClick={onCancel}>Annuler</Button>
+        <Button size="sm" disabled={!insurer.trim() || !policy.trim() || !branchValue || save.isPending} onClick={() => save.mutate()}>
+          {save.isPending && <Loader2 className="animate-spin" />} {ct ? "Enregistrer" : "Ajouter le contrat"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================ avenants et fichiers (V3.13) */
+
+/** Fichiers joints : bouton « Joindre » (plusieurs à la fois, 10 Mo max chacun) + liste téléchargeable. */
+function FilesField({ files, onChange, label, busy }: { files: Attachment[]; onChange: (f: Attachment[]) => void; label?: string; busy?: boolean }) {
+  const ref = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const add = async (list: FileList | null) => {
+    if (!list?.length) return;
+    setUploading(true);
+    try { const up = await uploadFiles(list); if (up.length) onChange([...files, ...up]); } finally { setUploading(false); if (ref.current) ref.current.value = ""; }
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <input ref={ref} type="file" multiple className="hidden" onChange={(e) => add(e.target.files)}
+        accept=".pdf,.jpg,.jpeg,.png,.heic,.doc,.docx,.xls,.xlsx" />
+      <Button type="button" size="sm" variant="outline" className="h-7" disabled={uploading || busy} onClick={() => ref.current?.click()}>
+        {uploading ? <Loader2 className="animate-spin" /> : <Paperclip />} Joindre un fichier
+      </Button>
+      {files.length ? <AttachmentChips items={files} onRemove={busy ? undefined : (fid) => onChange(files.filter((f) => f.id !== fid))} />
+        : label && <span className="text-xs text-muted-foreground">{label} (PDF, photo… 10 Mo max)</span>}
+    </div>
+  );
+}
+
+function ContractExtras({ ct, subscriber, onSaved }: { ct: PfContract; subscriber: string; onSaved: (d: PfDetail) => void }) {
+  const [form, setForm] = useState<PfAmendment | "new" | null>(null);
+  const [deleting, setDeleting] = useState<PfAmendment | null>(null);
+  const files = useMutation({
+    mutationFn: (f: Attachment[]) => api.pfUpdateContract(ct.id, { attachment_ids: f.map((x) => x.id) }),
+    onSuccess: (d) => { onSaved(d); toast.success("Fichiers du contrat enregistrés"); }, onError: (e) => toastError(e, "Fichiers non enregistrés"),
+  });
+  const del = useMutation({
+    mutationFn: (a: PfAmendment) => api.pfDeleteAmendment(a.id),
+    onSuccess: (d) => { onSaved(d); setDeleting(null); toast.success("Avenant supprimé"); }, onError: (e) => toastError(e, "Avenant non supprimé"),
+  });
+  return (
+    <div className="space-y-3 text-xs">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border bg-background p-3 sm:grid-cols-4">
+        {([
+          ["Souscripteur", subscriber],
+          ["Compagnie", ct.insurer],
+          ["Date de souscription", ct.subscribed_on ? frDate(ct.subscribed_on) : null],
+          ["Date d'effet", ct.start_date ? frDate(ct.start_date) : null],
+          ["Échéance", ct.due_date ? frDate(ct.due_date) : ct.fixed_term ? "Contrat ferme" : null],
+          ["État", ct.cancelled ? `Résiliée${ct.cancelled_on ? ` le ${frDate(ct.cancelled_on)}` : ""}` : "Active"],
+          ["Co-assurance", ct.coinsurance ? "Oui" : "Non"],
+          ["N° apériteur", ct.aperiteur_no || null],
+          ["Dernier sinistre", ct.last_claim_on ? frDate(ct.last_claim_on) : null],
+          ["Flotte", ct.fleet ? "Oui" : "Non"],
+        ] as [string, string | null][]).map(([k, v]) => (
+          <div key={k} className={cn("min-w-0", k === "Souscripteur" && "col-span-2")}><dt className="text-[11px] text-muted-foreground">{k}</dt>
+            <dd className={cn("truncate", v ? "text-foreground" : "text-muted-foreground")}>{v ?? "—"}</dd></div>
+        ))}
+        {ct.note && <div className="col-span-full"><dt className="text-[11px] text-muted-foreground">Note</dt><dd className="whitespace-pre-line text-foreground">{ct.note}</dd></div>}
+      </dl>
+      <div className="space-y-1.5">
+        <p className="font-medium text-foreground">Fichiers du contrat</p>
+        <FilesField files={ct.files} onChange={(f) => files.mutate(f)} busy={files.isPending} label="Aucun fichier : joignez le contrat scanné" />
+      </div>
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-medium text-foreground">Avenants{ct.amendments.length ? ` (${ct.amendments.length})` : ""}</p>
+          {form === null && <Button size="sm" variant="outline" className="h-7" onClick={() => setForm("new")}><Plus /> Ajouter un avenant</Button>}
+        </div>
+        {form !== null && <AmendmentForm contractId={ct.id} a={form === "new" ? null : form} onCancel={() => setForm(null)}
+          onSaved={(d, isNew) => { onSaved(d); setForm(null); toast.success(isNew ? "Avenant ajouté" : "Avenant enregistré"); }} />}
+        {ct.amendments.length === 0 && form === null && <p className="text-muted-foreground">Aucun avenant sur ce contrat.</p>}
+        {ct.amendments.length > 0 && (
+          <ol className="divide-y rounded-lg border bg-background">
+            {ct.amendments.map((a) => (
+              <li key={a.id} className="flex gap-3 px-3 py-2">
+                <div className="w-20 shrink-0 text-muted-foreground">{a.effective_on ? new Date(`${a.effective_on}T12:00:00`).toLocaleDateString("fr-FR") : "—"}</div>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p><b className="text-foreground">{a.kind || "Avenant"}</b>{a.number && <span className="font-mono text-muted-foreground"> · n° {a.number}</span>}
+                    {a.premium_delta != null && a.premium_delta !== 0 && (
+                      <span className={cn("ml-2 font-medium", a.premium_delta > 0 ? "text-success" : "text-destructive")}>
+                        {a.premium_delta > 0 ? "+" : "−"} {n(Math.abs(a.premium_delta))} MAD</span>)}</p>
+                  {a.description && <p className="whitespace-pre-line text-foreground">{a.description}</p>}
+                  {a.files.length > 0 && <AttachmentChips items={a.files} />}
+                  {a.by && <p className="text-[11px] text-muted-foreground">saisi par {a.by}{a.at ? ` le ${formatDayTime(a.at)}` : ""}</p>}
+                </div>
+                <div className="flex shrink-0 items-start gap-0.5">
+                  <button className="rounded p-1 hover:bg-accent" title="Modifier" aria-label="Modifier l'avenant" onClick={() => setForm(a)}><Pencil className="size-3.5" /></button>
+                  <button className="rounded p-1 text-destructive hover:bg-destructive/10" title="Supprimer" aria-label="Supprimer l'avenant" onClick={() => setDeleting(a)}><Trash2 className="size-3.5" /></button>
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+      <ConfirmDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)} destructive pending={del.isPending}
+        title="Supprimer cet avenant ?" description="À utiliser pour une saisie erronée. L'avenant et le lien vers ses fichiers seront effacés de ce contrat."
+        confirmLabel="Supprimer" onConfirm={() => deleting && del.mutate(deleting)} />
+    </div>
+  );
+}
+
+function AmendmentForm({ contractId, a, onCancel, onSaved }: { contractId: number; a: PfAmendment | null; onCancel: () => void; onSaved: (d: PfDetail, isNew: boolean) => void }) {
+  const { data: kinds } = useQuery({ queryKey: ["pf-amendment-kinds"], queryFn: api.pfAmendmentKinds, staleTime: Infinity });
+  const [effective, setEffective] = useState(a?.effective_on ?? dayISO(new Date()));
+  const [kind, setKind] = useState(a?.kind ?? "");
+  const [number, setNumber] = useState(a?.number ?? "");
+  const [description, setDescription] = useState(a?.description ?? "");
+  const [sign, setSign] = useState<1 | -1>(a?.premium_delta != null && a.premium_delta < 0 ? -1 : 1);
+  const [delta, setDelta] = useState(a?.premium_delta != null ? String(Math.abs(a.premium_delta)) : "");
+  const [files, setFiles] = useState<Attachment[]>(a?.files ?? []);
+  const amount = delta.trim() ? Number(delta.replace(/\s/g, "").replace(",", ".")) : null;
+  const body = { effective_on: effective || null, kind, number, description, premium_delta: amount == null || Number.isNaN(amount) ? null : sign * amount,
+    attachment_ids: files.map((f) => f.id) };
+  const save = useMutation({
+    mutationFn: () => (a ? api.pfUpdateAmendment(a.id, body) : api.pfAddAmendment(contractId, body)),
+    onSuccess: (d) => onSaved(d, !a), onError: (e) => toastError(e, "Avenant non enregistré"),
+  });
+  return (
+    <div className="space-y-3 rounded-xl border bg-background p-3 text-sm">
+      <p className="font-medium">{a ? "Modifier l'avenant" : "Nouvel avenant"}</p>
+      <div className="grid gap-3 sm:grid-cols-4">
+        <label className="space-y-1"><span className="text-xs text-muted-foreground">Date d'effet</span><Input className="h-8" type="date" value={effective} onChange={(e) => setEffective(e.target.value)} /></label>
+        <label className="space-y-1 sm:col-span-2"><span className="text-xs text-muted-foreground">Nature de l'avenant</span>
+          <NativeSelect className="h-8" value={kind} onChange={(e) => setKind(e.target.value)}>
+            <option value="">Choisir…</option>
+            {kinds?.items.map((k) => <option key={k} value={k}>{k}</option>)}
+            {kind && kinds && !kinds.items.includes(kind) && <option value={kind}>{kind}</option>}
+          </NativeSelect>
+        </label>
+        <label className="space-y-1"><span className="text-xs text-muted-foreground">N° d'avenant</span><Input className="h-8 font-mono" value={number} onChange={(e) => setNumber(e.target.value)} placeholder="facultatif" /></label>
+      </div>
+      <label className="block space-y-1"><span className="text-xs text-muted-foreground">Détail</span>
+        <Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex. : ajout du véhicule 12345-A-6, Dacia Logan, à compter du…" /></label>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-1"><span className="block text-xs text-muted-foreground">Variation de prime (MAD)</span>
+          <div className="flex items-center gap-1.5">
+            <div className="inline-flex rounded-lg border bg-card p-0.5">
+              {([1, -1] as const).map((v) => (
+                <button key={v} type="button" onClick={() => setSign(v)} aria-label={v > 0 ? "Hausse" : "Baisse"}
+                  className={cn("rounded-md px-2.5 py-0.5 text-sm", sign === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>{v > 0 ? "+" : "−"}</button>
+              ))}
+            </div>
+            <Input className="h-8 w-32" inputMode="decimal" value={delta} onChange={(e) => setDelta(e.target.value)} placeholder="0" aria-label="Montant" />
+          </div>
+        </div>
+        <div className="min-w-0 flex-1"><FilesField files={files} onChange={setFiles} label="Avenant signé" /></div>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="ghost" onClick={onCancel}>Annuler</Button>
+        <Button size="sm" disabled={!effective || (!kind && !description.trim()) || save.isPending} onClick={() => save.mutate()}>
+          {save.isPending && <Loader2 className="animate-spin" />} {a ? "Enregistrer" : "Ajouter l'avenant"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function NewClientDialog({ open, onOpenChange, onDone, onOpenExisting }: { open: boolean; onOpenChange: (o: boolean) => void; onDone: (id: number) => void; onOpenExisting: (id: number) => void }) {
+  const qc = useQueryClient();
+  const [name, setName] = useState("");
+  const [segment, setSegment] = useState<"particulier" | "pro">("particulier");
+  const [phones, setPhones] = useState<Phone[]>([]);
+  const [email, setEmail] = useState("");
+  const [note, setNote] = useState("");
+  useEffect(() => { if (open) { setName(""); setSegment("particulier"); setPhones([]); setEmail(""); setNote(""); } }, [open]);
+  const create = useMutation({
+    mutationFn: () => api.pfCreateClient({ name, segment, email: email.trim() || null, note, phones: phones.filter((p) => p.number.trim()) }),
+    onSuccess: (d) => { ["pf-summary", "pf-clients"].forEach((k) => qc.invalidateQueries({ queryKey: [k] })); toast.success("Client ajouté : saisissez son contrat"); onDone(d.id); },
+    onError: (e) => {
+      const existing = e instanceof ApiError ? (e.data as { existing_id?: number } | null)?.existing_id : undefined;
+      if (existing) { toast.error(e instanceof Error ? e.message : "Client existant", { action: { label: "Ouvrir sa fiche", onClick: () => onOpenExisting(existing) } }); return; }
+      toastError(e, "Client non ajouté");
+    },
+  });
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Nouveau client</DialogTitle>
+          <DialogDescription>Saisi ici au lieu de DIAMM. Ensuite, sa fiche s'ouvre pour ajouter son ou ses contrats.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+            <label className="space-y-1"><span className="text-xs text-muted-foreground">Nom (personne ou entreprise)</span>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="ex. HAJJI KENZA ou STE ATLAS BETON SARL" autoFocus /></label>
+            <div className="space-y-1"><span className="block text-xs text-muted-foreground">Type</span><SegmentToggle value={segment} onChange={setSegment} /></div>
+          </div>
+          <div className="space-y-1"><span className="text-xs text-muted-foreground">Téléphone</span><PhonesInput value={phones} onChange={setPhones} /></div>
+          <label className="block space-y-1"><span className="text-xs text-muted-foreground">Email (facultatif : il pourra recevoir les campagnes)</span>
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+          <label className="block space-y-1"><span className="text-xs text-muted-foreground">Note (facultatif) : apporteur, interlocuteur…</span>
+            <Input value={note} onChange={(e) => setNote(e.target.value)} /></label>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>
+          <Button disabled={!name.trim() || create.isPending} onClick={() => create.mutate()}>{create.isPending ? <Loader2 className="animate-spin" /> : <Plus />} Créer le client</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

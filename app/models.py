@@ -681,6 +681,7 @@ class PortfolioClient(Base):
     phones: Mapped[list] = mapped_column(JSON, default=list)  # [{"number": "0661…", "label": "Leila"}]
     note: Mapped[str] = mapped_column(Text, default="")       # colonne « Responsable » de DIAMM
     contact_id: Mapped[int | None] = mapped_column(ForeignKey("contact.id", ondelete="SET NULL"), index=True)
+    source: Mapped[str] = mapped_column(String(10), default="diamm", server_default="diamm")  # V3.12 : diamm | appli
     seen_at: Mapped[datetime | None] = mapped_column(UTCDateTime)  # dernier import où il figurait
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
@@ -705,6 +706,15 @@ class PortfolioContract(Base):
     cancelled_on: Mapped[date | None] = mapped_column(Date)
     premium: Mapped[float | None] = mapped_column(Float)      # prime (si l'export la contient)
     due_date: Mapped[date | None] = mapped_column(Date)       # échéance (si l'export la contient)
+    start_date: Mapped[date | None] = mapped_column(Date)     # V3.12 : date d'effet (saisie dans l'appli)
+    # V3.13 (13/11, Omar) : fiche police complète. Saisis dans l'appli, ou lus à l'import si l'export les contient.
+    subscribed_on: Mapped[date | None] = mapped_column(Date)  # date de souscription
+    aperiteur_no: Mapped[str] = mapped_column(String(80), default="", server_default="")  # n° apériteur (co-assurance)
+    coinsurance: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    last_claim_on: Mapped[date | None] = mapped_column(Date)  # date du dernier sinistre (reliée plus tard aux sinistres)
+    attachment_ids: Mapped[list | None] = mapped_column(JSON, default=list)  # V3.13 : contrat scanné…
+    note: Mapped[str] = mapped_column(Text, default="", server_default="")
+    source: Mapped[str] = mapped_column(String(10), default="diamm", server_default="diamm")  # diamm | appli
     raw: Mapped[dict] = mapped_column(JSON, default=dict)     # colonnes non reconnues, gardées telles quelles
     seen_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
@@ -728,4 +738,23 @@ class PortfolioCall(Base):
     note: Mapped[str] = mapped_column(Text, default="")
     callback_on: Mapped[date | None] = mapped_column(Date)
     callback_done: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class PortfolioAmendment(Base):
+    """V3.13 : un avenant rattaché à un contrat du portefeuille (ajout ou retrait d'un véhicule,
+    changement de garanties, de capital, d'adresse…), avec sa date d'effet, la variation de prime et
+    ses pièces jointes (avenant scanné)."""
+    __tablename__ = "portfolio_amendment"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    org_id: Mapped[int] = mapped_column(Integer, default=_current_org, server_default="1", index=True)
+    contract_id: Mapped[int] = mapped_column(ForeignKey("portfolio_contract.id", ondelete="CASCADE"), index=True)
+    number: Mapped[str] = mapped_column(String(60), default="")
+    effective_on: Mapped[date | None] = mapped_column(Date)
+    kind: Mapped[str] = mapped_column(String(60), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    premium_delta: Mapped[float | None] = mapped_column(Float)
+    attachment_ids: Mapped[list | None] = mapped_column(JSON, default=list)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)

@@ -25,7 +25,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import CALL_OUTCOMES, Contact, PortfolioCall, PortfolioClient, PortfolioContract
+from app.models import CALL_OUTCOMES, Contact, PortfolioAmendment, PortfolioCall, PortfolioClient, PortfolioContract
 from app.timeutil import utcnow
 
 SOURCE = "Portefeuille DIAMM"
@@ -155,6 +155,12 @@ COLUMNS: dict[str, tuple[str, ...]] = {
     "fleet": ("FLOTTE",),
     "premium": ("PRIME", "PRIMETTC", "PRIMETOTALE", "PRIMENETTE", "PTTC", "MONTANTPRIME", "PRIMEANNUELLE"),
     "due": ("ECHEANCE", "DATEECHEANCE", "DATEECH", "ECHEANCEPRINCIPALE", "PROCHAINEECHEANCE"),
+    # V3.13 : lus si l'export DIAMM les contient (l'export actuel n'a pas ces colonnes)
+    "start": ("DATEEFFET", "DATEDEFFET", "EFFET", "DATEDEBUT"),
+    "subscribed": ("DATESOUSCRIPTION", "DATESOUS", "SOUSCRIPTION", "DATEEMISSION"),
+    "aperiteur": ("NAPERITEUR", "NUMAPERITEUR", "NUMEROAPERITEUR", "NOAPERITEUR", "POLICEAPERITEUR", "APERITEUR"),
+    "coinsurance": ("COASSURANCE", "COASS", "COASSURE"),
+    "last_claim": ("DATEDERNIERSINISTRE", "DERNIERSINISTRE", "DATESINISTRE"),
 }
 REQUIRED = ("client", "policy", "insurer")
 
@@ -442,10 +448,17 @@ def import_file(s: Session, path: Path, now: datetime | None = None) -> ImportRe
         ct.fleet = _yes(get(r, "fleet"))
         ct.cancelled_on = _date(get(r, "cancelled_on"))
         ct.cancelled = _yes(get(r, "cancelled")) or (ct.cancelled_on is not None and ct.cancelled_on <= now.date())
-        if "premium" in cols:
+        # V3.13 : une case vide de l'export n'efface jamais ce qui a été saisi dans l'appli
+        if "premium" in cols and _amount(get(r, "premium")) is not None:
             ct.premium = _amount(get(r, "premium"))
-        if "due" in cols:
-            ct.due_date = _date(get(r, "due"))
+        for col, attr in (("due", "due_date"), ("start", "start_date"), ("subscribed", "subscribed_on"),
+                          ("last_claim", "last_claim_on")):
+            if col in cols and _date(get(r, col)):
+                setattr(ct, attr, _date(get(r, col)))
+        if "aperiteur" in cols and _text(get(r, "aperiteur")):
+            ct.aperiteur_no = _text(get(r, "aperiteur"))[:80]
+        if "coinsurance" in cols and _text(get(r, "coinsurance")):
+            ct.coinsurance = _yes(get(r, "coinsurance"))
         ct.raw = {h: _text(r[i]) for i, h in extra if i < len(r) and _text(r[i])}
         ct.seen_at = now
         rep.cancelled += ct.cancelled
@@ -722,16 +735,27 @@ def detail(s: Session, client_id: int) -> dict | None:
     opps = [{"key": r.key, "label": r.label, "pitch": r.pitch} for r in RULES
             if not r.mono and rule_matches(r, c.segment, v.families)]
     names = _user_names(s)
+    amendments: dict[int, list[PortfolioAmendment]] = defaultdict(list)
+    if allc:
+        for a in s.scalars(select(PortfolioAmendment).where(PortfolioAmendment.contract_id.in_([x.id for x in allc]))
+                           .order_by(PortfolioAmendment.effective_on.desc(), PortfolioAmendment.id.desc())):
+            amendments[a.contract_id].append(a)
     calls = list(s.scalars(select(PortfolioCall).where(PortfolioCall.client_id == c.id)
                            .order_by(PortfolioCall.created_at.desc(), PortfolioCall.id.desc())))
     return {**_row(v, calls[0] if calls else None, names), "phones": c.phones, "note": c.note,
             "calls": [_call_json(x, names) for x in calls],
             "missing": [f for f in RELEVANT[c.segment] if f not in v.families],
             "opportunities": opps,
-            "items": [{"id": x.id, "policy": x.policy, "insurer": x.insurer, "category": x.category, "branch": x.branch,
+            "items": [{**_contract_extra(s, x, amendments.get(x.id, [])), "id": x.id, "policy": x.policy, "insurer": x.insurer, "category": x.category, "branch": x.branch,
                        "family": x.family, "fleet": x.fleet, "fixed_term": x.fixed_term, "cancelled": x.cancelled,
                        "cancelled_on": x.cancelled_on.isoformat() if x.cancelled_on else None,
-                       "premium": x.premium, "due_date": x.due_date.isoformat() if x.due_date else None} for x in allc]}
+                       "premium": x.premium, "due_date": x.due_date.isoformat() if x.due_date else None,
+                       "start_date": x.start_date.isoformat() if x.start_date else None, "note": x.note or "",
+                       "subscribed_on": x.subscribed_on.isoformat() if x.subscribed_on else None,
+                       "last_claim_on": x.last_claim_on.isoformat() if x.last_claim_on else None,
+                       "aperiteur_no": x.aperiteur_no or "", "coinsurance": bool(x.coinsurance),
+                       "source": x.source} for x in allc],
+            "source": c.source}
 
 
 def _org() -> int:
@@ -745,3 +769,236 @@ def make_list(s: Session, name: str, views: list[ClientView]) -> tuple[object, i
     ids = [v.c.contact_id for v in views if v.c.contact_id]
     cl = ls.create(s, name, ids, source="manual")
     return cl, len(ids), len(views) - len(ids)
+
+
+# ------------------------------------------------------------------ V3.12 : saisie dans l'appli (relais de DIAMM)
+
+class DuplicateClient(PortfolioError):
+    def __init__(self, message: str, existing_id: int):
+        super().__init__(message)
+        self.existing_id = existing_id
+
+
+def options(s: Session) -> dict:
+    """Compagnies et branches connues, pour les listes de la saisie (branche -> famille)."""
+    from app.models import Company
+    insurers = {ct.insurer for ct in s.scalars(select(PortfolioContract))}
+    insurers |= {_up(c.name) for c in s.scalars(select(Company).where(Company.kind == "insurer"))}
+    branches: dict[str, str] = {b: f for b, f in FAMILIES.items()}
+    cats: dict[str, str] = {}
+    for b, cat in s.execute(select(PortfolioContract.branch, PortfolioContract.category).distinct()):
+        if b:
+            branches.setdefault(b, family_of(b, cat))
+            cats.setdefault(b, cat)
+    by_family: dict[str, list[str]] = defaultdict(list)
+    for b, f in sorted(branches.items()):
+        by_family[f].append(b)
+    return {"insurers": sorted(i for i in insurers if i),
+            "families": [{"family": f, "branches": bs} for f, bs in sorted(by_family.items())],
+            "categories": cats}
+
+
+def _phones_in(values) -> list[dict]:
+    out = []
+    for p in values or []:
+        if isinstance(p, dict):
+            got = phones_of(p.get("number"))
+            if got:
+                out.append({"number": got[0]["number"], "label": _text(p.get("label"))[:60]})
+        else:
+            out += phones_of(p)
+    seen, uniq = set(), []
+    for p in out:
+        d = re.sub(r"\D", "", p["number"])[:10]
+        if d not in seen:
+            seen.add(d)
+            uniq.append(p)
+    return uniq[:6]
+
+
+def _client_fields(s: Session, c: PortfolioClient, data: dict) -> None:
+    if "name" in data:
+        name = _text(data.get("name"))
+        key = client_key(name)
+        if not key:
+            raise PortfolioError("Indiquez le nom du client.")
+        other = s.scalars(select(PortfolioClient).where(PortfolioClient.key == key)).first()
+        if other is not None and other.id != c.id:
+            raise DuplicateClient(f"« {other.name} » existe déjà dans le portefeuille.", other.id)
+        c.name, c.key = name[:255], key
+    if "segment" in data:
+        if data["segment"] not in ("particulier", "pro"):
+            raise PortfolioError("Particulier ou entreprise ?")
+        c.segment = data["segment"]
+    if "phones" in data:
+        c.phones = _phones_in(data.get("phones"))
+    if "note" in data:
+        c.note = _text(data.get("note"))[:2000]
+    c.updated_at = utcnow()
+
+
+def create_client(s: Session, data: dict) -> PortfolioClient:
+    c = PortfolioClient(phones=[], note="", source="appli", segment="particulier", created_at=utcnow())
+    _client_fields(s, c, {"segment": "particulier", **data, "name": data.get("name")})
+    s.add(c)
+    s.flush()
+    if data.get("email"):
+        set_email(s, c, data["email"])
+    return c
+
+
+def update_client(s: Session, c: PortfolioClient, data: dict) -> None:
+    _client_fields(s, c, data)
+    if "email" in data and (data.get("email") or None) != c.email:
+        set_email(s, c, data.get("email"))
+    s.flush()
+
+
+def _contract_fields(s: Session, ct: PortfolioContract, data: dict) -> None:
+    if "insurer" in data or "policy" in data:
+        insurer = _up(data.get("insurer", ct.insurer))[:120]
+        policy = _text(data.get("policy", ct.policy))[:80]
+        if not insurer or not policy:
+            raise PortfolioError("Indiquez la compagnie et le n° de police.")
+        other = s.scalars(select(PortfolioContract).where(PortfolioContract.insurer == insurer,
+                                                          PortfolioContract.policy == policy)).first()
+        if other is not None and other.id != ct.id:
+            raise PortfolioError(f"La police {policy} chez {insurer} existe déjà (client n° {other.client_id}).")
+        ct.insurer, ct.policy = insurer, policy
+    if "branch" in data:
+        branch = _up(data.get("branch"))[:120]
+        if not branch:
+            raise PortfolioError("Indiquez la branche.")
+        cat = _up(data.get("category")) or options_category(s, branch)
+        ct.branch, ct.category = branch, cat[:120]
+        ct.family = family_of(branch, cat)[:60]
+    for f in ("fleet", "fixed_term"):
+        if f in data:
+            setattr(ct, f, bool(data[f]))
+    for f in ("start_date", "due_date", "subscribed_on", "last_claim_on"):
+        if f in data:
+            setattr(ct, f, _date(data[f]) if data[f] else None)
+    if "premium" in data:
+        ct.premium = _amount(data["premium"]) if data["premium"] not in (None, "") else None
+    if "note" in data:
+        ct.note = _text(data.get("note"))[:2000]
+    if "aperiteur_no" in data:
+        ct.aperiteur_no = _text(data.get("aperiteur_no"))[:80]
+    if "coinsurance" in data:
+        ct.coinsurance = bool(data["coinsurance"])
+    if "attachment_ids" in data:  # V3.13 : contrat scanné, conditions particulières…
+        ct.attachment_ids = _files_in(s, data.get("attachment_ids"))
+
+
+def options_category(s: Session, branch: str) -> str:
+    cat = s.scalars(select(PortfolioContract.category).where(PortfolioContract.branch == branch,
+                                                             PortfolioContract.category != "")).first()
+    return cat or ""
+
+
+def add_contract(s: Session, c: PortfolioClient, data: dict) -> PortfolioContract:
+    ct = PortfolioContract(client_id=c.id, source="appli", raw={}, created_at=utcnow(), note="")
+    _contract_fields(s, ct, {"insurer": data.get("insurer"), "policy": data.get("policy"),
+                             "branch": data.get("branch"), **data})
+    s.add(ct)
+    c.updated_at = utcnow()
+    s.flush()
+    return ct
+
+
+def update_contract(s: Session, ct: PortfolioContract, data: dict) -> None:
+    _contract_fields(s, ct, data)
+    if "cancelled" in data:
+        ct.cancelled = bool(data["cancelled"])
+        ct.cancelled_on = (_date(data.get("cancelled_on")) or utcnow().date()) if ct.cancelled else None
+    s.flush()
+
+
+def delete_contract(s: Session, ct: PortfolioContract) -> None:
+    if ct.source != "appli":
+        raise PortfolioError("Un contrat venu de DIAMM ne se supprime pas : résiliez-le.")
+    s.delete(ct)
+    s.flush()
+
+
+# ------------------------------------------------------------------ avenants et pièces jointes (V3.13)
+
+# Nature de l'avenant (V3.13, Omar : « renouvellement, modification, ajout ou retrait d'un véhicule… »)
+AMENDMENT_KINDS = ("Renouvellement", "Modification", "Ajout de véhicule (flotte)", "Retrait de véhicule (flotte)",
+                   "Changement de garanties", "Changement de capital", "Changement d'adresse ou d'assuré",
+                   "Ajout ou retrait de personnel", "Suspension", "Remise en vigueur", "Autre")
+MAX_FILES = 20
+
+
+def _files_in(s: Session, ids) -> list[int]:
+    """Numéros de pièces jointes déjà déposées (/api/attachments) ; refuse un numéro inconnu."""
+    from app import attachments_service
+    clean = list(dict.fromkeys(int(x) for x in (ids or []) if str(x).isdigit()))[:MAX_FILES]
+    try:
+        attachments_service.get_many(s, clean)
+    except attachments_service.AttachmentError as exc:
+        raise PortfolioError(str(exc)) from None
+    return clean
+
+
+def _files_json(s: Session, ids) -> list[dict]:
+    from app import attachments_service
+    out = []
+    for i in ids or []:
+        try:
+            out += [attachments_service.as_json(a) for a in attachments_service.get_many(s, [i])]
+        except attachments_service.AttachmentError:
+            continue  # fichier disparu du disque : on n'empêche pas d'afficher le reste
+    return out
+
+
+def _amendment_json(s: Session, a: PortfolioAmendment, names: dict | None = None) -> dict:
+    return {"id": a.id, "number": a.number, "effective_on": a.effective_on.isoformat() if a.effective_on else None,
+            "kind": a.kind, "description": a.description, "premium_delta": a.premium_delta,
+            "files": _files_json(s, a.attachment_ids), "by": (names or {}).get(a.user_id),
+            "at": a.created_at.isoformat() if a.created_at else None}
+
+
+def _contract_extra(s: Session, ct: PortfolioContract, amendments: list[PortfolioAmendment]) -> dict:
+    deltas = [a.premium_delta for a in amendments if a.premium_delta is not None]
+    return {"files": _files_json(s, ct.attachment_ids), "amendments": [_amendment_json(s, a) for a in amendments],
+            "amendments_premium": round(sum(deltas), 2) if deltas else None}
+
+
+def set_contract_files(s: Session, ct: PortfolioContract, ids) -> None:
+    ct.attachment_ids = _files_in(s, ids)
+    s.flush()
+
+
+def _amendment_fields(s: Session, a: PortfolioAmendment, data: dict) -> None:
+    if "effective_on" in data:
+        a.effective_on = _date(data["effective_on"]) if data["effective_on"] else None
+    if "kind" in data:
+        a.kind = _text(data.get("kind"))[:60]
+    if "number" in data:
+        a.number = _text(data.get("number"))[:60]
+    if "description" in data:
+        a.description = (data.get("description") or "").strip()[:4000]
+    if "premium_delta" in data:
+        a.premium_delta = _amount(data["premium_delta"]) if data["premium_delta"] not in (None, "") else None
+    if "attachment_ids" in data:
+        a.attachment_ids = _files_in(s, data.get("attachment_ids"))
+    if not a.effective_on:
+        raise PortfolioError("Indiquez la date d'effet de l'avenant.")
+    if not a.kind and not a.description:
+        raise PortfolioError("Indiquez la nature de l'avenant.")
+
+
+def add_amendment(s: Session, ct: PortfolioContract, data: dict) -> PortfolioAmendment:
+    from app.current import user_id
+    a = PortfolioAmendment(contract_id=ct.id, user_id=user_id(), created_at=utcnow(), attachment_ids=[], number="",
+                           kind="", description="")
+    _amendment_fields(s, a, {"effective_on": None, **data})
+    s.add(a)
+    s.flush()
+    return a
+
+
+def update_amendment(s: Session, a: PortfolioAmendment, data: dict) -> None:
+    _amendment_fields(s, a, data)
+    s.flush()

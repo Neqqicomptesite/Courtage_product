@@ -172,10 +172,22 @@ export type PfSummary = {
 export type PfRow = { id: number; name: string; segment: "particulier" | "pro"; email: string | null; phone: string | null; contracts: number;
   cancelled: number; families: string[]; contact_id: number | null; premium: number | null; last_call: PfCall | null };
 export type PfClients = PfReach & { total: number; items: PfRow[] };
-export type PfDetail = PfRow & { phones: { number: string; label: string }[]; note: string; calls: PfCall[]; missing: string[];
+export type PfContract = { id: number; policy: string; insurer: string; category: string; branch: string; family: string; fleet: boolean; fixed_term: boolean;
+    cancelled: boolean; cancelled_on: string | null; premium: number | null; due_date: string | null; start_date: string | null; note: string; source: string;
+    subscribed_on: string | null; last_claim_on: string | null; aperiteur_no: string; coinsurance: boolean;
+    files: Attachment[]; amendments: PfAmendment[]; amendments_premium: number | null };
+// V3.13 : avenant rattaché à un contrat (date d'effet, objet, variation de prime, pièces jointes)
+export type PfAmendment = { id: number; number: string; effective_on: string | null; kind: string; description: string; premium_delta: number | null;
+  files: Attachment[]; by: string | null; at: string | null };
+export type PfAmendmentIn = Partial<{ number: string; effective_on: string | null; kind: string; description: string; premium_delta: number | null; attachment_ids: number[] }>;
+export type PfContractIn = Partial<{ insurer: string; policy: string; branch: string; start_date: string | null; due_date: string | null; premium: number | null;
+  fleet: boolean; fixed_term: boolean; note: string; cancelled: boolean; cancelled_on: string | null; attachment_ids: number[];
+  subscribed_on: string | null; last_claim_on: string | null; aperiteur_no: string; coinsurance: boolean }>;
+export type PfClientIn = Partial<{ name: string; segment: "particulier" | "pro"; email: string | null; phones: { number: string; label: string }[]; note: string }>;
+export type PfOptions = { insurers: string[]; families: { family: string; branches: string[] }[] };
+export type PfDetail = PfRow & { source: string; phones: { number: string; label: string }[]; note: string; calls: PfCall[]; missing: string[];
   opportunities: { key: string; label: string; pitch: string }[];
-  items: { id: number; policy: string; insurer: string; category: string; branch: string; family: string; fleet: boolean; fixed_term: boolean;
-    cancelled: boolean; cancelled_on: string | null; premium: number | null; due_date: string | null }[] };
+  items: PfContract[] };
 export type PfImport = { rows: number; clients_new: number; clients_updated: number; contracts_new: number; contracts_updated: number; cancelled: number;
   particuliers: number; pros: number; with_email: number; with_phone: number; contacts_created: number; contacts_linked: number;
   prospects_now_clients: number; skipped: number; unknown_branches: string[]; extra_columns: string[]; has_premium: boolean; has_due: boolean;
@@ -735,6 +747,16 @@ export const api = {
   pfEmail: (id: number, email: string | null) => request<PfDetail>(`/api/portfolio/clients/${id}/email`, { method: "PUT", json: { email } }),
   pfCall: (id: number, body: { outcome: string; note?: string; callback_on?: string | null; rule?: string | null; email?: string | null }) =>
     request<PfDetail>(`/api/portfolio/clients/${id}/calls`, { method: "POST", json: body }),
+  pfOptions: () => request<PfOptions>("/api/portfolio/options"),
+  pfCreateClient: (body: PfClientIn) => request<PfDetail>("/api/portfolio/clients", { method: "POST", json: body }),
+  pfUpdateClient: (id: number, body: PfClientIn) => request<PfDetail>(`/api/portfolio/clients/${id}`, { method: "PUT", json: body }),
+  pfAddContract: (id: number, body: PfContractIn) => request<PfDetail>(`/api/portfolio/clients/${id}/contracts`, { method: "POST", json: body }),
+  pfUpdateContract: (id: number, body: PfContractIn) => request<PfDetail>(`/api/portfolio/contracts/${id}`, { method: "PUT", json: body }),
+  pfAddAmendment: (contractId: number, body: PfAmendmentIn) => request<PfDetail>(`/api/portfolio/contracts/${contractId}/amendments`, { method: "POST", json: body }),
+  pfUpdateAmendment: (id: number, body: PfAmendmentIn) => request<PfDetail>(`/api/portfolio/amendments/${id}`, { method: "PUT", json: body }),
+  pfDeleteAmendment: (id: number) => request<PfDetail>(`/api/portfolio/amendments/${id}`, { method: "DELETE" }),
+  pfAmendmentKinds: () => request<{ items: string[] }>("/api/portfolio/amendment-kinds"),
+  pfDeleteContract: (id: number) => request<PfDetail>(`/api/portfolio/contracts/${id}`, { method: "DELETE" }),
   pfCallbacks: (days = 0) => request<{ items: PfCallback[] }>(`/api/portfolio/callbacks?days=${days}`),
   pfList: (body: { name: string; q?: string; segment?: string; has?: string; lacks?: string; rule?: string; ids?: number[] }) =>
     request<{ list_id: number; added: number; without_email: number }>("/api/portfolio/list", { method: "POST", json: body }),

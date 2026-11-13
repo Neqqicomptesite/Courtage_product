@@ -643,3 +643,13 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
 313. **Repris d'ODDO V3.11.3 (13/11)** : sur une campagne lancée, encadré « N contacts encore en cours ont un
      email douteux » : voir qui, décocher ceux qu'on garde, les retirer d'un coup (confirmation). Ils restent
      dans les contacts et les listes.
+314. **Repris d'ODDO V3.12 (13/11)** : saisie des nouveaux clients et contrats dans le Portefeuille, pour
+     prendre le relais du logiciel métier une fois l'existant importé (« Nouveau client », fiche
+     modifiable, contrats : ajouter, modifier, résilier, réactiver, supprimer si saisi dans l'appli).
+     Migration 0028 (source / start_date / note, ajout seulement).
+315. **Repris d'ODDO V3.13 (13/11)** : avenants et fichiers joints aux contrats du Portefeuille (contrat
+     scanné, avenant signé ; date d'effet, nature, n°, détail, variation de prime). Fiche police complète :
+     n° de police, souscripteur, n° apériteur, dates de souscription / d'effet / d'échéance, résiliée ou non,
+     dernier sinistre, co-assurance ; polices actives et résiliées séparées. Un réimport garde avenants,
+     fichiers et valeurs saisies. Migration 0029 (portfolio_amendment ; portfolio_contract.attachment_ids,
+     subscribed_on, aperiteur_no, coinsurance, last_claim_on).
