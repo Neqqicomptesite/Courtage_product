@@ -29,12 +29,14 @@ def _error(exc: co.CompanyError) -> HTTPException:
 
 
 @router.get("/companies")
-def companies(q: str = "", kind: str = ""):
+def companies(q: str = "", kind: str = "", exclude: str = ""):
     with get_session() as s:
         n = co.counts(s)
         stmt = select(Company).order_by(func.lower(Company.name))
         if kind:
             stmt = stmt.where(Company.kind == kind)
+        if exclude:  # V3.11 : la page Entreprises sans les assureurs (qui ont leur page)
+            stmt = stmt.where(Company.kind != exclude)
         # Chaque mot doit se trouver dans l'entreprise OU chez une de ses personnes (nom, poste, email) :
         # « sanlam gestionnaire » trouve Sanlam.
         for word in q.split()[:6]:

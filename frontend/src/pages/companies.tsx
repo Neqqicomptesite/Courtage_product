@@ -62,39 +62,47 @@ export function Logo({ name, kind, src, className }: { name: string; kind: Kind;
 
 /* =============================================================== liste */
 
-export function CompaniesPage() {
+/** V3.11 : deux pages sur la même base : « Assureurs » (Production) et « Entreprises » (Commercial :
+ *  prospects, clients, partenaires). */
+export function CompaniesPage({ insurers = false }: { insurers?: boolean }) {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const kind = params.get("kind") ?? "";
+  const kind = insurers ? "insurer" : params.get("kind") ?? "";
+  const base = insurers ? "/insurers" : "/companies";
   const [q, setQ] = useState(params.get("q") ?? "");
   const setParam = (k: string, v: string) => setParams((p) => { const n = new URLSearchParams(p); if (v) n.set(k, v); else n.delete(k); return n; }, { replace: true });
   const debouncedQ = useDebounced((v: string) => setParam("q", v.trim()), 250);
-  const { data } = useQuery({ queryKey: ["companies", params.get("q") ?? "", kind], queryFn: () => api.companies({ q: params.get("q") ?? "", kind }), placeholderData: (p) => p });
+  const { data } = useQuery({ queryKey: ["companies", params.get("q") ?? "", kind, insurers], queryFn: () => api.companies({ q: params.get("q") ?? "", kind, exclude: insurers ? "" : "insurer" }), placeholderData: (p) => p });
   const [creating, setCreating] = useState(false);
 
   return (
     <>
-      <PageHeader title="Entreprises" description="Prospects, clients, assureurs et partenaires, avec les personnes de chaque entreprise."
-        actions={<Button onClick={() => setCreating(true)}><Plus /> Nouvelle entreprise</Button>} />
-      {data && <KindCards counts={Object.fromEntries(data.kinds.map((k) => [k.value, k.count]))} value={kind}
-        onChange={(k) => setParam("kind", k)} allLabel="Toutes les entreprises" />}
+      {insurers ? (
+        <PageHeader title="Assureurs" description="Les compagnies d'assurance, leurs services (souscription, gestion…) et vos interlocuteurs."
+          actions={<Button onClick={() => setCreating(true)}><Plus /> Nouvel assureur</Button>} />
+      ) : (
+        <PageHeader title="Entreprises" description="Prospects, clients et partenaires, avec les personnes de chaque entreprise. Les assureurs ont leur page, dans Production."
+          actions={<Button onClick={() => setCreating(true)}><Plus /> Nouvelle entreprise</Button>} />
+      )}
+      {data && !insurers && <KindCards counts={Object.fromEntries(data.kinds.map((k) => [k.value, k.count]))} value={kind}
+        onChange={(k) => setParam("kind", k)} allLabel="Toutes les entreprises" kinds={["client", "prospect", "partner"]} />}
       <div className="mb-4 space-y-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input className="pl-9" value={q} placeholder="Nom d'entreprise, domaine, ou une personne : « sanlam », « gestionnaire »…"
+          <Input className="pl-9" value={q} placeholder={insurers ? "Assureur ou une personne : « sanlam », « gestionnaire »…" : "Nom d'entreprise, domaine, ou une personne…"}
             onChange={(e) => { setQ(e.target.value); debouncedQ(e.target.value); }} />
         </div>
 
       </div>
 
       {!data ? <Skeleton className="h-96 rounded-xl" /> : data.items.length === 0 ? (
-        data.total === 0 ? <EmptyState icon={Building2} title="Aucune entreprise" text="Les entreprises se créent toutes seules à l'import et à la saisie des contacts."
+        data.total === 0 || (insurers && !q) ? <EmptyState icon={Building2} title={insurers ? "Aucun assureur" : "Aucune entreprise"} text="Les entreprises se créent toutes seules à l'import et à la saisie des contacts."
           action={<Button onClick={() => setCreating(true)}><Plus /> Nouvelle entreprise</Button>} />
           : <EmptyState icon={Search} title="Aucune entreprise ne correspond" />
       ) : (
         <Card className="divide-y overflow-hidden">
           {data.items.map((c) => (
-            <Link key={c.id} to={`/companies/${c.id}`} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/40">
+            <Link key={c.id} to={`${base}/${c.id}`} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/40">
               <Logo name={c.name} kind={c.kind} src={c.logo} className="size-9" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2"><span className="truncate font-medium">{c.name}</span><KindBadge kind={c.kind} hideProspect /></div>
@@ -105,17 +113,17 @@ export function CompaniesPage() {
           ))}
         </Card>
       )}
-      <CompanyDialog open={creating} onOpenChange={setCreating} onDone={(id) => navigate(`/companies/${id}`)} />
+      <CompanyDialog open={creating} onOpenChange={setCreating} onDone={(id) => navigate(`${base}/${id}`)} defaultKind={insurers ? "insurer" : "prospect"} />
     </>
   );
 }
 
 
 /** Création ou modification des informations d'une entreprise. */
-function CompanyDialog({ open, onOpenChange, company, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; company?: CompanyDetail; onDone?: (id: number) => void }) {
+function CompanyDialog({ open, onOpenChange, company, onDone, defaultKind = "prospect" }: { open: boolean; onOpenChange: (o: boolean) => void; company?: CompanyDetail; onDone?: (id: number) => void; defaultKind?: Kind }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const blank: CompanyInput = { name: "", kind: "prospect", domain: "", website: "", phone: "", sector: "" };
+  const blank: CompanyInput = { name: "", kind: defaultKind, domain: "", website: "", phone: "", sector: "" };
   const [v, setV] = useState<CompanyInput>(company ?? blank);
   const set = (k: keyof CompanyInput) => (e: React.ChangeEvent<HTMLInputElement>) => setV((x) => ({ ...x, [k]: e.target.value }));
   const save = useMutation({
@@ -213,7 +221,7 @@ export function CompanyPage() {
 
   return (
     <>
-      <PageHeader back={<BackButton to="/companies" label="Entreprises" />}
+      <PageHeader back={data.kind === "insurer" ? <BackButton to="/insurers" label="Assureurs" /> : <BackButton to="/companies" label="Entreprises" />}
         title={<span className="flex items-center gap-3">
           <button type="button" onClick={() => logoInput.current?.click()} title={data.logo ? "Changer le logo" : "Ajouter le logo"} className="group relative rounded-lg">
             <Logo name={data.name} kind={data.kind} src={data.logo} className="size-12" />

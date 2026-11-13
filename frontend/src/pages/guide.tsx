@@ -198,7 +198,7 @@ const NEXT: Record<string, { title: string; text: string; cta: string; to?: stri
   real_send: { title: "Envoyer votre premier vrai email", text: "Une relance, une demande de cotation : écrivez-la depuis l'appli, elle part de votre boîte.", cta: "Écrire un email", compose: true },
   campaign: { title: "Lancer votre première campagne", text: "Choisissez une liste et une séquence : l'appli envoie et relance pour vous.", cta: "Nouvelle campagne", to: "/campaigns/new" },
   classified: { title: "Classer votre première réponse", text: "Intéressé, à rappeler, pas intéressé : un clic, et la suite se fait toute seule.", cta: "Voir les réponses", to: "/replies" },
-  quote: { title: "Ouvrir votre premier dossier de cotation", text: "Les demandes aux compagnies et leurs relances automatiques, au même endroit.", cta: "Dossiers", to: "/quotes" },
+  quote: { title: "Ouvrir votre premier dossier de cotation", text: "Les demandes aux compagnies et leurs relances automatiques, au même endroit.", cta: "Demandes de cotation", to: "/quotes" },
 };
 
 export function NextStepCard() {

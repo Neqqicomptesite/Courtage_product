@@ -697,7 +697,7 @@ export const api = {
   contactAction: (id: number, action: "do-not-contact" | "reactivate") => request(`/api/contacts/${id}/${action}`, { method: "POST" }),
   contactErase: (id: number, confirm: string) => request(`/api/contacts/${id}/erase`, { method: "POST", json: { confirm } }),
   removeEnrollment: (cid: number, eid: number) => request(`/api/contacts/${cid}/enrollments/${eid}/remove`, { method: "POST" }),
-  companies: (f: { q?: string; kind?: string } = {}) => request<CompanyList>(`/api/companies${qs(f)}`),
+  companies: (f: { q?: string; kind?: string; exclude?: string } = {}) => request<CompanyList>(`/api/companies${qs(f)}`),
   company: (id: number) => request<CompanyDetail>(`/api/companies/${id}`),
   companyCreate: (body: CompanyInput) => request<{ id: number }>("/api/companies", { method: "POST", json: body }),
   companyUpdate: (id: number, body: CompanyInput) => request<{ stopped: number }>(`/api/companies/${id}`, { method: "PUT", json: body }),

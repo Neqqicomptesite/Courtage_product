@@ -83,9 +83,9 @@ export function QuotesPage() {
 
   return (
     <>
-      <PageHeader title="Dossiers de cotation"
+      <PageHeader title="Demandes de cotation"
         description={data ? <span>{open.length} dossier{open.length > 1 ? "s" : ""} en cours{late > 0 && <span className="text-destructive"> · {late} en retard</span>}</span> : undefined}
-        actions={<Button onClick={() => openNewQuote()}><Plus /> Nouveau dossier</Button>} />
+        actions={<Button onClick={() => openNewQuote()}><Plus /> Nouvelle demande</Button>} />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative w-full sm:w-64">
@@ -301,7 +301,7 @@ export function NewQuoteHost() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Nouveau dossier de cotation</DialogTitle>
+          <DialogTitle>Nouvelle demande de cotation</DialogTitle>
           <DialogDescription>Le client, la branche et la date à laquelle il attend sa proposition. Le reste se complète dans le dossier.</DialogDescription>
         </DialogHeader>
         <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); create.mutate(); }}>
@@ -363,7 +363,7 @@ export function QuotesPanel({ company, contact }: { company?: { id: number; name
   return (
     <Card>
       <div className="flex items-center justify-between px-6 pb-2 pt-5">
-        <h3 className="font-semibold leading-none tracking-tight">Dossiers de cotation</h3>
+        <h3 className="font-semibold leading-none tracking-tight">Demandes de cotation</h3>
         <Button size="sm" variant="outline" onClick={() => openNewQuote(company ? { company } : { contact: contact!, company: contact!.company ?? null })}><Plus /> Dossier</Button>
       </div>
       <div className="px-6 pb-5">

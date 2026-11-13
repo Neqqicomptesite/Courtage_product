@@ -630,3 +630,7 @@ Fichier réel analysé : 100 lignes, 100 emails uniques, 18 codes séquence.
      tableau de bord, vente croisée, listes d'appels, rappels). Tables portfolio_* (migration 0027).
      À rapprocher plus tard de la gestion des contrats propre à Cotalis (table contract) : pour l'instant
      les deux coexistent.
+310. **Repris d'ODDO V3.11 (13/11)** : menu par métier, sections repliables (général ; Commercial :
+     Portefeuille, Demandes de cotation, Contacts, Listes, Campagnes, Entreprises ; Production : Contrats,
+     Assureurs) ; page Assureurs à part ; « Dossiers » devient « Demandes de cotation ». Check-up : une
+     ancienne version démarre sur une base plus récente (retour automatique après une mise à jour ratée).

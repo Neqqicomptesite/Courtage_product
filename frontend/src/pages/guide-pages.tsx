@@ -455,7 +455,7 @@ const USE_CASES: UseCase[] = [
       { title: "Ouvrez la séquence G1", img: "avenant-1.png", alt: "Séquences, onglet Gestion, bouton Envoyer de G1",
         text: <>Menu <B>Séquences</B> → onglet <B>Gestion</B> (1) → sur « G1 · Demande d'avenant », cliquez <B>Envoyer</B> (2).</> },
       { title: "Choisissez le gestionnaire", img: "avenant-2.png", alt: "Recherche du gestionnaire et bouton Continuer",
-        text: <>Tapez son nom ou celui de la compagnie (1), cochez la bonne personne (2), puis <B>Continuer</B> (3). Les dates prévues du 1er email et des relances s'affichent juste au-dessus. Sous « Que faut-il envoyer ? », gardez <B>Toute la séquence</B> pour les relances automatiques, ou choisissez <B>1er email seulement</B>. La personne n'est pas dans la liste ? Ajoutez-la d'abord depuis la fiche de la compagnie (<B>Entreprises</B>).</> },
+        text: <>Tapez son nom ou celui de la compagnie (1), cochez la bonne personne (2), puis <B>Continuer</B> (3). Les dates prévues du 1er email et des relances s'affichent juste au-dessus. Sous « Que faut-il envoyer ? », gardez <B>Toute la séquence</B> pour les relances automatiques, ou choisissez <B>1er email seulement</B>. La personne n'est pas dans la liste ? Ajoutez-la d'abord depuis la fiche de la compagnie (<B>Production → Assureurs</B>).</> },
       { title: "Choisissez « Personnaliser d'abord »", img: "avenant-3.png", alt: "Choix Personnaliser d'abord",
         text: <>Ici c'est indispensable : l'email contient des informations propres à ce dossier. La séquence G1 elle-même ne change pas, seul l'email de cette personne est retouché.</> },
       { title: "Remplacez les champs entre crochets", img: "avenant-4.png", alt: "Objet et champs entre crochets à compléter",

@@ -66,6 +66,8 @@ const router = createBrowserRouter(
         { path: "contacts/prospecting", element: <ProspectingPage /> },  // V3.7
         { path: "companies", element: <CompaniesPage /> },
         { path: "companies/:id", element: <CompanyPage /> },
+        { path: "insurers", element: <CompaniesPage insurers /> },  // V3.11 : les assureurs, dans Production
+        { path: "insurers/:id", element: <CompanyPage /> },
         { path: "agenda", element: <AgendaPage /> },
         { path: "quotes", element: <QuotesPage /> },
         { path: "quotes/:id", element: <QuoteDetailPage /> },

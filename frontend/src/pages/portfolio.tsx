@@ -480,7 +480,7 @@ function ClientDialog({ id, rule, onClose }: { id: number | null; rule: string |
   return (
     <Dialog open={!!id} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[calc(100vh-2rem)] max-w-3xl overflow-y-auto">
-        {isLoading || !c ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Chargement…</p> : (
+        {isLoading || !c ? <><DialogTitle className="sr-only">Fiche client</DialogTitle><p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Chargement…</p></> : (
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">{c.segment === "pro" ? <Building2 className="size-4" /> : <User className="size-4" />}{c.name}</DialogTitle>

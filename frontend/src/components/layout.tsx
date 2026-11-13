@@ -6,7 +6,7 @@ import {
   FileCheck2,
   FileStack,
   Inbox,
-  Briefcase, LayoutDashboard, ListChecks,
+  Briefcase, ChevronDown, Landmark, LayoutDashboard, ListChecks,
   LogOut,
   ListOrdered,
   Menu,
@@ -39,23 +39,46 @@ import { relativeTime } from "@/lib/format";
 import { signOut } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { useMe } from "@/pages/login";
-import { cn } from "@/lib/utils";
 import { Brand } from "@/components/brand";
+import { cn } from "@/lib/utils";
 
-const NAV = [
-  { to: "/", label: "Tableau de bord", icon: LayoutDashboard, end: true },
-  { to: "/inbox", label: "Boîte mail", icon: Inbox, unread: true, also: ["/replies"] },
-  { to: "/quotes", label: "Dossiers", icon: FileStack },
-  { to: "/contracts", label: "Contrats", icon: FileCheck2 },
-  { to: "/agenda", label: "Agenda", icon: CalendarDays },
-  { to: "/sequences", label: "Séquences", icon: ListOrdered },
-  { to: "/campaigns", label: "Campagnes", icon: Rocket },
-  { to: "/companies", label: "Entreprises", icon: Building2 },
-  { to: "/contacts", label: "Contacts", icon: Users },
-  { to: "/contacts/lists", label: "Listes", icon: ListChecks, sub: true },  // V4 : les listes mises en avant
-  { to: "/portfolio", label: "Portefeuille", icon: Briefcase },  // V3.10 : clients DIAMM, vente croisée
-  { to: "/settings", label: "Réglages", icon: Settings },
+type NavItem = { to: string; label: string; icon: typeof Inbox; end?: boolean; unread?: boolean; also?: string[]; sub?: boolean };
+/** V3.11 : menu rangé par métier. Le quotidien en haut, puis une section par activité : les
+ *  pages futures (avenants, renouvellements, sinistres…) iront dans leur section. */
+const NAV: { title?: string; items: NavItem[] }[] = [
+  { items: [  // général : le quotidien
+    { to: "/", label: "Tableau de bord", icon: LayoutDashboard, end: true },
+    { to: "/inbox", label: "Boîte mail", icon: Inbox, unread: true, also: ["/replies"] },
+    { to: "/agenda", label: "Agenda", icon: CalendarDays },
+    { to: "/sequences", label: "Séquences", icon: ListOrdered },
+  ] },
+  { title: "Commercial", items: [
+    { to: "/portfolio", label: "Portefeuille", icon: Briefcase },  // V3.10 : clients DIAMM, vente croisée
+    { to: "/quotes", label: "Demandes de cotation", icon: FileStack },
+    { to: "/contacts", label: "Contacts", icon: Users },
+    { to: "/contacts/lists", label: "Listes", icon: ListChecks, sub: true },  // V4 : les listes mises en avant
+    { to: "/campaigns", label: "Campagnes", icon: Rocket },
+    { to: "/companies", label: "Entreprises", icon: Building2 },
+  ] },
+  { title: "Production", items: [
+    { to: "/contracts", label: "Contrats", icon: FileCheck2 },
+    { to: "/insurers", label: "Assureurs", icon: Landmark },
+  ] },
 ];
+
+/** Sections repliées (gardé dans ce navigateur ; la section de la page ouverte reste toujours visible). */
+function useCollapsed(): [Set<string>, (t: string) => void] {
+  const [set, setSet] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("oddo-nav-collapsed") ?? "[]") as string[]); } catch { return new Set(); }
+  });
+  const toggle = (t: string) => setSet((old) => {
+    const n = new Set(old);
+    if (n.has(t)) n.delete(t); else n.add(t);
+    try { localStorage.setItem("oddo-nav-collapsed", JSON.stringify([...n])); } catch { /* navigateur sans stockage */ }
+    return n;
+  });
+  return [set, toggle];
+}
 
 export function useStatus() {
   // Interrogé toutes les 15 s : l'indicateur « boîte lue il y a … » reste à jour sans recharger.
@@ -149,16 +172,29 @@ function Sidebar({ status, onNavigate }: { status: Status | undefined; onNavigat
   const location = useLocation();
   const me = useMe();
   const unread = useUnread();
-  const nav = me?.server_mode && me.role === "admin"
-    ? [...NAV.slice(0, -1), { to: "/equipe", label: "Équipe", icon: UserCog }, NAV[NAV.length - 1]]
-    : NAV;
+  const [collapsed, toggle] = useCollapsed();
+  const isHere = (n: NavItem) => (n.end ? location.pathname === n.to : location.pathname.startsWith(n.to))
+    || !!n.also?.some((p) => location.pathname.startsWith(p));
+  const sections = [...NAV, { items: [
+    ...(me?.server_mode && me.role === "admin" ? [{ to: "/equipe", label: "Équipe", icon: UserCog }] : []),
+    { to: "/settings", label: "Réglages", icon: Settings },
+  ] as NavItem[] }];
   return (
     <div className="flex h-full flex-col">
       <div className="px-5 pb-6 pt-6">
         <Brand />
       </div>
-      <nav className="flex-1 space-y-0.5 px-3">
-        {nav.map((n) => {
+      <nav className="flex-1 space-y-4 overflow-y-auto px-3">
+        {sections.map((sec, si) => (
+        <div key={sec.title ?? si} className="space-y-0.5">
+          {sec.title && (
+            <button type="button" onClick={() => toggle(sec.title!)} aria-expanded={!collapsed.has(sec.title)}
+              className="flex w-full items-center gap-1 rounded-md px-3 pb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground/80 hover:text-foreground">
+              <span className="flex-1 text-left">{sec.title}</span>
+              <ChevronDown className={cn("size-3.5 transition-transform", collapsed.has(sec.title) && "-rotate-90")} />
+            </button>
+          )}
+          {sec.items.filter((n) => !sec.title || !collapsed.has(sec.title) || isHere(n)).map((n) => {
           const count = "unread" in n && n.unread ? unread : 0;
           const alsoActive = "also" in n && n.also?.some((p) => location.pathname.startsWith(p));
           // une liste ouverte (Contacts filtré sur une liste) allume « Listes », pas « Contacts »
@@ -173,7 +209,9 @@ function Sidebar({ status, onNavigate }: { status: Status | undefined; onNavigat
               {count > 0 && <span className="rounded-full bg-destructive px-1.5 text-[11px] font-semibold text-destructive-foreground tabular">{count}</span>}
             </NavLink>
           );
-        })}
+          })}
+        </div>
+        ))}
       </nav>
       <div className="space-y-1 p-3 text-xs text-muted-foreground">
         <NavLink to="/guide" onClick={onNavigate}

@@ -13,13 +13,13 @@ const META: Record<string, { label: string; icon: typeof Layers; tone: string }>
   partner: { label: "Partenaires", icon: Handshake, tone: "text-warning" },
 };
 
-export function KindCards({ counts, value, onChange, allLabel }: {
-  counts: Partial<Record<string, number>>; value: string; onChange: (k: string) => void; allLabel?: string;
+export function KindCards({ counts, value, onChange, allLabel, kinds = KIND_ORDER }: {
+  counts: Partial<Record<string, number>>; value: string; onChange: (k: string) => void; allLabel?: string; kinds?: readonly string[];
 }) {
-  const total = KIND_ORDER.reduce((n, k) => n + (counts[k] ?? 0), 0);
+  const total = kinds.reduce((n, k) => n + (counts[k] ?? 0), 0);
   return (
-    <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-      {(["", ...KIND_ORDER] as string[]).map((k) => {
+    <div className={cn("mb-4 grid grid-cols-2 gap-2", kinds.length === 3 ? "sm:grid-cols-4" : "sm:grid-cols-5")}>
+      {(["", ...kinds] as string[]).map((k) => {
         const m = META[k];
         const n = k ? counts[k] ?? 0 : total;
         const active = value === k;

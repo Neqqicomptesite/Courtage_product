@@ -79,7 +79,7 @@ export function QuoteDetailPage() {
 
   return (
     <>
-      <PageHeader back={<BackButton to="/quotes" label="Dossiers" />}
+      <PageHeader back={<BackButton to="/quotes" label="Demandes de cotation" />}
         title={<span className="flex flex-wrap items-center gap-x-3 gap-y-1"><DossierName name={data.client_name} saving={update.isPending}
           onSave={(client_name) => update.mutateAsync({ client_name })} /><StageBadge stage={data.stage} /></span>}
         description={<span className="flex flex-wrap items-center gap-x-3 gap-y-1">
